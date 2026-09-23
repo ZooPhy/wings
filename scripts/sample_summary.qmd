@@ -6,7 +6,9 @@ format:
     toc-location: left
     embed-resources: true
     theme: cosmo
-    css: report/sample-report.css
+    css:
+      - report/sample-report.css
+      - report/genome-constellation.css
     include-after-body: report/escape-report.html
     title-block-banner: false
 execute:
@@ -563,18 +565,150 @@ segment_payload = {
 }
 segment_json = json.dumps(segment_payload, ensure_ascii=False).replace("</", "<\\/")
 
+# Build an eight-segment genome-constellation payload from evidence WINGS already
+# generated. This is a linked visualization only; it does not introduce a new
+# subtype, genotype, reassortment, or transmission inference.
+def _constellation_number(value):
+    try:
+        if pd.isna(value):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _constellation_int(value, default=0):
+    try:
+        if pd.isna(value):
+            return default
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _constellation_text(value, default=""):
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return default if text.upper() in {"NAN", "NONE"} else text
+
+
+constellation_blast_lookup = {}
+if "segment" in blast.columns:
+    for _, blast_row in blast.iterrows():
+        segment_key = _constellation_text(blast_row.get("segment")).upper()
+        if not segment_key:
+            continue
+        constellation_blast_lookup[segment_key] = {
+            "top_hit": _constellation_text(blast_row.get("top_hit")),
+            "hit_status": _constellation_text(blast_row.get("hit_status")),
+        }
+
+
+constellation_records = []
+for segment in segment_order:
+    selected = segment_data.loc[segment_data["segment"] == segment]
+
+    if selected.empty:
+        source = {}
+    else:
+        source = selected.iloc[0].to_dict()
+
+    contig = _constellation_text(source.get("contig"))
+    subtype_label = ""
+
+    if segment == "HA":
+        subtype_match = re.search(r"(?:^|_)H(\d+)(?:_|$)", contig, flags=re.IGNORECASE)
+        if subtype_match:
+            subtype_label = f"H{subtype_match.group(1)}"
+    elif segment == "NA":
+        subtype_match = re.search(r"(?:^|_)N(\d+)(?:_|$)", contig, flags=re.IGNORECASE)
+        if subtype_match:
+            subtype_label = f"N{subtype_match.group(1)}"
+
+    medaka_record = medaka_segment_status.get(segment, {})
+    medaka_consensus = medaka_record.get("consensus", {})
+    medaka_variants = medaka_record.get("variants", {})
+    blast_record = constellation_blast_lookup.get(segment, {})
+
+    constellation_records.append(
+        {
+            "segment": segment,
+            "contig": contig,
+            "subtype_label": subtype_label,
+            "overall_status": _constellation_text(source.get("overall_status"), "MISSING").upper(),
+            "coverage_status": _constellation_text(source.get("coverage_status"), "MISSING").upper(),
+            "length_status": _constellation_text(source.get("length_status"), "MISSING").upper(),
+            "n_content_status": _constellation_text(source.get("n_content_status"), "MISSING").upper(),
+            "length": _constellation_number(source.get("length")),
+            "median_depth": _constellation_number(source.get("median_depth")),
+            "mean_depth": _constellation_number(source.get("mean_depth")),
+            "breadth_covered": _constellation_number(source.get("breadth_covered")),
+            "n_fraction": _constellation_number(source.get("n_fraction")),
+            "candidate_count": _constellation_int(source.get("candidate_count"), 0),
+            "selection_status": _constellation_text(source.get("selection_status"), "MISSING"),
+            "selection_reason": _constellation_text(source.get("selection_reason")),
+            "consensus_source": _constellation_text(medaka_consensus.get("consensus_source")),
+            "medaka_consensus_status": _constellation_text(medaka_consensus.get("status")),
+            "medaka_variant_status": _constellation_text(medaka_variants.get("status")),
+            "blast_status": _constellation_text(blast_record.get("hit_status")),
+            "blast_top_hit": _constellation_text(blast_record.get("top_hit")),
+        }
+    )
+
+
+constellation_payload = {
+    "sample_id": str(sample_id),
+    "h5_status": h5_status,
+    "segments_pass": int(segments_pass),
+    "threshold": float(coverage_threshold),
+    "breadth_threshold": float(coverage_breadth_threshold),
+    "max_n_fraction": float(max_n_fraction),
+    "segments": constellation_records,
+}
+constellation_json = json.dumps(
+    constellation_payload,
+    ensure_ascii=False,
+).replace("</", "<\\/")
+
+
 display(HTML(f"""
-<div class="escape-viz-card escape-segment-card">
+<div class="escape-viz-card escape-constellation-card">
   <div class="escape-viz-heading">
     <div>
-      <div class="escape-viz-eyebrow">Influenza A genome QC</div>
-      <div class="escape-viz-title">Interactive segment QC</div>
-      <div class="escape-viz-subtitle">Review depth, breadth-at-depth, expected length, N content, and overall QC status. Select a segment for details.</div>
+      <div class="escape-viz-eyebrow">Eight-segment influenza A genome</div>
+      <div class="escape-viz-title">Genome constellation</div>
+      <div class="escape-viz-subtitle">
+        Select a segment to connect QC, subtype evidence, Medaka provenance,
+        IRMA candidate selection, and the top BLAST result.
+      </div>
     </div>
     <div class="escape-viz-accent" aria-hidden="true"></div>
   </div>
-  <div class="escape-segment-viz" data-escape-segments='{html.escape(segment_json, quote=True)}'></div>
+  <div
+    class="escape-constellation-viz"
+    data-wings-constellation='{html.escape(constellation_json, quote=True)}'>
+  </div>
 </div>
+"""))
+
+display(HTML(f"""
+<details class="escape-comparison-details" open>
+  <summary>
+    <span class="escape-comparison-summary-copy">
+      <strong>Compare all segments</strong>
+      <small>Depth, breadth, N content, and QC status across all eight influenza A genome segments</small>
+    </span>
+  </summary>
+  <div class="escape-viz-card escape-segment-card escape-comparison-card">
+    <div class="escape-segment-viz" data-escape-segments='{html.escape(segment_json, quote=True)}'></div>
+  </div>
+</details>
 """))
 ```
 

@@ -64,3 +64,11 @@ vadr_fail_soft: false
 
 # Run-level reporting
 run_summary: true
+
+# WINGS Surveillance Explorer
+# Map + collection timeline are built from metadata. Segment phylogenies are
+# optional external inputs. If a tree file contains multiple Newick trees,
+# the first tree is displayed.
+run_surveillance_explorer: true
+phylogeny_dir: "phylogeny"
+phylogeny_pattern: "{segment}_Tree.newick"

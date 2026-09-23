@@ -300,3 +300,124 @@ a:hover, a:focus { color: var(--escape-maroon-dark); }
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* WINGS compact all-segment comparison */
+.escape-comparison-details {
+  background: #fff;
+  border: 1px solid var(--escape-border);
+  border-radius: .85rem;
+  box-shadow: var(--escape-shadow);
+  margin: 1rem 0 2rem;
+  overflow: hidden;
+}
+
+.escape-comparison-details > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: .85rem;
+  list-style: none;
+  padding: 1rem 1.15rem;
+  user-select: none;
+}
+
+.escape-comparison-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.escape-comparison-details > summary::before {
+  align-items: center;
+  background: var(--escape-gold);
+  border-radius: 50%;
+  color: #000;
+  content: "+";
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 1.15rem;
+  font-weight: 900;
+  height: 1.75rem;
+  justify-content: center;
+  line-height: 1;
+  width: 1.75rem;
+}
+
+.escape-comparison-details[open] > summary::before {
+  content: "−";
+}
+
+.escape-comparison-details > summary:hover,
+.escape-comparison-details > summary:focus-visible {
+  background: #fff8dc;
+  outline: none;
+}
+
+.escape-comparison-summary-copy {
+  display: grid;
+  gap: .16rem;
+}
+
+.escape-comparison-summary-copy strong {
+  color: #000;
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.escape-comparison-summary-copy small {
+  color: var(--escape-muted);
+  font-size: .82rem;
+}
+
+.escape-comparison-details[open] > summary {
+  border-bottom: 1px solid var(--escape-border);
+}
+
+.escape-comparison-card {
+  border: 0;
+  border-radius: 0;
+  border-top: 5px solid var(--escape-maroon);
+  box-shadow: none;
+  margin: 0;
+  padding: 1rem 1.15rem 1.2rem;
+}
+
+.escape-comparison-card .escape-segment-layout {
+  display: block;
+}
+
+.escape-comparison-card .escape-segment-detail {
+  display: none;
+}
+
+.escape-comparison-controls {
+  margin-top: 0;
+}
+
+.escape-comparison-chart {
+  gap: .42rem;
+}
+
+.escape-comparison-row {
+  cursor: default;
+  grid-template-columns: 62px minmax(0, 1fr) 94px;
+  padding: .52rem .72rem;
+}
+
+.escape-comparison-row:hover,
+.escape-comparison-row:focus-visible {
+  background: #fff;
+  box-shadow: none;
+  transform: none;
+}
+
+.escape-comparison-row .escape-segment-track {
+  height: 20px;
+}
+
+@media (max-width: 560px) {
+  .escape-comparison-details > summary {
+    align-items: flex-start;
+  }
+  .escape-comparison-row {
+    grid-template-columns: 48px minmax(0, 1fr) 72px;
+  }
+}

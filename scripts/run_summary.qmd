@@ -7,8 +7,10 @@ format:
     toc-depth: 2
     page-layout: full
     embed-resources: true
-    css: report/sample-report.css
-    include-after-body: report/escape-report.html
+    css:
+      - report/sample-report.css
+      - report/surveillance-explorer.css
+    include-after-body: report/run-report.html
 execute:
   echo: false
   warning: false
@@ -18,6 +20,8 @@ params:
   samples: ""
   run_summary_tsv: "run_summary.tsv"
   review_tsv: "samples_requiring_review.tsv"
+  explorer_json: "surveillance_explorer.json"
+  explorer_enabled: true
   coverage_threshold: 50
   coverage_breadth_threshold: 0.95
   max_n_fraction: 0.01
@@ -148,17 +152,27 @@ summary <- summary |>
     pass_segments = coalesce(pass_segments, 0)
   )
 
-# Normalize the H5N1 screen to the current three-state semantics. Legacy PASS
-# is safely equivalent to DETECTED; legacy FAIL is mapped to INDETERMINATE
-# because older WINGS runs did not distinguish QC failure from a true negative.
-if (!"h5n1_screen" %in% names(summary)) {
-  summary$h5n1_screen <- "INDETERMINATE"
+# Normalize the H5+NA screen to the current three-state semantics.
+# Current sample summaries use h5_screen. Legacy h5n1_screen values are
+# retained for backwards compatibility: PASS -> DETECTED and
+# FAIL -> INDETERMINATE because older runs did not distinguish QC failure
+# from a biological negative.
+if (!"h5_screen" %in% names(summary)) {
+  if ("h5n1_screen" %in% names(summary)) {
+    h5_values <- toupper(trimws(as.character(summary$h5n1_screen)))
+    h5_values[h5_values == "PASS"] <- "DETECTED"
+    h5_values[h5_values == "FAIL"] <- "INDETERMINATE"
+    h5_values[!h5_values %in% c("DETECTED", "NOT_DETECTED", "INDETERMINATE")] <- "INDETERMINATE"
+    summary$h5_screen <- h5_values
+  } else {
+    summary$h5_screen <- "INDETERMINATE"
+  }
 } else {
-  h5n1_values <- toupper(trimws(as.character(summary$h5n1_screen)))
-  h5n1_values[h5n1_values == "PASS"] <- "DETECTED"
-  h5n1_values[h5n1_values == "FAIL"] <- "INDETERMINATE"
-  h5n1_values[!h5n1_values %in% c("DETECTED", "NOT_DETECTED", "INDETERMINATE")] <- "INDETERMINATE"
-  summary$h5n1_screen <- h5n1_values
+  h5_values <- toupper(trimws(as.character(summary$h5_screen)))
+  h5_values[h5_values == "PASS"] <- "DETECTED"
+  h5_values[h5_values == "FAIL"] <- "INDETERMINATE"
+  h5_values[!h5_values %in% c("DETECTED", "NOT_DETECTED", "INDETERMINATE")] <- "INDETERMINATE"
+  summary$h5_screen <- h5_values
 }
 
 # Normalize IRMA candidate-ambiguity fields across sample-summary versions.
@@ -558,6 +572,31 @@ header_html <- sprintf(
 htmltools::HTML(header_html)
 ```
 
+
+## Surveillance Explorer
+
+```{r}
+explorer_enabled <- tolower(trimws(as.character(params$explorer_enabled))) %in%
+  c("true", "t", "1", "yes", "y", "on")
+
+if (explorer_enabled && file.exists(params$explorer_json)) {
+  explorer_json_text <- paste(
+    readLines(params$explorer_json, warn = FALSE, encoding = "UTF-8"),
+    collapse = "\n"
+  )
+  # build_surveillance_explorer.py already escapes closing-script sequences.
+  htmltools::HTML(sprintf(
+    '<script type="application/json" id="wings-surveillance-data-0">%s</script>\n<div class="wings-surveillance-explorer" data-wse-data-id="wings-surveillance-data-0"></div>',
+    explorer_json_text
+  ))
+} else if (explorer_enabled) {
+  htmltools::div(
+    class = "alert alert-warning",
+    "Surveillance Explorer data are not available for this run."
+  )
+}
+```
+
 ## Overview
 
 ```{r}
@@ -647,41 +686,41 @@ overview |>
   )
 ```
 
-## H5N1 Screening
+## H5 Screening
 
-The WINGS H5N1 screen uses three states. **DETECTED** means QC-qualified HA and NA evidence jointly meets the H5/N1 screening criterion. **NOT_DETECTED** is reported only when both HA and NA provide QC-qualified, informative evidence and the H5/N1 criterion is not met. **INDETERMINATE** means HA or NA lacks sufficient QC-qualified evidence to support a biological negative.
+The WINGS H5 screen uses three states. **DETECTED** means HA is QC-qualified H5 and NA is QC-qualified and subtype-resolved, indicating an H5Nx virus. **NOT_DETECTED** means QC-qualified, informative HA is not H5; NA does not change that negative call. **INDETERMINATE** means HA is uninformative, or HA is H5 but NA is missing, failed QC, or unresolved. GenoFLU runs only for **DETECTED** H5Nx samples.
 
 ```{r}
-h5n1_counts <- summary |>
-  count(h5n1_screen, name = "Count") |>
+h5_counts <- summary |>
+  count(h5_screen, name = "Count") |>
   right_join(
-    tibble(h5n1_screen = c("DETECTED", "NOT_DETECTED", "INDETERMINATE")),
-    by = "h5n1_screen"
+    tibble(h5_screen = c("DETECTED", "NOT_DETECTED", "INDETERMINATE")),
+    by = "h5_screen"
   ) |>
   mutate(
     Count = coalesce(Count, 0L),
     Percent = Count / max(total_samples, 1)
   )
 
-h5n1_counts |>
+h5_counts |>
   gt() |>
   tab_header(
-    title = "H5N1 Screening Overview",
+    title = "H5 Screening Overview",
     subtitle = "Three-state analytical screening results"
   ) |>
-  cols_label(h5n1_screen = "Screen Result") |>
+  cols_label(h5_screen = "Screen Result") |>
   fmt_percent(columns = Percent, decimals = 0) |>
   tab_style(
     style = cell_fill(color = "#FFF3CD"),
-    locations = cells_body(rows = h5n1_screen == "DETECTED")
+    locations = cells_body(rows = h5_screen == "DETECTED")
   ) |>
   tab_style(
     style = cell_fill(color = "#E7F4EA"),
-    locations = cells_body(rows = h5n1_screen == "NOT_DETECTED")
+    locations = cells_body(rows = h5_screen == "NOT_DETECTED")
   ) |>
   tab_style(
     style = cell_fill(color = "#FCE8DC"),
-    locations = cells_body(rows = h5n1_screen == "INDETERMINATE")
+    locations = cells_body(rows = h5_screen == "INDETERMINATE")
   ) |>
   tab_options(
     table.width = pct(70),
@@ -691,8 +730,8 @@ h5n1_counts |>
 ```
 
 ```{r}
-h5n1_attention <- summary |>
-  filter(h5n1_screen %in% c("DETECTED", "INDETERMINATE")) |>
+h5_attention <- summary |>
+  filter(h5_screen %in% c("DETECTED", "INDETERMINATE")) |>
   mutate(
     sample_id = sprintf(
       "[%s](../%s/summary/%s.sample_summary.html)",
@@ -707,12 +746,12 @@ h5n1_attention <- summary |>
     state,
     flyway,
     potential_subtype,
-    h5n1_screen,
+    h5_screen,
     pass_segments
   )
 
-if (nrow(h5n1_attention) > 0) {
-  h5n1_attention |>
+if (nrow(h5_attention) > 0) {
+  h5_attention |>
     gt() |>
     fmt_markdown(columns = sample_id) |>
     cols_label(
@@ -723,10 +762,10 @@ if (nrow(h5n1_attention) > 0) {
       state = "State",
       flyway = "Flyway",
       potential_subtype = "Predicted Subtype",
-      h5n1_screen = "H5N1 Screen",
+      h5_screen = "H5 Screen",
       pass_segments = "Passing Segments"
     ) |>
-    tab_header(title = "H5N1 Results Requiring Attention") |>
+    tab_header(title = "H5 Results Requiring Attention") |>
     tab_options(
       table.width = pct(100),
       table.font.size = px(13),
@@ -817,7 +856,7 @@ sample_table <-
     Review,
     display_host,
     potential_subtype,
-    h5n1_screen,
+    h5_screen,
     ha_call,
     na_call,
     pass_segments,
@@ -841,7 +880,7 @@ sample_table |>
     Review = "Review",
     display_host = "Host",
     potential_subtype = "Predicted Subtype",
-    h5n1_screen = "H5N1 Screen",
+    h5_screen = "H5 Screen",
     ha_call = "HA",
     na_call = "NA",
     pass_segments = "Passing Segments",

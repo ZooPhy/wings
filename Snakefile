@@ -184,6 +184,11 @@ RUN_NANOPLOT = as_bool(config.get("run_nanoplot", True))
 RUN_GENOFLU = as_bool(config.get("run_genoflu", True))
 RUN_VADR = as_bool(config.get("run_vadr", True))
 RUN_SUMMARY = as_bool(config.get("run_summary", True))
+RUN_SURVEILLANCE_EXPLORER = as_bool(config.get("run_surveillance_explorer", True))
+PHYLOGENY_DIR = config_path("phylogeny_dir", "phylogeny")
+PHYLOGENY_PATTERN = str(config.get("phylogeny_pattern", "{segment}_Tree.newick"))
+if "{segment}" not in PHYLOGENY_PATTERN:
+    raise ValueError("config key 'phylogeny_pattern' must contain {segment}")
 VADR_IMAGE = str(config.get("vadr_image", "docker://staphb/vadr:1.7"))
 VADR_RUNTIME = str(config.get("vadr_runtime", "auto")).strip().lower()
 VADR_MKEY = str(config.get("vadr_mkey", "flu"))
@@ -227,6 +232,18 @@ if not SAMPLES:
 # Stable normalized IRMA interface
 # -----------------------------------------------------------------------------
 SEGMENT_SEQUENCE = ("HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS")
+
+
+def surveillance_tree_inputs(_wildcards):
+    """Return supplied segment trees that exist at DAG construction time."""
+    if not RUN_SURVEILLANCE_EXPLORER:
+        return []
+    paths = []
+    for segment in SEGMENT_SEQUENCE:
+        candidate = Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment)
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            paths.append(str(candidate))
+    return paths
 
 
 def irma_segments_dir(wildcards):
@@ -1581,7 +1598,9 @@ rule sample_summary_html:
         ],
         css="scripts/report/sample-report.css",
         report_html="scripts/report/escape-report.html",
-        report_js="scripts/report/escape-report.js"
+        report_js="scripts/report/escape-report.js",
+        constellation_css="scripts/report/genome-constellation.css",
+        constellation_js="scripts/report/genome-constellation.js"
     output:
         html=f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.html"
     params:
@@ -1606,6 +1625,8 @@ rule sample_summary_html:
         css_abs="$(cd "$(dirname {input.css:q})" && pwd)/$(basename {input.css:q})"
         report_html_abs="$(cd "$(dirname {input.report_html:q})" && pwd)/$(basename {input.report_html:q})"
         report_js_abs="$(cd "$(dirname {input.report_js:q})" && pwd)/$(basename {input.report_js:q})"
+        constellation_css_abs="$(cd "$(dirname {input.constellation_css:q})" && pwd)/$(basename {input.constellation_css:q})"
+        constellation_js_abs="$(cd "$(dirname {input.constellation_js:q})" && pwd)/$(basename {input.constellation_js:q})"
 
         temp_qmd="$output_dir/.sample_summary.qmd"
         temp_report_dir="$output_dir/report"
@@ -1616,6 +1637,8 @@ rule sample_summary_html:
         cp "$css_abs" "$temp_report_dir/sample-report.css"
         cp "$report_html_abs" "$temp_report_dir/escape-report.html"
         cp "$report_js_abs" "$temp_report_dir/escape-report.js"
+        cp "$constellation_css_abs" "$temp_report_dir/genome-constellation.css"
+        cp "$constellation_js_abs" "$temp_report_dir/genome-constellation.js"
 
         (
             cd "$output_dir"
@@ -1647,6 +1670,24 @@ rule sample_summary_html:
 
 
 # -----------------------------------------------------------------------------
+# Build the linked map/timeline/phylogeny data bundle used by the run report.
+# Supplied phylogeny files are optional external inputs; WINGS displays the
+# first Newick tree in each file without inferring or modifying the phylogeny.
+# -----------------------------------------------------------------------------
+rule surveillance_explorer_data:
+    input:
+        metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        summaries=expand(
+            f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
+            sample=SAMPLES,
+        ),
+        trees=surveillance_tree_inputs
+    output:
+        json=f"{RESULTS}/run_summary/surveillance_explorer.json"
+    script:
+        "scripts/build_surveillance_explorer.py"
+
+
 # Produce a run-level report across all FASTQ-derived samples
 # -----------------------------------------------------------------------------
 rule run_summary_html:
@@ -1698,7 +1739,11 @@ rule run_summary_html:
         template="scripts/run_summary.qmd",
         css="scripts/report/sample-report.css",
         report_html="scripts/report/escape-report.html",
-        report_js="scripts/report/escape-report.js"
+        report_js="scripts/report/escape-report.js",
+        explorer_json=f"{RESULTS}/run_summary/surveillance_explorer.json",
+        run_report_html="scripts/report/run-report.html",
+        explorer_css="scripts/report/surveillance-explorer.css",
+        explorer_js="scripts/report/surveillance-explorer.js"
     output:
         html=f"{RESULTS}/run_summary/run_summary.html",
         tsv=f"{RESULTS}/run_summary/run_summary.tsv",
@@ -1710,6 +1755,7 @@ rule run_summary_html:
         coverage_threshold=COVERAGE_MIN,
         coverage_breadth_threshold=COVERAGE_MIN_BREADTH,
         max_n_fraction=SEGMENT_MAX_N_FRACTION,
+        explorer_enabled="true" if RUN_SURVEILLANCE_EXPLORER else "false",
         quarto=QUARTO_CMD,
     conda:
         REPORTING_ENV
@@ -1723,6 +1769,10 @@ rule run_summary_html:
         css_abs="$(cd "$(dirname {input.css:q})" && pwd)/$(basename {input.css:q})"
         report_html_abs="$(cd "$(dirname {input.report_html:q})" && pwd)/$(basename {input.report_html:q})"
         report_js_abs="$(cd "$(dirname {input.report_js:q})" && pwd)/$(basename {input.report_js:q})"
+        explorer_json_abs="$(cd "$(dirname {input.explorer_json:q})" && pwd)/$(basename {input.explorer_json:q})"
+        run_report_html_abs="$(cd "$(dirname {input.run_report_html:q})" && pwd)/$(basename {input.run_report_html:q})"
+        explorer_css_abs="$(cd "$(dirname {input.explorer_css:q})" && pwd)/$(basename {input.explorer_css:q})"
+        explorer_js_abs="$(cd "$(dirname {input.explorer_js:q})" && pwd)/$(basename {input.explorer_js:q})"
 
         temp_qmd="$output_dir/.run_summary.qmd"
         temp_report_dir="$output_dir/report"
@@ -1732,6 +1782,9 @@ rule run_summary_html:
         cp "$css_abs" "$temp_report_dir/sample-report.css"
         cp "$report_html_abs" "$temp_report_dir/escape-report.html"
         cp "$report_js_abs" "$temp_report_dir/escape-report.js"
+        cp "$run_report_html_abs" "$temp_report_dir/run-report.html"
+        cp "$explorer_css_abs" "$temp_report_dir/surveillance-explorer.css"
+        cp "$explorer_js_abs" "$temp_report_dir/surveillance-explorer.js"
 
         (
             cd "$output_dir"
@@ -1747,6 +1800,8 @@ rule run_summary_html:
               -P "samples:{params.samples}" \
               -P "run_summary_tsv:run_summary.tsv" \
               -P "review_tsv:samples_requiring_review.tsv" \
+              -P "explorer_json:${{explorer_json_abs}}" \
+              -P "explorer_enabled:{params.explorer_enabled}" \
               -P "coverage_threshold:{params.coverage_threshold}" \
               -P "coverage_breadth_threshold:{params.coverage_breadth_threshold}" \
               -P "max_n_fraction:{params.max_n_fraction}"

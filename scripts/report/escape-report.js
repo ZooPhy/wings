@@ -185,66 +185,113 @@
   };
 
   const renderSegmentViz = (root) => {
-    let payload; try { payload=JSON.parse(root.dataset.escapeSegments||"{}"); } catch { return; }
-    const data=payload.segments||[];
-    const threshold=Number(payload.threshold||0);
-    const breadthThreshold=Number(payload.breadth_threshold??0.95);
-    const maxNFraction=Number(payload.max_n_fraction??0.01);
-    root.innerHTML="";
-    const controls=document.createElement("div"); controls.className="escape-viz-controls";
-    const layout=document.createElement("div"); layout.className="escape-segment-layout";
-    const chart=document.createElement("div"); chart.className="escape-segment-chart";
-    const detail=document.createElement("aside"); detail.className="escape-segment-detail";
-    layout.append(chart,detail); root.append(controls,layout);
-    [["Median depth","depth"],["Breadth at depth","breadth"],["N content","ncontent"],["QC status","status"]]
-      .forEach((x,i)=>controls.appendChild(makeButton(x[0],x[1],i===0)));
-    const statusColor=s=>String(s).toUpperCase()==="PASS"?ASU.maroon:String(s).toUpperCase()==="WARNING"?ASU.gold:ASU.black;
-    const statusText=s=>String(s??"REVIEW").toUpperCase();
-    const show=(r)=>{
-      const nFraction=r.n_fraction==null?NaN:Number(r.n_fraction);
-      const nCount=r.n_count==null?NaN:Number(r.n_count);
-      const nLabel=Number.isFinite(nFraction)?`${pct(nFraction)}${Number.isFinite(nCount)?` (${fmt(nCount)} N bases)`:""}`:"Not available";
-      const expectedMin=r.expected_length_min==null?NaN:Number(r.expected_length_min), expectedMax=r.expected_length_max==null?NaN:Number(r.expected_length_max);
-      const expectedLabel=Number.isFinite(expectedMin)&&Number.isFinite(expectedMax)?`${fmt(expectedMin)}–${fmt(expectedMax)} nt`:"Not configured";
-      const overall=statusText(r.overall_status);
-      detail.innerHTML=`<div class="escape-detail-kicker">Selected segment</div><div class="escape-detail-title">${r.segment}</div><span class="escape-detail-badge" style="background:${statusColor(overall)};color:${overall==='WARNING'?ASU.black:ASU.white}">${overall}</span><dl><div><dt>Coverage QC</dt><dd>${statusText(r.coverage_status)}</dd></div><div><dt>Length QC</dt><dd>${statusText(r.length_status)}</dd></div><div><dt>N-content QC</dt><dd>${statusText(r.n_content_status)}</dd></div><div><dt>Median depth</dt><dd>${fmt(r.median_depth,1)}x</dd></div><div><dt>Mean depth</dt><dd>${fmt(r.mean_depth,1)}x</dd></div><div><dt>Breadth at ≥${fmt(threshold)}x</dt><dd>${pct(r.breadth_covered)}</dd></div><div><dt>Consensus length</dt><dd>${fmt(r.length)} nt</dd></div><div><dt>Length QC bounds</dt><dd>${expectedLabel}</dd></div><div><dt>N content</dt><dd>${nLabel}</dd></div><div><dt>Contig</dt><dd>${r.contig||"Unknown"}</dd></div></dl><p>PASS requires median depth ≥ <strong>${fmt(threshold)}x</strong>, breadth ≥ <strong>${pct(breadthThreshold)}</strong> at that depth, consensus length ≥ the configured minimum, and N content ≤ <strong>${pct(maxNFraction)}</strong>. Length above the upper guide is warning-only.</p>`;
+    let payload;
+    try { payload = JSON.parse(root.dataset.escapeSegments || "{}"); } catch { return; }
+
+    const data = payload.segments || [];
+    const threshold = Number(payload.threshold || 0);
+    const breadthThreshold = Number(payload.breadth_threshold ?? 0.95);
+    const maxNFraction = Number(payload.max_n_fraction ?? 0.01);
+
+    root.innerHTML = "";
+
+    const controls = document.createElement("div");
+    controls.className = "escape-viz-controls escape-comparison-controls";
+
+    const chart = document.createElement("div");
+    chart.className = "escape-segment-chart escape-comparison-chart";
+
+    root.append(controls, chart);
+
+    [
+      ["Median depth", "depth"],
+      ["Breadth at depth", "breadth"],
+      ["N content", "ncontent"],
+      ["QC status", "status"],
+    ].forEach((item, index) => {
+      controls.appendChild(makeButton(item[0], item[1], index === 0));
+    });
+
+    const statusText = (value) => {
+      const status = String(value ?? "REVIEW").toUpperCase();
+      return status === "WARNING" ? "REVIEW" : status;
     };
-    const draw=(mode)=>{
-      controls.querySelectorAll("button").forEach(b=>b.classList.toggle("is-active",b.dataset.value===mode));
-      const maxDepth=Math.max(...data.map(d=>Number(d.median_depth)||0),threshold,1);
-      chart.innerHTML="";
-      data.forEach((r,i)=>{
-        const row=document.createElement("button"); row.type="button"; row.className="escape-segment-row";
-        let val,label,width,color,marker="";
-        if(mode==="depth"){
-          val=Number(r.median_depth)||0;
-          width=Math.max(2,Math.log10(val+1)/Math.log10(maxDepth+1)*100);
-          label=`${fmt(val,1)}x`;
-          color=statusText(r.coverage_status)==="PASS"?ASU.maroon:ASU.black;
-          marker=`<span class="escape-threshold-marker" style="left:${Math.log10(threshold+1)/Math.log10(maxDepth+1)*100}%"></span>`;
-        } else if(mode==="breadth"){
-          val=Number(r.breadth_covered)||0;
-          width=Math.max(2,Math.min(100,val*100));
-          label=pct(val);
-          color=val>=breadthThreshold?ASU.maroon:ASU.gold;
-          marker=`<span class="escape-threshold-marker" style="left:${Math.min(100,breadthThreshold*100)}%"></span>`;
-        } else if(mode==="ncontent"){
-          val=r.n_fraction==null?NaN:Number(r.n_fraction);
-          const finite=Number.isFinite(val);
-          const denom=maxNFraction>0?maxNFraction:1;
-          width=finite?Math.max(2,Math.min(100,val/denom*100)):2;
-          label=finite?pct(val):"NA";
-          color=statusText(r.n_content_status)==="PASS"?ASU.maroon:ASU.black;
-          marker='<span class="escape-threshold-marker" style="left:100%"></span>';
+
+    const statusColor = (value) => {
+      const status = statusText(value);
+      if (status === "PASS") return "#176B3A";
+      if (status === "FAIL" || status === "ERROR") return "#B3261E";
+      if (status === "MISSING") return "#AEB4BC";
+      return ASU.gold;
+    };
+
+    const draw = (mode) => {
+      controls.querySelectorAll("button").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.value === mode);
+      });
+
+      const maxDepth = Math.max(
+        ...data.map((record) => Number(record.median_depth) || 0),
+        threshold,
+        1,
+      );
+
+      chart.innerHTML = "";
+
+      data.forEach((record) => {
+        const row = document.createElement("div");
+        row.className = "escape-segment-row escape-comparison-row";
+
+        let label = "";
+        let width = 0;
+        let color = "#AEB4BC";
+        let marker = "";
+
+        if (mode === "depth") {
+          const value = Number(record.median_depth) || 0;
+          width = Math.max(2, Math.log10(value + 1) / Math.log10(maxDepth + 1) * 100);
+          label = `${fmt(value, 1)}x`;
+          color = statusColor(record.coverage_status);
+          marker = `<span class="escape-threshold-marker" style="left:${Math.log10(threshold + 1) / Math.log10(maxDepth + 1) * 100}%"></span>`;
+        } else if (mode === "breadth") {
+          const value = Number(record.breadth_covered) || 0;
+          width = Math.max(2, Math.min(100, value * 100));
+          label = pct(value);
+          color = statusColor(record.coverage_status);
+          marker = `<span class="escape-threshold-marker" style="left:${Math.min(100, breadthThreshold * 100)}%"></span>`;
+        } else if (mode === "ncontent") {
+          const value = record.n_fraction == null ? NaN : Number(record.n_fraction);
+          const finite = Number.isFinite(value);
+          const denominator = maxNFraction > 0 ? maxNFraction : 1;
+          width = finite ? Math.max(2, Math.min(100, value / denominator * 100)) : 2;
+          label = finite ? pct(value) : "NA";
+          color = statusColor(record.n_content_status);
+          marker = '<span class="escape-threshold-marker" style="left:100%"></span>';
         } else {
-          width=100; label=statusText(r.overall_status); color=statusColor(r.overall_status);
+          const status = statusText(record.overall_status);
+          width = 100;
+          label = status;
+          color = statusColor(status);
         }
-        row.innerHTML=`<span class="escape-segment-name">${r.segment}</span><span class="escape-segment-track"><span class="escape-segment-fill" style="--bar-width:${width}%;--bar-color:${color}"></span>${marker}</span><span class="escape-segment-value">${label}</span>`;
-        row.addEventListener("click",()=>{chart.querySelectorAll("button").forEach(x=>x.classList.remove("is-selected")); row.classList.add("is-selected"); show(r);});
-        chart.appendChild(row); if(i===0){row.classList.add("is-selected"); show(r);}
+
+        row.innerHTML = `
+          <span class="escape-segment-name">${record.segment}</span>
+          <span class="escape-segment-track">
+            <span class="escape-segment-fill" style="--bar-width:${width}%;--bar-color:${color}"></span>
+            ${marker}
+          </span>
+          <span class="escape-segment-value">${label}</span>`;
+
+        chart.appendChild(row);
       });
     };
-    controls.addEventListener("click",e=>{const b=e.target.closest("button");if(b)draw(b.dataset.value);}); draw("depth");
+
+    controls.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (button) draw(button.dataset.value);
+    });
+
+    draw("depth");
   };
 
   const initialize = () => {

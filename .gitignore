@@ -59,3 +59,8 @@ resources/vadr-models/
 # R local session files
 .RData
 .Rhistory
+# User-supplied phylogenies for Surveillance Explorer
+/phylogeny/*.newick
+/phylogeny/*.nwk
+/phylogeny/*.tree
+/phylogeny/*.tre
