@@ -98,7 +98,7 @@
             <div>
               <div class="wse-eyebrow">Run-level genomic surveillance</div>
               <div class="wse-title">WINGS Surveillance Explorer</div>
-              <div class="wse-subtitle">Linked collection timeline, geospatial context, and segment-specific phylogeny. Select a sample anywhere to highlight it everywhere.</div>
+              <div class="wse-subtitle">Linked collection timeline, geospatial context, and segment-specific phylogeny. Click any sample on the timeline, map, or phylogeny to select it and highlight it across all views.</div>
             </div>
             <div class="wse-heading-accent" aria-hidden="true"></div>
           </div>
