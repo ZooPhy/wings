@@ -70,5 +70,9 @@ run_summary: true
 # optional external inputs. If a tree file contains multiple Newick trees,
 # the first tree is displayed.
 run_surveillance_explorer: true
+
+phylogeny:
+  enabled: false
+  min_sequences: 5
 phylogeny_dir: "phylogeny"
 phylogeny_pattern: "{segment}_Tree.newick"

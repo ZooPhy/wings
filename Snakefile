@@ -185,6 +185,16 @@ RUN_GENOFLU = as_bool(config.get("run_genoflu", True))
 RUN_VADR = as_bool(config.get("run_vadr", True))
 RUN_SUMMARY = as_bool(config.get("run_summary", True))
 RUN_SURVEILLANCE_EXPLORER = as_bool(config.get("run_surveillance_explorer", True))
+
+PHYLOGENY_CONFIG = config.get("phylogeny", {}) or {}
+if not isinstance(PHYLOGENY_CONFIG, dict):
+    raise ValueError("config key 'phylogeny' must be a mapping")
+
+RUN_PHYLOGENY = as_bool(PHYLOGENY_CONFIG.get("enabled", False))
+PHYLOGENY_MIN_SEQUENCES = int(PHYLOGENY_CONFIG.get("min_sequences", 5))
+if PHYLOGENY_MIN_SEQUENCES < 5:
+    raise ValueError("phylogeny.min_sequences must be at least 5")
+
 PHYLOGENY_DIR = config_path("phylogeny_dir", "phylogeny")
 PHYLOGENY_PATTERN = str(config.get("phylogeny_pattern", "{segment}_Tree.newick"))
 if "{segment}" not in PHYLOGENY_PATTERN:
@@ -1667,6 +1677,35 @@ rule sample_summary_html:
         rm -rf "$output_dir/.sample_summary_files"
         rm -rf "$temp_report_dir"
         """
+
+
+# -----------------------------------------------------------------------------
+# Collect QC-qualified final consensus sequences for optional phylogeny
+# inference. The merged per-sample FASTA provides the final Medaka-polished
+# sequence (or explicit IRMA fallback), while coverage.tsv supplies the
+# existing WINGS segment QC decision and selected contig.
+# -----------------------------------------------------------------------------
+
+rule phylogeny_segment_input:
+    input:
+        merged=expand(
+            f"{RESULTS}/{{sample}}/merged/consensus_all_segments.fasta",
+            sample=SAMPLES,
+        ),
+        coverage=expand(
+            f"{RESULTS}/{{sample}}/coverage/coverage.tsv",
+            sample=SAMPLES,
+        )
+    output:
+        fasta=f"{RESULTS}/run_summary/phylogeny/{{segment}}.input.fasta",
+        status=f"{RESULTS}/run_summary/phylogeny/{{segment}}.status.tsv"
+    params:
+        samples=",".join(SAMPLES),
+        min_sequences=PHYLOGENY_MIN_SEQUENCES
+    conda:
+        "envs/py-tools.yaml"
+    script:
+        "scripts/build_phylogeny_input.py"
 
 
 # -----------------------------------------------------------------------------
