@@ -1208,4 +1208,51 @@ Users adapting WINGS should apply the same standard to any LLM-assisted changes:
 
 ## Optional segment phylogenies
 
-Set `phylogeny.enabled: true` in `config.yaml` to infer one maximum-likelihood tree for each of the eight influenza segments. WINGS collects QC-passing final consensus sequences per segment, aligns them with MAFFT `--auto`, and runs IQ-TREE 2 with `-m MFP` for automatic model selection. It writes `phylogeny/{segment}_Tree.newick` and feeds the generated trees into the Surveillance Explorer. Set `phylogeny.threads` (default 4) and `phylogeny.min_sequences` (default 5) as needed. Every segment must have at least the configured number of passing sequences; the workflow stops with the affected segment and count if it does not. The stage is off by default, and with it disabled the Explorer continues to read available external trees from `phylogeny_dir`.
+The stage is off by default. To infer trees, add this block to `config.yaml` (or set `enabled: true` in an existing `phylogeny` block):
+
+```yaml
+phylogeny:
+  enabled: true
+  min_sequences: 5
+  threads: 4
+```
+
+Run the report from the repository root with Docker Desktop running on macOS:
+
+```bash
+snakemake --configfile config.yaml --sdm conda --cores 4 \
+  --resources mem_mb=90000 kaleido=1 \
+  --rerun-incomplete results/run_summary/run_summary.html
+```
+
+WINGS selects QC-passing final consensus sequences for HA, NA, PB2, PB1, PA, NP, MP, and NS. It aligns each segment with MAFFT `--auto`, then uses IQ-TREE 2 with `-m MFP` for maximum-likelihood inference and automatic model selection. Outputs are `phylogeny/{segment}_Tree.newick`, per-segment status and alignment files under `results/run_summary/phylogeny/`, and the Surveillance Explorer in `results/run_summary/run_summary.html`. Snakemake creates the tool environment from `envs/phylogeny.yaml`.
+
+Every segment needs at least `phylogeny.min_sequences` QC-passing sequences (minimum 5). If a segment has fewer, check its `results/run_summary/phylogeny/{segment}.status.tsv` for the count and exclusions. With the stage disabled, the Explorer reads existing external trees from `phylogeny_dir` when available; generating all eight trees requires `enabled: true`.
+
+After the run, check that the Explorer parsed all eight trees and that their tip counts match the QC-passing input counts:
+
+```bash
+python3 - <<'PY'
+import csv
+import json
+from pathlib import Path
+
+segments = ("HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS")
+data = json.loads(Path("results/run_summary/surveillance_explorer.json").read_text())
+assert set(data["trees"]) == set(segments), data["trees"].keys()
+
+for segment in segments:
+    status_path = Path(f"results/run_summary/phylogeny/{segment}.status.tsv")
+    with status_path.open(newline="") as handle:
+        status = next(csv.DictReader(handle, delimiter="\t"))
+    tree = data["trees"][segment]
+    assert status["status"] == "READY", (segment, status)
+    assert tree["tip_count"] == int(status["sequence_count"]), segment
+    assert tree["unmatched_tip_count"] == 0, segment
+    print(f"{segment}: {tree['tip_count']} tips")
+
+print("Explorer warnings:", data["warnings"])
+PY
+```
+
+Review any Explorer warnings, the alignments, and `results/run_summary/phylogeny/{segment}.iqtree.log` before interpreting the trees. Check sequence identity and selected models in the IQ-TREE output, and inspect the trees for unexpected placements; successful execution alone does not establish biological validity.
