@@ -191,6 +191,9 @@ if not isinstance(PHYLOGENY_CONFIG, dict):
     raise ValueError("config key 'phylogeny' must be a mapping")
 
 RUN_PHYLOGENY = as_bool(PHYLOGENY_CONFIG.get("enabled", False))
+PHYLOGENY_THREADS = int(PHYLOGENY_CONFIG.get("threads", 4))
+if PHYLOGENY_THREADS < 1:
+    raise ValueError("phylogeny.threads must be at least 1")
 PHYLOGENY_MIN_SEQUENCES = int(PHYLOGENY_CONFIG.get("min_sequences", 5))
 if PHYLOGENY_MIN_SEQUENCES < 5:
     raise ValueError("phylogeny.min_sequences must be at least 5")
@@ -248,6 +251,9 @@ def surveillance_tree_inputs(_wildcards):
     """Return supplied segment trees that exist at DAG construction time."""
     if not RUN_SURVEILLANCE_EXPLORER:
         return []
+    if RUN_PHYLOGENY:
+        return [str(Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment))
+                for segment in SEGMENT_SEQUENCE]
     paths = []
     for segment in SEGMENT_SEQUENCE:
         candidate = Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment)
@@ -417,6 +423,12 @@ if RUN_VADR:
                 sample=SAMPLES,
             ),
         ]
+    )
+
+if RUN_PHYLOGENY:
+    FINAL_TARGETS.extend(
+        str(Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment))
+        for segment in SEGMENT_SEQUENCE
     )
 
 if RUN_SUMMARY:
@@ -1708,10 +1720,56 @@ rule phylogeny_segment_input:
         "scripts/build_phylogeny_input.py"
 
 
+# Align QC-qualified segment consensus sequences and infer maximum-likelihood
+# trees. Each segment needs at least phylogeny.min_sequences passing samples.
+rule phylogeny_align:
+    input:
+        fasta=f"{RESULTS}/run_summary/phylogeny/{{segment}}.input.fasta",
+        status=f"{RESULTS}/run_summary/phylogeny/{{segment}}.status.tsv"
+    output:
+        alignment=f"{RESULTS}/run_summary/phylogeny/{{segment}}.aligned.fasta"
+    log:
+        f"{RESULTS}/run_summary/phylogeny/{{segment}}.mafft.log"
+    conda:
+        "envs/phylogeny.yaml"
+    threads:
+        PHYLOGENY_THREADS
+    shell:
+        r"""
+        set -euo pipefail
+        python -c 'import csv,sys; row=next(csv.DictReader(open(sys.argv[1]), delimiter="\t")); assert row["status"] == "READY", "Insufficient QC-qualified sequences for " + row["segment"] + ": " + row["sequence_count"] + " < " + row["min_sequences"]' {input.status:q}
+        mafft --auto --thread {threads} {input.fasta:q} > {output.alignment:q} 2> {log:q}
+        test -s {output.alignment:q}
+        """
+
+
+rule phylogeny_tree:
+    input:
+        alignment=f"{RESULTS}/run_summary/phylogeny/{{segment}}.aligned.fasta"
+    output:
+        tree=str(Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN)
+    log:
+        f"{RESULTS}/run_summary/phylogeny/{{segment}}.iqtree.log"
+    conda:
+        "envs/phylogeny.yaml"
+    threads:
+        PHYLOGENY_THREADS
+    params:
+        prefix=lambda wildcards: f"{RESULTS}/run_summary/phylogeny/{wildcards.segment}.iqtree"
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.tree:q})"
+        iqtree2 -s {input.alignment:q} -m MFP -nt {threads} -seed 1 -pre {params.prefix:q} > {log:q} 2>&1
+        test -s {params.prefix:q}.treefile
+        cp {params.prefix:q}.treefile {output.tree:q}
+        """
+
+
 # -----------------------------------------------------------------------------
 # Build the linked map/timeline/phylogeny data bundle used by the run report.
-# Supplied phylogeny files are optional external inputs; WINGS displays the
-# first Newick tree in each file without inferring or modifying the phylogeny.
+# Generated trees are dependencies when phylogeny is enabled; otherwise,
+# existing external trees are included when available.
 # -----------------------------------------------------------------------------
 rule surveillance_explorer_data:
     input:

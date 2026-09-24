@@ -67,12 +67,13 @@ run_summary: true
 
 # WINGS Surveillance Explorer
 # Map + collection timeline are built from metadata. Segment phylogenies are
-# optional external inputs. If a tree file contains multiple Newick trees,
+# generated when phylogeny.enabled is true, or read as external inputs. If a file contains multiple Newick trees,
 # the first tree is displayed.
 run_surveillance_explorer: true
 
 phylogeny:
   enabled: false
   min_sequences: 5
+  threads: 4
 phylogeny_dir: "phylogeny"
 phylogeny_pattern: "{segment}_Tree.newick"

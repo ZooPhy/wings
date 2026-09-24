@@ -1205,3 +1205,7 @@ Large language models, including OpenAI ChatGPT, were used during development of
 All workflow logic, code changes, configuration decisions, and scientific interpretations remain the responsibility of the WINGS developers and should be independently reviewed and validated. ChatGPT is not used by the workflow to generate sequencing results, assemble influenza genomes, assign subtypes or genotypes, call variants, or replace the underlying bioinformatics tools described above.
 
 Users adapting WINGS should apply the same standard to any LLM-assisted changes: review the generated code, verify tool parameters and dependencies, test changes on appropriate data, and document substantive LLM assistance when required by institutional, journal, or funding-agency policies.
+
+## Optional segment phylogenies
+
+Set `phylogeny.enabled: true` in `config.yaml` to infer one maximum-likelihood tree for each of the eight influenza segments. WINGS collects QC-passing final consensus sequences per segment, aligns them with MAFFT `--auto`, and runs IQ-TREE 2 with `-m MFP` for automatic model selection. It writes `phylogeny/{segment}_Tree.newick` and feeds the generated trees into the Surveillance Explorer. Set `phylogeny.threads` (default 4) and `phylogeny.min_sequences` (default 5) as needed. Every segment must have at least the configured number of passing sequences; the workflow stops with the affected segment and count if it does not. The stage is off by default, and with it disabled the Explorer continues to read available external trees from `phylogeny_dir`.
