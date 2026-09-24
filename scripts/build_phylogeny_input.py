@@ -2,7 +2,6 @@
 
 """Build a QC-qualified segment FASTA for optional WINGS phylogeny inference."""
 
-from __future__ import annotations
 
 import csv
 from pathlib import Path
