@@ -6,7 +6,6 @@ It displays the first Newick tree in each configured file and does not infer,
 reroot, date, or otherwise modify a phylogeny.
 """
 
-from __future__ import annotations
 
 import argparse
 import csv

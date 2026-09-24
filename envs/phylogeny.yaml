@@ -3,4 +3,5 @@ channels:
   - bioconda
 dependencies:
   - mafft
-  - iqtree
+  - iqtree=2.*
+  - python=3.11
