@@ -1721,7 +1721,8 @@ rule phylogeny_segment_input:
 
 
 # Align QC-qualified segment consensus sequences and infer maximum-likelihood
-# trees. Each segment needs at least phylogeny.min_sequences passing samples.
+# trees with ultrafast bootstrap support. Each segment needs at least
+# phylogeny.min_sequences passing samples.
 rule phylogeny_align:
     input:
         fasta=f"{RESULTS}/run_summary/phylogeny/{{segment}}.input.fasta",
@@ -1760,7 +1761,7 @@ rule phylogeny_tree:
         r"""
         set -euo pipefail
         mkdir -p "$(dirname {output.tree:q})"
-        iqtree2 -s {input.alignment:q} -m MFP -nt {threads} -seed 1 -pre {params.prefix:q} > {log:q} 2>&1
+        iqtree2 -s {input.alignment:q} -m MFP -B 1000 -nt {threads} -seed 1 -redo -pre {params.prefix:q} > {log:q} 2>&1
         test -s {params.prefix:q}.treefile
         cp {params.prefix:q}.treefile {output.tree:q}
         """

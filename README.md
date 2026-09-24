@@ -1225,7 +1225,7 @@ snakemake --configfile config.yaml --sdm conda --cores 4 \
   --rerun-incomplete results/run_summary/run_summary.html
 ```
 
-WINGS selects QC-passing final consensus sequences for HA, NA, PB2, PB1, PA, NP, MP, and NS. It aligns each segment with MAFFT `--auto`, then uses IQ-TREE 2 with `-m MFP` for maximum-likelihood inference and automatic model selection. Outputs are `phylogeny/{segment}_Tree.newick`, per-segment status and alignment files under `results/run_summary/phylogeny/`, and the Surveillance Explorer in `results/run_summary/run_summary.html`. Snakemake creates the tool environment from `envs/phylogeny.yaml`.
+WINGS selects QC-passing final consensus sequences for HA, NA, PB2, PB1, PA, NP, MP, and NS. It aligns each segment with MAFFT `--auto`, then uses IQ-TREE 2 with `-m MFP` for maximum-likelihood inference and automatic model selection and `-B 1000` for ultrafast bootstrap (UFBoot) branch support. On reruns, `-redo` lets IQ-TREE recompute a completed analysis when Snakemake finds its output out of date. Outputs are `phylogeny/{segment}_Tree.newick`, per-segment status and alignment files under `results/run_summary/phylogeny/`, and the Surveillance Explorer in `results/run_summary/run_summary.html`. Snakemake creates the tool environment from `envs/phylogeny.yaml`.
 
 Every segment needs at least `phylogeny.min_sequences` QC-passing sequences (minimum 5). If a segment has fewer, check its `results/run_summary/phylogeny/{segment}.status.tsv` for the count and exclusions. With the stage disabled, the Explorer reads existing external trees from `phylogeny_dir` when available; generating all eight trees requires `enabled: true`.
 
@@ -1255,4 +1255,4 @@ print("Explorer warnings:", data["warnings"])
 PY
 ```
 
-Review any Explorer warnings, the alignments, and `results/run_summary/phylogeny/{segment}.iqtree.log` before interpreting the trees. Check sequence identity and selected models in the IQ-TREE output, and inspect the trees for unexpected placements; successful execution alone does not establish biological validity.
+Review any Explorer warnings, the alignments, and `results/run_summary/phylogeny/{segment}.iqtree.iqtree` before interpreting the trees. Check sequence identity, selected models, and UFBoot support values in the IQ-TREE report; the Explorer displays numeric support labels of at least 70. UFBoot is an approximation, not the standard nonparametric bootstrap. Inspect the trees for unexpected placements; successful execution alone does not establish biological validity. See the [IQ-TREE tutorial](https://iqtree.github.io/doc/Tutorial) for UFBoot interpretation.
