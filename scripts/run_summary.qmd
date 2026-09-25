@@ -3,8 +3,7 @@ title: ""
 format:
   html:
     theme: cosmo
-    toc: true
-    toc-depth: 2
+    toc: false
     page-layout: full
     embed-resources: true
     css:
@@ -22,6 +21,7 @@ params:
   review_tsv: "samples_requiring_review.tsv"
   explorer_json: "surveillance_explorer.json"
   explorer_enabled: true
+  genoflu_enabled: false
   coverage_threshold: 50
   coverage_breadth_threshold: 0.95
   max_n_fraction: 0.01
@@ -508,40 +508,6 @@ review <- summary |>
 
 write_tsv(summary, params$run_summary_tsv)
 write_tsv(review, params$review_tsv)
-
-get_populated_values <- function(column_name) {
-  if (!column_name %in% names(summary)) {
-    return(character(0))
-  }
-
-  values <- trimws(as.character(summary[[column_name]]))
-  values[
-    !is.na(values) &
-    nzchar(values) &
-    toupper(values) != "UNKNOWN"
-  ]
-}
-
-host_values <- get_populated_values("host_common_name")
-
-if (length(host_values) == 0) {
-  host_values <- get_populated_values("host_species")
-}
-
-if (length(host_values) == 0) {
-  host_values <- get_populated_values("host")
-}
-
-host_values <- unique(host_values)
-
-metadata <- tibble(
-  Metric = c("Run date", "Host", "Pipeline version"),
-  Value = c(
-    format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-    if (length(host_values) > 0) paste(host_values, collapse = ", ") else "Not available",
-    "1.0.0"
-  )
-)
 ```
 
 ```{r}
@@ -573,29 +539,9 @@ htmltools::HTML(header_html)
 ```
 
 
-## Surveillance Explorer
+::: {.panel-tabset}
 
-```{r}
-explorer_enabled <- tolower(trimws(as.character(params$explorer_enabled))) %in%
-  c("true", "t", "1", "yes", "y", "on")
-
-if (explorer_enabled && file.exists(params$explorer_json)) {
-  explorer_json_text <- paste(
-    readLines(params$explorer_json, warn = FALSE, encoding = "UTF-8"),
-    collapse = "\n"
-  )
-  # build_surveillance_explorer.py already escapes closing-script sequences.
-  htmltools::HTML(sprintf(
-    '<script type="application/json" id="wings-surveillance-data-0">%s</script>\n<div class="wings-surveillance-explorer" data-wse-data-id="wings-surveillance-data-0"></div>',
-    explorer_json_text
-  ))
-} else if (explorer_enabled) {
-  htmltools::div(
-    class = "alert alert-warning",
-    "Surveillance Explorer data are not available for this run."
-  )
-}
-```
+# Run Summary {.active}
 
 ## Overview
 
@@ -729,107 +675,7 @@ h5_counts |>
   )
 ```
 
-```{r}
-h5_attention <- summary |>
-  filter(h5_screen %in% c("DETECTED", "INDETERMINATE")) |>
-  mutate(
-    sample_id = sprintf(
-      "[%s](../%s/summary/%s.sample_summary.html)",
-      sample_id, sample_id, sample_id
-    )
-  ) |>
-  select(
-    sample_id,
-    host_common_name,
-    host_species,
-    collection_date,
-    state,
-    flyway,
-    potential_subtype,
-    h5_screen,
-    pass_segments
-  )
-
-if (nrow(h5_attention) > 0) {
-  h5_attention |>
-    gt() |>
-    fmt_markdown(columns = sample_id) |>
-    cols_label(
-      sample_id = "Sample",
-      host_common_name = "Host Common Name",
-      host_species = "Host Species",
-      collection_date = "Collection Date",
-      state = "State",
-      flyway = "Flyway",
-      potential_subtype = "Predicted Subtype",
-      h5_screen = "H5 Screen",
-      pass_segments = "Passing Segments"
-    ) |>
-    tab_header(title = "H5 Results Requiring Attention") |>
-    tab_options(
-      table.width = pct(100),
-      table.font.size = px(13),
-      heading.background.color = "#8C1D40"
-    )
-}
-```
-
-```{r}
-metadata |>
-  gt() |>
-  tab_options(
-    table.width = pct(60),
-    table.font.size = px(14),
-    data_row.padding = px(8)
-  )
-```
-
-## ⚠ Samples Requiring Immediate Review
-
-```{r}
-n_review <- nrow(review)
-
-if (n_review == 0) {
-  div(
-    class = "alert alert-success",
-    h4("✓ No samples require manual review."),
-    p("All samples passed the configured QC thresholds.")
-  )
-} else {
-  div(
-    class = "alert alert-warning",
-    h4(sprintf("%d sample(s) require manual review", n_review)),
-    p("These samples failed one or more quality-control criteria. Review these before downstream analyses.")
-  )
-
-  review |>
-    mutate(
-      sample_id = sprintf(
-        "[%s](../%s/summary/%s.sample_summary.html)",
-        sample_id,
-        sample_id,
-        sample_id
-      )
-    ) |>
-    select(
-      sample_id,
-      display_host,
-      potential_subtype,
-      genome_status,
-      review_reason
-    ) |>
-    gt() |>
-    fmt_markdown(columns = sample_id) |>
-    cols_label(sample_id = "Sample") |>
-    tab_options(
-      table.width = pct(100),
-      table.font.size = px(13),
-      heading.background.color = "#8C1D40",
-      heading.title.font.size = px(18)
-    )
-}
-```
-
+# Sample Detail
 
 ## Sample Summary
 
@@ -902,6 +748,136 @@ sample_table |>
 ```
 
 
+# Subtype/Genotype Distribution
+
+## HA Subtype Distribution
+
+```{r}
+ha_counts <- summary %>%
+  count(ha_call)
+
+p <- ggplot(
+  ha_counts,
+  aes(
+    x = reorder(ha_call, n),
+    y = n
+  )
+) +
+  geom_col(
+    fill = "#8C1D40",
+    width = 0.7
+  ) +
+  coord_flip() +
+  labs(
+    x = "HA Subtype",
+    y = "Samples"
+  ) +
+  theme_minimal(base_size = 14)
+
+p
+```
+
+## NA Subtype Distribution
+
+```{r}
+na_counts <- summary %>%
+  count(na_call)
+
+p <- ggplot(
+  na_counts,
+  aes(
+    x = reorder(na_call, n),
+    y = n
+  )
+) +
+  geom_col(
+    fill = "#FFC627",
+    width = 0.7
+  ) +
+  coord_flip() +
+  labs(
+    x = "NA Subtype",
+    y = "Samples"
+  ) +
+  theme_minimal(base_size = 14)
+
+p
+```
+
+## GenoFLU Genotype Distribution
+
+GenoFLU genotype counts include only samples eligible under the QC-qualified H5Nx screen. "Not assigned" means GenoFLU did not return a consensus genotype; "Missing output" identifies an absent or empty GenoFLU result. Samples ineligible for GenoFLU are excluded.
+
+```{r}
+genoflu_enabled <- tolower(trimws(as.character(params$genoflu_enabled))) %in%
+  c("true", "t", "1", "yes", "y", "on")
+
+read_genoflu_genotype <- function(sample_id) {
+  path <- file.path(params$results_dir, sample_id, "genoflu", "GenoFLU.tsv")
+  if (!file.exists(path) || is.na(file.info(path)$size) || file.info(path)$size == 0) {
+    return("Missing output")
+  }
+
+  # Match the consensus genotype line parsed by the individual sample report.
+  report <- paste(readLines(path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  match <- regmatches(
+    report,
+    regexec(
+      "consensus[[:space:]]+Genotype[[:space:]]*-->[[:space:]]*([^:\r\n]+):",
+      report,
+      ignore.case = TRUE,
+      perl = TRUE
+    )
+  )[[1]]
+  if (length(match) < 2) return("Not assigned")
+
+  genotype <- trimws(match[2])
+  if (!nzchar(genotype) || tolower(genotype) %in%
+      c("not assigned", "unassigned", "not available", "not run", "unknown", "indeterminate")) {
+    return("Not assigned")
+  }
+  genotype
+}
+
+if (!genoflu_enabled) {
+  cat("GenoFLU is disabled for this run.")
+} else {
+  eligible <- summary |> filter(h5_screen == "DETECTED")
+  if (nrow(eligible) == 0) {
+    cat("No samples met GenoFLU eligibility criteria in this run.")
+  } else {
+    genotype_counts <- tibble(
+      genotype = vapply(eligible$sample_id, read_genoflu_genotype, character(1))
+    ) |>
+      count(genotype, name = "Samples")
+
+    p <- ggplot(
+      genotype_counts,
+      aes(
+        x = reorder(genotype, Samples),
+        y = Samples,
+        fill = ifelse(genotype %in% c("Not assigned", "Missing output"), "No call", "Assigned")
+      )
+    ) +
+      geom_col(width = 0.7) +
+      geom_text(aes(label = Samples), hjust = -0.2) +
+      coord_flip() +
+      scale_fill_manual(values = c("Assigned" = "#8C1D40", "No call" = "#AEB4BC"), guide = "none") +
+      scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+      labs(
+        x = "GenoFLU genotype",
+        y = "Eligible samples",
+        subtitle = paste(nrow(eligible), "H5Nx-screen-eligible samples")
+      ) +
+      theme_minimal(base_size = 14)
+
+    print(p)
+  }
+}
+```
+
+# Genome Coverage
+
 ## QC-qualified Genome Completeness
 
 Each influenza segment passes WINGS segment QC when median depth is at least **`r format(coverage_threshold, trim = TRUE)`x**; at least **`r format(100 * coverage_breadth_threshold, trim = TRUE)`%** of reference positions have depth of at least **`r format(coverage_threshold, trim = TRUE)`x**; consensus length is at least the configured segment-specific minimum; and the consensus N fraction is at most **`r format(100 * max_n_fraction, trim = TRUE)`%**. A consensus longer than the configured upper length guide is retained as **PASS** but receives a length warning for review. Genome status is based on the number of the eight influenza A segments that pass the hard QC criteria:
@@ -958,88 +934,6 @@ p <- ggplot(
 p
 ```
 
-## HA Subtype Distribution
-
-```{r}
-ha_counts <- summary %>%
-  count(ha_call)
-
-p <- ggplot(
-  ha_counts,
-  aes(
-    x = reorder(ha_call, n),
-    y = n
-  )
-) +
-  geom_col(
-    fill = "#8C1D40",
-    width = 0.7
-  ) +
-  coord_flip() +
-  labs(
-    x = "HA Subtype",
-    y = "Samples"
-  ) +
-  theme_minimal(base_size = 14)
-
-p
-```
-
-## NA Subtype Distribution
-
-```{r}
-na_counts <- summary %>%
-  count(na_call)
-
-p <- ggplot(
-  na_counts,
-  aes(
-    x = reorder(na_call, n),
-    y = n
-  )
-) +
-  geom_col(
-    fill = "#FFC627",
-    width = 0.7
-  ) +
-  coord_flip() +
-  labs(
-    x = "NA Subtype",
-    y = "Samples"
-  ) +
-  theme_minimal(base_size = 14)
-
-p
-```
-
-## Host Distribution
-
-```{r}
-host_counts <-
-  summary %>%
-  count(display_host)
-
-p <- ggplot(
-  host_counts,
-  aes(
-    reorder(display_host, n),
-    n
-  )
-) +
-  geom_col(
-    fill = "#8C1D40",
-    width = 0.7
-  ) +
-  coord_flip() +
-  labs(
-    x = "Host",
-    y = "Samples"
-  ) +
-  theme_minimal(base_size = 14)
-
-p
-```
-
 ## Average Coverage
 
 ```{r}
@@ -1083,17 +977,27 @@ p <- ggplot(
 p
 ```
 
-## Publication-quality Summary Figure
-
-::: {.center-figure}
+# Surveillance Explorer
 
 ```{r}
-figure_path <- "figures/run_summary.png"
+explorer_enabled <- tolower(trimws(as.character(params$explorer_enabled))) %in%
+  c("true", "t", "1", "yes", "y", "on")
 
-if (file.exists(figure_path)) {
-  knitr::include_graphics(figure_path)
-} else {
-  cat("Publication-quality summary figure was not generated for this run.")
+if (explorer_enabled && file.exists(params$explorer_json)) {
+  explorer_json_text <- paste(
+    readLines(params$explorer_json, warn = FALSE, encoding = "UTF-8"),
+    collapse = "\n"
+  )
+  # build_surveillance_explorer.py already escapes closing-script sequences.
+  htmltools::HTML(sprintf(
+    '<script type="application/json" id="wings-surveillance-data-0">%s</script>\n<div class="wings-surveillance-explorer" data-wse-data-id="wings-surveillance-data-0"></div>',
+    explorer_json_text
+  ))
+} else if (explorer_enabled) {
+  htmltools::div(
+    class = "alert alert-warning",
+    "Surveillance Explorer data are not available for this run."
+  )
 }
 ```
 

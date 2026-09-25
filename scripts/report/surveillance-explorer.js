@@ -56,7 +56,10 @@
       this.payload = payload;
       this.samples = Array.isArray(payload.samples) ? payload.samples : [];
       this.sampleById = new Map(this.samples.map((sample) => [sample.sample_id, sample]));
-      this.hosts = Array.isArray(payload.hosts) ? payload.hosts : [];
+      this.hosts = [...new Set([
+        ...(Array.isArray(payload.hosts) ? payload.hosts : []),
+        ...this.samples.map((sample) => sample.host).filter(Boolean),
+      ])];
       this.hostColor = new Map(this.hosts.map((host, i) => [host, HOST_COLORS[i % HOST_COLORS.length]]));
       this.segments = (payload.segment_order || []).filter((segment) => payload.trees && payload.trees[segment]);
       this.segment = this.segments.includes("HA") ? "HA" : (this.segments[0] || null);
@@ -121,7 +124,7 @@
               <div class="wse-tree"></div>
             </section>
           </div>
-          <div class="wse-footer-note">Phylogenies are displayed as supplied and are not inferred, rerooted, or time-calibrated by WINGS. Collection dates come from metadata, not tip labels.</div>
+          <div class="wse-footer-note">When the optional phylogeny stage is enabled, WINGS infers segment trees from QC-passing consensus sequences. Otherwise, the Explorer displays available external trees. Trees are displayed without rerooting or time calibration. Collection dates come from metadata, not tip labels.</div>
         </div>`;
 
       this.metricsNode = this.root.querySelector(".wse-metrics");
@@ -206,24 +209,23 @@
         this.updateSelection();
       });
       this.controlsNode.querySelector(".wse-host-select")?.addEventListener("change", (event) => {
-        this.hostFilter = event.target.value;
-        this.renderTimeline();
-        this.renderMap();
-        this.renderTree();
-        this.renderLegend();
-        this.updateSelection();
+        this.setHostFilter(event.target.value);
       });
       this.controlsNode.querySelector(".wse-reset")?.addEventListener("click", () => {
-        this.hostFilter = "ALL";
-        const hostSelect = this.controlsNode.querySelector(".wse-host-select");
-        if (hostSelect) hostSelect.value = "ALL";
         this.selectedSampleId = this.samples[0]?.sample_id || null;
-        this.renderTimeline();
-        this.renderMap();
-        this.renderTree();
-        this.renderLegend();
-        this.updateSelection();
+        this.setHostFilter("ALL");
       });
+    }
+
+    setHostFilter(host) {
+      this.hostFilter = host;
+      const hostSelect = this.controlsNode.querySelector(".wse-host-select");
+      if (hostSelect) hostSelect.value = host;
+      this.renderTimeline();
+      this.renderMap();
+      this.renderTree();
+      this.renderLegend();
+      this.updateSelection();
     }
 
     renderSelected() {
@@ -257,8 +259,32 @@
     }
 
     renderLegend() {
-      const visibleHosts = this.hostFilter === "ALL" ? this.hosts : [this.hostFilter];
-      this.legendNode.innerHTML = visibleHosts.map((host) => `<span><i style="background:${this.hostColor.get(host) || "#5F6368"}"></i>${esc(host)}</span>`).join("");
+      const counts = new Map(this.hosts.map((host) => [host, 0]));
+      this.samples.forEach((sample) => counts.set(sample.host, (counts.get(sample.host) || 0) + 1));
+      const ranked = [...counts.keys()].filter((host) => counts.get(host) > 0)
+        .sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
+      const maxCount = Math.max(1, ...ranked.map((host) => counts.get(host)));
+
+      this.legendNode.innerHTML = `
+        <div class="wse-host-distribution-title">Host distribution</div>
+        ${ranked.length ? ranked.map((host) => {
+          const count = counts.get(host);
+          const color = this.hostColor.get(host) || "#5F6368";
+          const active = this.hostFilter === host;
+          return `<button type="button" class="wse-host-row${active ? " is-active" : ""}"
+            data-host="${esc(host)}" aria-pressed="${active ? "true" : "false"}"
+            aria-label="Filter by ${esc(host)}: ${count} samples">
+            <span class="wse-host-label"><i style="background:${color}"></i>${esc(host)}</span>
+            <span class="wse-host-track"><span class="wse-host-fill" style="width:${100 * count / maxCount}%;background:${color}"></span></span>
+            <strong>${formatNumber(count)}</strong>
+          </button>`;
+        }).join("") : '<div class="wse-empty">No host data available.</div>'}`;
+
+      this.legendNode.querySelectorAll(".wse-host-row").forEach((button) => {
+        button.addEventListener("click", () => {
+          this.setHostFilter(this.hostFilter === button.dataset.host ? "ALL" : button.dataset.host);
+        });
+      });
     }
 
     renderTimeline() {

@@ -772,6 +772,8 @@ The sequencing-run report is written to:
 results/run_summary/run_summary.html
 ```
 
+The HTML report uses tabs for **Run Summary**, **Sample Detail**, **Subtype/Genotype Distribution**, **Genome Coverage**, and **Surveillance Explorer**. The subtype tab shows HA and NA distributions and, when GenoFLU is enabled, genotype counts among H5Nx-screen-eligible samples. Samples without an assigned GenoFLU genotype are shown separately; samples ineligible for GenoFLU are excluded. The Explorer shows the linked timeline, map, segment trees, and a compact host distribution beneath the map. Click a host bar to filter the Explorer; click it again to show all hosts.
+
 A portable WINGS report bundle containing the run summary and all sample reports is written to:
 
 ```text

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build the data bundle used by the WINGS Surveillance Explorer.
 
-The explorer deliberately treats supplied phylogenies as visualization inputs.
-It displays the first Newick tree in each configured file and does not infer,
-reroot, date, or otherwise modify a phylogeny.
+The explorer treats WINGS-generated or externally supplied trees as visualization
+inputs. It displays the first Newick tree in each configured file and does not
+infer, reroot, date, or otherwise modify a phylogeny.
 """
 
 
@@ -371,7 +371,7 @@ def build_payload(
         "warnings": warnings,
         "notes": [
             "Collection dates are read from metadata and are not parsed from tree-tip labels.",
-            "Phylogenies are displayed as supplied; WINGS does not infer, reroot, or time-calibrate them.",
+            "When the optional phylogeny stage is enabled, WINGS infers segment trees from QC-passing consensus sequences; otherwise, the Explorer displays available external trees. Trees are displayed without rerooting or time calibration.",
             "When a tree file contains multiple Newick trees, the first tree is displayed.",
             "Samples without coordinates remain available in the timeline and phylogeny.",
         ],

@@ -1854,6 +1854,7 @@ rule run_summary_html:
         coverage_breadth_threshold=COVERAGE_MIN_BREADTH,
         max_n_fraction=SEGMENT_MAX_N_FRACTION,
         explorer_enabled="true" if RUN_SURVEILLANCE_EXPLORER else "false",
+        genoflu_enabled="true" if RUN_GENOFLU else "false",
         quarto=QUARTO_CMD,
     conda:
         REPORTING_ENV
@@ -1900,6 +1901,7 @@ rule run_summary_html:
               -P "review_tsv:samples_requiring_review.tsv" \
               -P "explorer_json:${{explorer_json_abs}}" \
               -P "explorer_enabled:{params.explorer_enabled}" \
+              -P "genoflu_enabled:{params.genoflu_enabled}" \
               -P "coverage_threshold:{params.coverage_threshold}" \
               -P "coverage_breadth_threshold:{params.coverage_breadth_threshold}" \
               -P "max_n_fraction:{params.max_n_fraction}"

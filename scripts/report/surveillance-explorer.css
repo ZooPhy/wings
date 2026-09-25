@@ -259,26 +259,45 @@
   font-weight: 800;
 }
 .wse-host-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .4rem .7rem;
-  justify-content: center;
+  display: grid;
+  gap: .3rem;
   padding: .25rem .75rem .8rem;
 }
-.wse-host-legend span {
-  align-items: center;
-  color: #444;
-  display: inline-flex;
-  font-size: .7rem;
+.wse-host-distribution-title {
+  color: #333;
+  font-size: .78rem;
   font-weight: 900;
-  gap: .3rem;
+  margin-bottom: .1rem;
 }
-.wse-host-legend i {
+.wse-host-row {
+  align-items: center;
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: .35rem;
+  color: #444;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: .76rem;
+  gap: .6rem;
+  grid-template-columns: minmax(4.5rem, 6rem) minmax(0, 1fr) 2rem;
+  padding: .18rem .35rem;
+  text-align: left;
+  width: 100%;
+}
+.wse-host-row:hover,
+.wse-host-row.is-active { background: #fff8df; border-color: #8C1D40; }
+.wse-host-row:focus-visible { outline: 2px solid #8C1D40; outline-offset: 2px; }
+.wse-host-label { align-items: center; display: flex; font-weight: 800; gap: .35rem; }
+.wse-host-label i {
   border-radius: 50%;
   display: inline-block;
-  height: .7rem;
-  width: .7rem;
+  flex: 0 0 .65rem;
+  height: .65rem;
 }
+.wse-host-track { background: #ebedf0; border-radius: .35rem; height: .55rem; overflow: hidden; }
+.wse-host-fill { border-radius: .35rem; display: block; height: 100%; }
+.wse-host-row strong { font-size: .78rem; text-align: right; }
 
 .wse-segment-tabs {
   align-items: center;
