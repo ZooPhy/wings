@@ -1779,7 +1779,12 @@ rule surveillance_explorer_data:
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
             sample=SAMPLES,
         ),
-        trees=surveillance_tree_inputs
+        trees=surveillance_tree_inputs,
+        ebird_samples=(
+            [f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"]
+            if Path(f"{RESULTS}/run_summary/ebird/ebird_samples.tsv").is_file()
+            else []
+        )
     output:
         json=f"{RESULTS}/run_summary/surveillance_explorer.json"
     script:

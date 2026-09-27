@@ -829,6 +829,12 @@ snakemake \
 
 Because the run summary depends on all sample reports, target an individual sample report when rerunning only one barcode.
 
+### Optional eBird reporting context
+
+eBird is an external ecological context, not an infection or abundance estimate. Keep the large EBD observation and sampling-event files outside the WINGS repository. After downloading an authorized matching pair, summarize it locally using `scripts/filter_ebird_for_wings.py` with `--metadata metadata.tsv`, `--observations`, `--sampling`, and an explicit `--map CAGO='Canada Goose'` for coded hosts. Save aggregates to `results/run_summary/ebird/` (the script's `--output-dir`). The script discovers which species are in the EBD and writes `ebird_samples.tsv`, `ebird_monthly.tsv`, and `ebird_species.tsv`; it does not copy raw EBD records into WINGS.
+
+If `ebird_samples.tsv` exists when Snakemake builds the run summary, the Surveillance Explorer displays READY results in a dedicated eBird panel. Samples sharing a host species, geographic scope, and collection-date window share **one** checklist context; do not add those checklist totals across samples. State-only metadata yield state-wide context; a local radius requires both sample coordinates and `--radius-km`. When eBird aggregates are absent, the panel is hidden and the standard report still works. Rebuild `results/run_summary/run_summary.html` after updating eBird aggregates, then rebuild the portable bundle if needed.
+
 ### Build the portable WINGS report bundle
 
 Build the portable report bundle with:

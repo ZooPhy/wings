@@ -56,6 +56,7 @@
       this.payload = payload;
       this.samples = Array.isArray(payload.samples) ? payload.samples : [];
       this.sampleById = new Map(this.samples.map((sample) => [sample.sample_id, sample]));
+      this.ebirdContexts = Array.isArray(payload.ebird_contexts) ? payload.ebird_contexts : [];
       this.hosts = [...new Set([
         ...(Array.isArray(payload.hosts) ? payload.hosts : []),
         ...this.samples.map((sample) => sample.host).filter(Boolean),
@@ -112,6 +113,10 @@
             <div class="wse-panel-heading"><div><span class="wse-panel-kicker">When</span><h3>Collection timeline</h3></div><div class="wse-panel-note">Circle color = host</div></div>
             <div class="wse-timeline"></div>
           </section>
+          <section class="wse-panel wse-ebird-panel" hidden>
+            <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Ecological context</span><h3>eBird reporting frequency</h3></div></div>
+            <div class="wse-ebird"></div>
+          </section>
           <div class="wse-main-grid">
             <section class="wse-panel wse-map-panel">
               <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Where</span><h3>Sampling map</h3></div><div class="wse-panel-note wse-map-count"></div></div>
@@ -131,6 +136,8 @@
       this.controlsNode = this.root.querySelector(".wse-controls");
       this.selectedNode = this.root.querySelector(".wse-selected");
       this.timelineNode = this.root.querySelector(".wse-timeline");
+      this.ebirdPanelNode = this.root.querySelector(".wse-ebird-panel");
+      this.ebirdNode = this.root.querySelector(".wse-ebird");
       this.mapNode = this.root.querySelector(".wse-map");
       this.mapCountNode = this.root.querySelector(".wse-map-count");
       this.legendNode = this.root.querySelector(".wse-host-legend");
@@ -142,6 +149,7 @@
       this.renderControls();
       this.renderSegmentTabs();
       this.renderTimeline();
+      this.renderEbird();
       this.renderMap();
       this.renderTree();
       this.renderLegend();
@@ -222,6 +230,7 @@
       const hostSelect = this.controlsNode.querySelector(".wse-host-select");
       if (hostSelect) hostSelect.value = host;
       this.renderTimeline();
+      this.renderEbird();
       this.renderMap();
       this.renderTree();
       this.renderLegend();
@@ -256,6 +265,37 @@
         </div>
         <div class="wse-selected-tags">${tags.join("")}</div>
         <a class="wse-report-link" href="${esc(sample.report_href)}">Open sample report →</a>`;
+    }
+
+    renderEbird() {
+      if (!this.ebirdPanelNode) return;
+      this.ebirdPanelNode.hidden = !this.ebirdContexts.length;
+      if (!this.ebirdContexts.length) return;
+      const contexts = this.ebirdContexts.filter((item) =>
+        this.hostFilter === "ALL" || item.host === this.hostFilter);
+      if (!contexts.length) {
+        this.ebirdNode.innerHTML = '<p class="wse-ebird-note">No eBird context is available for this host.</p>';
+        return;
+      }
+      this.ebirdNode.innerHTML = `
+        <p class="wse-ebird-note">These are complete eBird checklist reporting frequencies, not bird abundance, infection prevalence, or measurements at the sampled birds. Records sharing the same location and date window are displayed once; sample counts must not be added together.</p>
+        <div class="wse-ebird-grid">${contexts.map((item) => {
+          const ids = Array.isArray(item.sample_ids) ? item.sample_ids : [];
+          const count = Number(item.complete_checklists);
+          const positives = Number(item.reporting_checklists);
+          const percent = count > 0 ? 100 * positives / count : NaN;
+          const scope = item.radius_km == null ? `${item.state}, ${item.country} · state-wide` :
+            `${item.state}, ${item.country} · ${formatNumber(item.radius_km, 1)} km radius`;
+          const isSelected = ids.includes(this.selectedSampleId);
+          return `<article class="wse-ebird-card${isSelected ? " is-selected" : ""}">
+            <div class="wse-ebird-card-heading"><strong>${esc(item.species)}</strong><span>${Number.isFinite(percent) ? percent.toFixed(1) + "%" : "NA"}</span></div>
+            <div class="wse-ebird-track"><span style="width:${Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 0}%"></span></div>
+            <div>${esc(`${formatNumber(positives)} of ${formatNumber(count)} complete checklists reported this species`)}</div>
+            <small>${esc(scope)} · ${esc(dateLabel(item.date_from))}–${esc(dateLabel(item.date_to))}</small>
+            <small>Shared by ${formatNumber(ids.length)} WINGS sample${ids.length === 1 ? "" : "s"}: ${ids.map(esc).join(", ")}</small>
+            <small>Source: eBird Basic Dataset${item.release ? ` · ${esc(item.release)}` : ""}</small>
+          </article>`;
+        }).join("")}</div>`;
     }
 
     renderLegend() {
@@ -522,6 +562,7 @@
 
     updateSelection() {
       this.renderSelected();
+      this.renderEbird();
       this.updateEmphasis();
     }
 

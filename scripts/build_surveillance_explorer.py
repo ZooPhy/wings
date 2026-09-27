@@ -339,12 +339,14 @@ def build_payload(
     metadata: Path,
     summaries: Iterable[Path],
     trees: Iterable[Path],
+    ebird_samples: Path | None = None,
 ) -> dict[str, Any]:
     metadata_rows = read_metadata(metadata)
     summary_rows = read_sample_summaries(summaries)
     samples = build_sample_records(metadata_rows, summary_rows)
     sample_ids = {sample["sample_id"] for sample in samples}
     tree_records, warnings = build_tree_records(trees, sample_ids)
+    ebird_contexts = build_ebird_contexts(samples, ebird_samples, warnings)
 
     geolocated = sum(1 for sample in samples if sample["has_coordinates"])
     dates = sorted(
@@ -357,6 +359,7 @@ def build_payload(
         "title": "WINGS Surveillance Explorer",
         "samples": samples,
         "trees": tree_records,
+        "ebird_contexts": ebird_contexts,
         "segment_order": list(SEGMENT_ORDER),
         "summary": {
             "sample_count": len(samples),
@@ -378,12 +381,75 @@ def build_payload(
     }
 
 
-def _paths_from_snakemake() -> tuple[Path, list[Path], list[Path], Path]:
+def build_ebird_contexts(
+    samples: list[dict[str, Any]], path: Path | None, warnings: list[str]
+) -> list[dict[str, Any]]:
+    """Group identical metadata windows so checklists are displayed only once."""
+    if path is None or not path.is_file():
+        return []
+    by_id = {sample["sample_id"]: sample for sample in samples}
+    grouped: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in read_tsv(path):
+        if _clean(row.get("status")) != "READY":
+            continue
+        sample = by_id.get(_clean(row.get("sample_id")))
+        if sample is None:
+            continue
+        country = _clean(row.get("country")).upper()
+        meta_country = sample["country"].upper()
+        if meta_country in {"USA", "UNITED STATES", "UNITED STATES OF AMERICA"}:
+            meta_country = "US"
+        elif meta_country in {"CAN", "CANADA"}:
+            meta_country = "CA"
+        if (sample["host"] != _clean(row.get("host")) or
+            sample["collection_date"] != _clean(row.get("collection_date")) or
+            sample["state"].casefold() != _clean(row.get("state")).casefold() or
+            meta_country != country):
+            warnings.append(f"eBird summary for {sample['sample_id']} does not match current metadata; ignored.")
+            continue
+        total = _integer(row.get("complete_checklists"))
+        reported = _integer(row.get("reporting_checklists"))
+        if total is None or total <= 0 or reported is None or not 0 <= reported <= total:
+            warnings.append(f"Invalid eBird checklist counts for {sample['sample_id']}; ignored.")
+            continue
+        radius = _number(row.get("radius_km"))
+        if radius is not None and not sample["has_coordinates"]:
+            warnings.append(f"eBird radius for {sample['sample_id']} has no matching coordinates; ignored.")
+            continue
+        key = (sample["host"], country, sample["state"].casefold(),
+               _clean(row.get("ebird_species")).casefold(),
+               _clean(row.get("date_from")), _clean(row.get("date_to")),
+               _clean(row.get("release")), radius,
+               sample["latitude"] if radius is not None else None,
+               sample["longitude"] if radius is not None else None)
+        if (not key[3] or not key[4] or not key[5] or
+            not key[4] <= sample["collection_date"] <= key[5]):
+            continue
+        if key not in grouped:
+            grouped[key] = {
+                "host": sample["host"], "species": _clean(row.get("ebird_species")),
+                "state": sample["state"], "country": country,
+                "date_from": key[4], "date_to": key[5], "radius_km": radius,
+                "complete_checklists": total, "reporting_checklists": reported,
+                "reporting_frequency": reported / total,
+                "release": _clean(row.get("release")), "sample_ids": [],
+            }
+        record = grouped[key]
+        if (record["complete_checklists"], record["reporting_checklists"]) != (total, reported):
+            warnings.append(f"Conflicting eBird summaries for {sample['sample_id']}; ignored.")
+            continue
+        if sample["sample_id"] not in record["sample_ids"]:
+            record["sample_ids"].append(sample["sample_id"])
+    return list(grouped.values())
+
+
+def _paths_from_snakemake() -> tuple[Path, list[Path], list[Path], Path, Path | None]:
     metadata = Path(snakemake.input.metadata)
     summaries = [Path(value) for value in snakemake.input.summaries]
     trees = [Path(value) for value in getattr(snakemake.input, "trees", [])]
     output = Path(snakemake.output.json)
-    return metadata, summaries, trees, output
+    ebird = getattr(snakemake.input, "ebird_samples", [])
+    return metadata, summaries, trees, output, Path(ebird[0]) if ebird else None
 
 
 def parse_args() -> argparse.Namespace:
@@ -391,18 +457,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--summary", type=Path, action="append", default=[])
     parser.add_argument("--tree", type=Path, action="append", default=[])
+    parser.add_argument("--ebird-samples", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
 
 def main() -> None:
     if "snakemake" in globals():
-        metadata, summaries, trees, output = _paths_from_snakemake()
+        metadata, summaries, trees, output, ebird = _paths_from_snakemake()
     else:
         args = parse_args()
-        metadata, summaries, trees, output = args.metadata, args.summary, args.tree, args.output
+        metadata, summaries, trees, output, ebird = (
+            args.metadata, args.summary, args.tree, args.output, args.ebird_samples
+        )
 
-    payload = build_payload(metadata, summaries, trees)
+    payload = build_payload(metadata, summaries, trees, ebird)
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.
