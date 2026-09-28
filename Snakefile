@@ -203,6 +203,25 @@ PHYLOGENY_PATTERN = str(config.get("phylogeny_pattern", "{segment}_Tree.newick")
 if "{segment}" not in PHYLOGENY_PATTERN:
     raise ValueError("config key 'phylogeny_pattern' must contain {segment}")
 
+# Public metadata annotate reviewed contextual trees supplied for display.
+REFERENCE_CONFIG = config.get("public_references", {}) or {}
+if not isinstance(REFERENCE_CONFIG, dict):
+    raise ValueError("public_references must be a mapping")
+REFERENCE_ENABLED = as_bool(REFERENCE_CONFIG.get("enabled", False))
+REFERENCE_MANIFEST = str(REFERENCE_CONFIG.get("manifest", "resources/references/manifest.tsv"))
+REFERENCE_PROVENANCE = str(REFERENCE_CONFIG.get("provenance", "resources/references/provenance.json"))
+REFERENCE_TREE_DIR = REFERENCE_CONFIG.get("tree_dir")
+REFERENCE_TREE_PATTERN = str(REFERENCE_CONFIG.get("tree_pattern", "{segment}_Tree.newick"))
+if "{segment}" not in REFERENCE_TREE_PATTERN:
+    raise ValueError("public_references.tree_pattern must contain {segment}")
+
+# Ecological context uses an explicitly refreshed offline snapshot.
+ECOLOGY_CONFIG = config.get("ecological_context", {}) or {}
+if not isinstance(ECOLOGY_CONFIG, dict):
+    raise ValueError("ecological_context must be a mapping")
+ECOLOGY_JSON = str(ECOLOGY_CONFIG.get("snapshot", "resources/ecology/ecological-context.json"))
+ECOLOGY_ENABLED = as_bool(ECOLOGY_CONFIG.get("enabled", Path(ECOLOGY_JSON).is_file()))
+
 # APHIS context uses a pinned local CSV; report builds never fetch live data.
 OUTBREAK_CONFIG = config.get("outbreak_context", {}) or {}
 if not isinstance(OUTBREAK_CONFIG, dict):
@@ -323,6 +342,13 @@ def surveillance_tree_inputs(_wildcards):
     """Return supplied segment trees that exist at DAG construction time."""
     if not RUN_SURVEILLANCE_EXPLORER:
         return []
+    if REFERENCE_ENABLED and REFERENCE_TREE_DIR:
+        paths = [Path(REFERENCE_TREE_DIR) / REFERENCE_TREE_PATTERN.format(segment=segment)
+                 for segment in SEGMENT_SEQUENCE]
+        existing = [str(path) for path in paths if path.is_file() and path.stat().st_size]
+        if not existing:
+            raise ValueError("No contextual trees found in public_references.tree_dir")
+        return existing
     if RUN_PHYLOGENY:
         return [str(Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment))
                 for segment in SEGMENT_SEQUENCE]
@@ -1945,6 +1971,11 @@ if EBIRD_ENABLED:
 
 rule surveillance_explorer_data:
     input:
+        reference_manifest=([REFERENCE_MANIFEST] if REFERENCE_ENABLED else []),
+        reference_provenance=([REFERENCE_PROVENANCE] if REFERENCE_ENABLED else []),
+        reference_loader="scripts/public_reference_context.py",
+        ecological_context=([ECOLOGY_JSON] if ECOLOGY_ENABLED else []),
+        ecological_loader="scripts/build_ecological_context.py",
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",

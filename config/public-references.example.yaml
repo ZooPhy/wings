@@ -1,0 +1,10 @@
+# Merge this block into config.yaml after reviewing the metadata and trees.
+# No public sequences are downloaded or added to trees by this feature.
+public_references:
+  enabled: false
+  manifest: resources/references/manifest.tsv
+  provenance: resources/references/provenance.json
+  # Optional: display these pre-existing contextual trees instead of run trees.
+  # Missing segments remain unavailable; trees from different analyses are not mixed.
+  tree_dir: resources/references/trees
+  tree_pattern: "{segment}_Tree.newick"

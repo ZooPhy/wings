@@ -23,6 +23,7 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - `fastplong` read-quality and length filtering without a second adapter-trimming pass
 - Sample metadata validation and integration
 - IRMA `FLU-minion` assembly
+- NanoPlot raw-read QC enabled by default and configurable with `run_nanoplot`
 - Segment-level QC using depth, breadth-at-depth, expected-length, and N-content criteria
 - Medaka consensus polishing and variant calling
 - BLAST-based segment identification with identity/query-coverage evidence and confidence classification
@@ -31,6 +32,9 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - VADR sequence annotation and validation
 - Interactive sample-level HTML reports
 - Interactive sequencing-run summary report
+- Optional internal eight-segment phylogeny inference from QC-qualified WINGS consensuses using MAFFT and IQ-TREE 2
+- Linked eight-segment Surveillance Explorer with synchronized sample selection across timeline, map, and segment trees
+- [Ecological context](docs/ecological-context.md) with aligned eBird reporting frequency, an offline BirdCast state pilot, and cached ERA5 weather; source scales, units, dates, and provenance remain visible
 - [USDA APHIS outbreak context](#usda-aphis-outbreak-context) with state-level map shading, date filters, source-record browsing, and reproducible offline snapshots
 - Portable `.wings` report bundles containing the run summary, all sample reports, and embedded run-level provenance
 - Run-level provenance capturing workflow state, configuration hashes, environment hashes, runtime details, and BLAST database provenance
@@ -42,6 +46,9 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 
 ```text
 Nanopore FASTQ
+    |
+    +--> NanoPlot raw-read QC
+    |    (enabled by default; set run_nanoplot: false to disable)
     |
     v
 Porechop ABI
@@ -78,7 +85,14 @@ Segment-level QC
     |             (only when the H5Nx screen is DETECTED)
     |
     +--> VADR annotation and validation
-         (from segment-QC-qualified polished consensuses)
+    |    (from segment-QC-qualified polished consensuses)
+    |
+    +--> QC-qualified final segment consensuses
+         |
+         +--> Optional internal phylogeny (phylogeny.enabled: true)
+              +--> MAFFT alignment
+              +--> IQ-TREE 2 maximum-likelihood trees
+              +--> Linked eight-segment Surveillance Explorer
     |
     v
 Interactive HTML reports
@@ -89,7 +103,7 @@ Interactive HTML reports
     +--> Portable WINGS report bundle (.wings; provenance embedded)
 ```
 
-NanoPlot is also available as an optional raw-read quality-control target.
+NanoPlot raw-read QC is included in the default `rule all` workflow. Set `run_nanoplot: false` in `config.yaml` to disable it. Internal phylogeny inference is opt-in with `phylogeny.enabled: true`; the Surveillance Explorer can still display supplied or pre-existing segment trees when internal inference is disabled.
 
 ## Repository structure
 
@@ -107,6 +121,7 @@ NanoPlot is also available as an optional raw-read quality-control target.
 │   ├── genoflu.yaml
 │   ├── medaka.yaml
 │   ├── nanoplot.yaml
+│   ├── phylogeny.yaml
 │   ├── porechop.yaml
 │   ├── py-tools.yaml
 │   ├── pysam.yaml
@@ -115,26 +130,39 @@ NanoPlot is also available as an optional raw-read quality-control target.
 │   └── seqtk.yaml
 ├── scripts/
 │   ├── build_blast_db.sh
+│   ├── build_ebird_cache.py
+│   ├── build_ecological_context.py
+│   ├── build_phylogeny_input.py
 │   ├── build_report_bundle.py
+│   ├── build_surveillance_explorer.py
 │   ├── install_vadr_models.sh           # pinned VADR influenza-model installer
 │   ├── check_coverage.py
 │   ├── coverage_table.py
+│   ├── filter_ebird_for_wings.py
 │   ├── install_quarto_linux_arm64.sh  # pinned ARM64 Quarto installer
 │   ├── normalize_irma_outputs.py
 │   ├── prepare_vadr_input.py
+│   ├── public_reference_context.py
 │   ├── resolve_medaka_model.py
 │   ├── sample_summary.py
 │   ├── validate_metadata.py
 │   ├── extract_sample_metadata.py
 │   ├── serve_reports.py
 │   ├── summarize_blast.py
+│   ├── summarize_vadr.py
 │   ├── sample_summary.qmd
 │   ├── run_summary.qmd
 │   ├── write_run_provenance.py
 │   └── report/
 │       ├── escape-report.html
 │       ├── escape-report.js
-│       └── sample-report.css
+│       ├── genome-constellation.css
+│       ├── genome-constellation.js
+│       ├── map-boundaries.js
+│       ├── run-report.html
+│       ├── sample-report.css
+│       ├── surveillance-explorer.css
+│       └── surveillance-explorer.js
 ├── profiles/
 │   └── slurm-arm/
 ├── tests/                             # regression tests
@@ -517,7 +545,17 @@ blast_max_hsps: 1
 medaka_model: null
 medaka_fail_soft: true
 
+run_nanoplot: true
 run_genoflu: true
+run_surveillance_explorer: true
+
+phylogeny:
+  enabled: false
+  threads: 4
+  min_sequences: 5
+phylogeny_dir: "phylogeny"
+phylogeny_pattern: "{segment}_Tree.newick"
+
 run_vadr: true
 vadr_runtime: auto
 vadr_image: "docker://staphb/vadr:1.7"
@@ -562,7 +600,17 @@ blast_max_hsps: 1
 medaka_model: null
 medaka_fail_soft: true
 
+run_nanoplot: true
 run_genoflu: true
+run_surveillance_explorer: true
+
+phylogeny:
+  enabled: false
+  threads: 4
+  min_sequences: 5
+phylogeny_dir: "phylogeny"
+phylogeny_pattern: "{segment}_Tree.newick"
+
 run_vadr: false
 vadr_runtime: auto
 vadr_image: "docker://staphb/vadr:1.7"
@@ -574,7 +622,9 @@ run_summary: true
 
 Use `irma_runtime: "singularity"` instead when Singularity is installed rather than Apptainer. `irma_runtime: "auto"` selects Apptainer, Singularity, Docker, or local IRMA in that order based on what is available.
 
-The `run_genoflu`, `run_vadr`, and `run_summary` settings control whether those analyses or run-level reporting outputs are requested as default workflow targets. On Apple Silicon macOS, keep all three set to `true` for a complete production run. On Linux ARM64, keep `run_genoflu: true` and `run_summary: true`, but set `run_vadr: false` when using the pinned VADR container image because that image does not provide a Linux ARM64 build.
+The `run_nanoplot`, `run_genoflu`, `run_vadr`, and `run_summary` settings control whether those analyses or run-level outputs are requested as default workflow targets. `run_surveillance_explorer` controls whether the linked Explorer is populated in the run report. NanoPlot is enabled by default; set `run_nanoplot: false` to omit raw-read NanoPlot QC from `rule all`. On Apple Silicon macOS, keep `run_genoflu: true`, `run_vadr: true`, and `run_summary: true` for a complete production run. On Linux ARM64, keep `run_genoflu: true` and `run_summary: true`, but set `run_vadr: false` when using the pinned VADR container image because that image does not provide a Linux ARM64 build.
+
+Internal tree inference is disabled by default. Set `phylogeny.enabled: true` to build one tree per influenza segment from QC-qualified final WINGS consensuses. `phylogeny.threads` controls MAFFT and IQ-TREE 2 threads, and `phylogeny.min_sequences` sets the minimum number of QC-qualified sequences required for a segment; the current Snakefile requires at least 5. `phylogeny_dir` and `phylogeny_pattern` control the final Newick locations and names.
 
 When VADR is enabled, `vadr_model_dir` must point to a complete influenza model installation. WINGS validates the required model files before launching VADR and passes the directory with `--mdir`; container runtimes mount it read-only. `vadr_forcegene: true` adds gene qualifiers to CDS and mat_peptide features using the influenza model information.
 
@@ -598,6 +648,25 @@ r1041_e82_400bps_hac_v5.0.0
 ```
 
 `medaka_model` remains available as an expert configuration override. With `medaka_model: null`, WINGS uses automatic FASTQ-based model resolution. The number of FASTQ records inspected can be configured with `medaka_model_records` (default: 100).
+
+### Internal eight-segment phylogeny
+
+WINGS can optionally infer sample-only phylogenies for the eight influenza A segments. Enable this with:
+
+```yaml
+phylogeny:
+  enabled: true
+  threads: 4
+  min_sequences: 5
+phylogeny_dir: "phylogeny"
+phylogeny_pattern: "{segment}_Tree.newick"
+```
+
+For each segment, WINGS collects the final consensus sequence from samples whose existing segment QC decision qualifies that segment. The merged per-sample FASTA supplies the final Medaka-polished sequence, or the workflow's explicit IRMA fallback when applicable, while `coverage.tsv` supplies the existing segment QC decision and selected contig. WINGS writes a segment input FASTA and status table under `results/run_summary/phylogeny/`.
+
+A segment proceeds only when at least `phylogeny.min_sequences` QC-qualified sequences are available. WINGS aligns the segment sequences with MAFFT (`--auto`) and infers a maximum-likelihood tree with IQ-TREE 2 using ModelFinder (`-m MFP`) and 1,000 ultrafast bootstrap replicates (`-B 1000`). The workflow uses a fixed IQ-TREE seed of 1 for reproducibility. Final Newick trees are written according to `phylogeny_dir` and `phylogeny_pattern`; with the defaults, these are `phylogeny/HA_Tree.newick`, `phylogeny/NA_Tree.newick`, and the corresponding files for PB2, PB1, PA, NP, MP, and NS.
+
+When internal phylogeny is enabled, these generated trees are tracked as Snakemake dependencies and supplied to the Surveillance Explorer. If internal phylogeny is disabled, the Explorer can display non-empty pre-existing trees matching `phylogeny_dir` and `phylogeny_pattern`. When `public_references.enabled: true` and `public_references.tree_dir` is configured, the reviewed contextual trees from that directory are used for Explorer display instead.
 
 ## Running on an Apple Silicon laptop
 
@@ -647,9 +716,9 @@ snakemake \
 
 Snakemake reuses completed outputs automatically when the command is rerun after a failure or interruption. The `mem_mb` value is a Snakemake scheduling resource; it does not configure Docker Desktop memory. Docker resources must be configured separately in Docker Desktop.
 
-### Run NanoPlot optionally
+### NanoPlot raw-read QC
 
-NanoPlot is available as an optional target and is not required by the default final targets.
+NanoPlot is included in the default final targets when `run_nanoplot: true` (the default). Set `run_nanoplot: false` in `config.yaml` to omit NanoPlot from `rule all`. You can still target an individual NanoPlot result directly.
 
 For one sample:
 
@@ -718,7 +787,7 @@ Outputs are organized by sample:
 
 ```text
 results/<sample>/
-├── nanoplot/                    # optional
+├── nanoplot/                    # enabled by default; configurable with run_nanoplot
 ├── porechop/
 ├── fastplong/
 ├── metadata/
@@ -767,6 +836,30 @@ results/metadata/validated_metadata.tsv
 results/metadata/metadata_validation.tsv
 results/run_summary/run_provenance.tsv
 results/run_summary/run_provenance.json
+```
+
+When internal phylogeny is enabled, run-level phylogeny intermediates are written under:
+
+```text
+results/run_summary/phylogeny/<segment>.input.fasta
+results/run_summary/phylogeny/<segment>.status.tsv
+results/run_summary/phylogeny/<segment>.aligned.fasta
+results/run_summary/phylogeny/<segment>.mafft.log
+results/run_summary/phylogeny/<segment>.iqtree.log
+results/run_summary/phylogeny/<segment>.iqtree.*
+```
+
+The final segment trees are written according to `phylogeny_dir` and `phylogeny_pattern`. With the defaults:
+
+```text
+phylogeny/HA_Tree.newick
+phylogeny/NA_Tree.newick
+phylogeny/PB2_Tree.newick
+phylogeny/PB1_Tree.newick
+phylogeny/PA_Tree.newick
+phylogeny/NP_Tree.newick
+phylogeny/MP_Tree.newick
+phylogeny/NS_Tree.newick
 ```
 
 The sequencing-run report is written to:
@@ -922,7 +1015,16 @@ with the report and work offline. See
 [`map-boundaries.md`](scripts/report/map-boundaries.md) for sources and limitations.
 
 The explorer shows the recorded GenoFLU consensus genotype and linked segment
-trees. Detailed segment QC and coverage remain in the existing sample report;
+trees. Trees can come from WINGS internal phylogeny inference, from non-empty
+pre-existing files matching `phylogeny_dir` and `phylogeny_pattern`, or from a
+reviewed `public_references.tree_dir` when public reference context is enabled.
+When `phylogeny.enabled: true`, WINGS builds sample-only trees from QC-qualified
+final consensuses using MAFFT and IQ-TREE 2; each segment must meet
+`phylogeny.min_sequences` before alignment and tree inference proceed. When a
+public-reference tree directory is configured, those contextual trees are used
+for Explorer display instead of the sample-only tree set.
+
+Detailed segment QC and coverage remain in the existing sample report;
 the Surveillance Explorer does not repeat the segment-evidence table.
 **Open sample report** leads to the detailed report and its supporting outputs,
 including in the portable bundle.
@@ -1043,3 +1145,41 @@ Previously saved or shared bundles retain the snapshot embedded when they were
 built. See
 [Outbreak context](docs/outbreak-context.md) for semantics, provenance, and exact
 rebuild commands.
+
+### Ecological context: eBird, BirdCast, and weather
+
+The Surveillance Explorer includes three sample-linked ecological views with a
+shared calendar-date axis. eBird retains its validated host reporting frequency,
+checklist denominator, original aggregation period, geographic scope, and
+release. The BirdCast state pilot displays imported nightly migration estimates
+and missing-data explanations. Weather shows cached ERA5 daily mean temperature,
+precipitation totals, and daily maximum wind speed, with units, grid coordinates,
+resolution, and local timezone. The display does not assign point weather when
+sample coordinates are missing or imply epidemiological linkage.
+
+Build the first weather snapshot with:
+
+```bash
+python scripts/build_ecological_context.py \
+  --metadata results/metadata/validated_metadata.tsv \
+  --days 90 --fetch-weather
+```
+
+BirdCast numeric data require a separately supplied, provenance-backed pilot
+CSV; no automatic BirdCast feed or real numeric snapshot is bundled. Missing
+data are labeled unavailable, and the source dashboard link remains visible.
+Reports and saved `.wings` bundles work offline. See
+[Ecological context](docs/ecological-context.md) for source definitions, import
+format, refresh behavior, configuration, and the three-step report rebuild.
+
+## Public reference context
+
+The Surveillance Explorer can annotate supplied contextual segment trees with a
+reviewed **GenBank accession.version metadata manifest**. Public references have
+teal square tips, clickable source records, explicit date precision and provenance,
+and linked selection across segments with documented common sample identity.
+WINGS sample QC stays separate. This display feature does not retrieve sequences
+or add references to sample-only trees; contextual trees must already be supplied.
+
+See [public reference context](docs/public-reference-context.md) and
+[example configuration](config/public-references.example.yaml).

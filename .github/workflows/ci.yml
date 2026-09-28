@@ -59,7 +59,9 @@ jobs:
           tests/test_sample_summary_segments.py \
           tests/test_surveillance_explorer.py \
           tests/test_linked_genome_explorer.py \
-          tests/test_outbreak_context.py
+          tests/test_outbreak_context.py \
+          tests/test_ecological_context.py \
+          tests/test_public_reference_context.py
 
   explorer-browser:
     name: Linked explorer / Chromium
@@ -78,6 +80,6 @@ jobs:
           npm install --no-save playwright
           npx playwright install --with-deps chromium
       - name: Check explorer state and retained local behavior
-        run: node --test tests/test_linked_genome_state.cjs tests/test_surveillance_map.cjs tests/test_outbreak_context.cjs
+        run: node --test tests/test_linked_genome_state.cjs tests/test_surveillance_map.cjs tests/test_outbreak_context.cjs tests/test_ecological_context.cjs tests/test_public_reference_context.cjs
       - name: Check linked explorer interactions
         run: node tests/test_linked_genome_explorer.cjs

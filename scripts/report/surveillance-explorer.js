@@ -52,8 +52,14 @@
       this.payload = payload;
       this.samples = Array.isArray(payload.samples) ? payload.samples : [];
       this.sampleById = new Map(this.samples.map((sample) => [sample.sample_id, sample]));
+      this.referenceContext = payload.public_reference_context || null;
+      this.references = Array.isArray(this.referenceContext?.references) ? this.referenceContext.references : [];
+      this.referenceById = new Map(this.references.map(ref => [ref.reference_id, ref]));
+      this.selectedReferenceId = null;
       this.ebirdContexts = Array.isArray(payload.ebird_contexts) ? payload.ebird_contexts : [];
       this.ebirdAttribution = payload.ebird_attribution || null;
+      this.ecology = payload.ecological_context || null;
+      this.ecologyDays = 30;
       this.hosts = [...new Set([
         ...(Array.isArray(payload.hosts) ? payload.hosts : []),
         ...this.samples.map((sample) => sample.host).filter(Boolean),
@@ -91,7 +97,15 @@
 
     selectSample(sampleId) {
       if (!this.sampleById.has(sampleId)) return;
+      this.selectedReferenceId = null;
       this.selectedSampleId = this.selectedSampleId === sampleId ? null : sampleId;
+      this.hoverSampleId = null;
+      this.updateSelection();
+    }
+
+    selectReference(referenceId) {
+      if (!this.referenceById.has(referenceId)) return;
+      this.selectedReferenceId = this.selectedReferenceId === referenceId ? null : referenceId;
       this.hoverSampleId = null;
       this.updateSelection();
     }
@@ -143,18 +157,32 @@
             <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Linked evidence</span><h3>Eight-segment genome explorer</h3></div><div class="wse-panel-note">One sample selection across all available trees</div></div>
             <div class="wse-genome-controls"></div>
             <div class="wse-genome-evidence"></div>
+            <div class="wse-reference-details" aria-live="polite"></div>
             <div class="wse-segment-tabs" role="group" aria-label="Phylogeny segment"></div>
             <div class="wse-tree-note wse-panel-note"></div>
             <div class="wse-tree"></div>
             <div class="wse-tree-grid"></div>
           </section>
           <div class="wse-footer-note">When the optional phylogeny stage is enabled, WINGS infers segment trees from QC-passing consensus sequences. Otherwise, the Explorer displays available external trees. Trees are displayed without rerooting or time calibration. Collection dates come from metadata, not tip labels.</div>
-          <section class="wse-panel wse-ebird-panel" hidden>
-            <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Ecological context</span><h3>eBird reporting frequency</h3></div></div>
-            <div class="wse-ebird"></div>
+          <section class="wse-panel wse-ecology-panel">
+            <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Ecological context</span><h3>Host reporting, migration, and weather</h3></div><label>Display window ± <select class="wse-ecology-days"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label></div>
+            <div class="wse-ecology-intro" aria-live="polite"></div>
+            <section class="wse-ecology-source wse-ebird-panel">
+              <h4>eBird · Host reporting frequency</h4>
+              <div class="wse-ebird"></div>
+              <div class="wse-ecology-ebird-charts"></div>
+            </section>
+            <section class="wse-ecology-source"><h4>BirdCast · Nocturnal migration pilot</h4><div class="wse-ecology-birdcast"></div></section>
+            <section class="wse-ecology-source"><h4>Weather · Historical reanalysis</h4><div class="wse-ecology-weather"></div></section>
+            <div class="wse-ecology-provenance"></div>
           </section>
         </div>`;
 
+      this.ecologyNode = this.root.querySelector(".wse-ecology-panel");
+      this.ecologyNode.querySelector(".wse-ecology-days").addEventListener("change", event => {
+        this.ecologyDays = Number(event.target.value);
+        this.renderEcology();
+      });
       this.outbreakNode = this.root.querySelector(".wse-outbreak-panel");
       this.bindOutbreakControls();
       this.metricsNode = this.root.querySelector(".wse-metrics");
@@ -198,6 +226,7 @@
       this.treeNode = this.root.querySelector(".wse-tree");
       this.treeNoteNode = this.root.querySelector(".wse-tree-note");
       this.treeGridNode = this.root.querySelector(".wse-tree-grid");
+      this.referenceNode = this.root.querySelector(".wse-reference-details");
       this.evidenceNode = this.root.querySelector(".wse-genome-evidence");
       this.genomeControlsNode = this.root.querySelector(".wse-genome-controls");
 
@@ -206,6 +235,7 @@
       this.renderSegmentTabs();
       this.renderTimeline();
       this.renderEbird();
+      this.renderEcology();
       this.renderMap();
       this.renderTrees();
       this.renderLegend();
@@ -257,10 +287,17 @@
     renderGenomeControls() {
       this.genomeControlsNode.innerHTML = `
         <label>Sample<select class="wse-sample-select" aria-label="Selected sample"><option value="">Select a sample…</option>${this.samples.map(sample => `<option value="${esc(sample.sample_id)}">${esc(sample.sample_id)}</option>`).join("")}</select></label>
+        <label>Public reference<select class="wse-reference-select" aria-label="Selected public reference" ${this.references.length ? "" : "disabled"}><option value="">${this.references.length ? "Select a public reference…" : "No reference manifest loaded"}</option>${this.references.map(ref => `<option value="${esc(ref.reference_id)}">${esc(ref.isolate || ref.reference_id)}</option>`).join("")}</select></label>
         <label>Tree view<select class="wse-view-select"><option value="all">All eight segments</option><option value="single">Single segment</option></select></label>
         <button type="button" class="wse-clear-selection">Clear selection</button>`;
       this.genomeControlsNode.querySelector(".wse-sample-select").addEventListener("change", event => {
+        this.selectedReferenceId = null;
         this.selectedSampleId = this.sampleById.has(event.target.value) ? event.target.value : null;
+        this.hoverSampleId = null;
+        this.updateSelection();
+      });
+      this.genomeControlsNode.querySelector(".wse-reference-select")?.addEventListener("change", event => {
+        this.selectedReferenceId = this.referenceById.has(event.target.value) ? event.target.value : null;
         this.hoverSampleId = null;
         this.updateSelection();
       });
@@ -271,6 +308,7 @@
         this.updateSelection();
       });
       this.genomeControlsNode.querySelector(".wse-clear-selection").addEventListener("click", () => {
+        this.selectedReferenceId = null;
         this.selectedSampleId = null;
         this.hoverSampleId = null;
         this.treeMode = "all";
@@ -285,6 +323,7 @@
       this.hostFilter = host;
       this.renderTimeline();
       this.renderEbird();
+      this.renderEcology();
       this.renderMap();
       this.renderTrees();
       this.renderLegend();
@@ -325,10 +364,14 @@
 
     renderEbird() {
       if (!this.ebirdPanelNode) return;
-      this.ebirdPanelNode.hidden = !this.ebirdContexts.length;
-      if (!this.ebirdContexts.length) return;
+      this.ebirdPanelNode.hidden = false;
+      if (!this.ebirdContexts.length) {
+        this.ebirdNode.innerHTML = '<p class="wse-ebird-note">No validated eBird reporting frequency is available in this report. Missing or unmatched data are not zero frequency.</p>';
+        return;
+      }
       const contexts = this.ebirdContexts.filter((item) =>
-        this.hostFilter === "ALL" || item.host === this.hostFilter);
+        (this.hostFilter === "ALL" || item.host === this.hostFilter) &&
+        (!this.selectedSampleId || (item.sample_ids || []).includes(this.selectedSampleId)));
       const attribution = this.ebirdAttribution;
       const sourceUrl = "https://ebird.org/data/download";
       const legalNotice = attribution ? `
@@ -339,7 +382,7 @@
           <details><summary>eBird Data Access Terms of Use (full text)</summary><pre>${esc(attribution.terms)}</pre></details>
         </div>` : "";
       if (!contexts.length) {
-        this.ebirdNode.innerHTML = '<p class="wse-ebird-note">No eBird context is available for this host.</p>' + legalNotice;
+        this.ebirdNode.innerHTML = '<p class="wse-ebird-note">No eBird context is available for this selection.</p>' + legalNotice;
         return;
       }
       this.ebirdNode.innerHTML = `
@@ -361,6 +404,124 @@
           </article>`;
         }).join("")}</div>${legalNotice}`;
     }
+
+    ecologyWindow() {
+      const sample = this.sampleById.get(this.selectedSampleId);
+      const center = this.outbreakEpoch(sample?.collection_date);
+      return center === null ? null : {sample, start: center - this.ecologyDays * 86400000, end: center + this.ecologyDays * 86400000, center};
+    }
+
+    ecologyState(sample) {
+      if (!sample || !["US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA"].includes(String(sample.country || "").trim().toUpperCase())) return null;
+      const value = String(sample.state || "").trim().toUpperCase().replace(/^US-/, "");
+      const states = this.ecology?.states || this.outbreakContext?.states || {};
+      const code = Object.keys(states).find(code => code === value || states[code].toUpperCase() === value);
+      const region = this.mapBoundaries?.regions.find(item => item.country === "USA" && (item.code === value || String(item.name || "").toUpperCase() === value));
+      return code || region?.code || null;
+    }
+
+    ecologyLink(url, label) {
+      // Only ordinary HTTPS source links can be emitted from imported metadata.
+      return /^https:\/\/[^\s/]+(?:\/|$)/i.test(String(url || "")) ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>` : esc(label);
+    }
+
+    renderEcology() {
+      if (!this.ecologyNode) return;
+      const node = selector => this.ecologyNode.querySelector(selector);
+      const window = this.ecologyWindow();
+      const sample = this.sampleById.get(this.selectedSampleId);
+      const bird = this.ecology?.birdcast;
+      const provenance = this.ecology ? `<details><summary>Ecological snapshot provenance</summary><p>Snapshot built: ${esc(this.ecology.created_at)} · Cached window: ±${esc(this.ecology.window_days)} days. Changing the display window does not download more data.</p><p>File: ${esc(this.ecology.source_file)}<br>SHA-256: <code>${esc(this.ecology.snapshot_sha256)}</code></p><p>Sources retain their own scales and dates. This offline snapshot stays fixed in saved bundles.</p></details>` : '<p>No BirdCast or weather snapshot is loaded. The existing eBird results remain available.</p>';
+      node(".wse-ecology-provenance").innerHTML = provenance;
+      const birdNode = node(".wse-ecology-birdcast"), weatherNode = node(".wse-ecology-weather");
+      const ebirdCharts = node(".wse-ecology-ebird-charts");
+      ebirdCharts.innerHTML = "";
+      if (!window) {
+        node(".wse-ecology-intro").textContent = sample ? `Selected WINGS sample: ${sample.sample_id}. A valid collection date is required for aligned ecological views.` : "Select a WINGS sample on the map, timeline, or tree to align these views around its collection date.";
+        birdNode.innerHTML = `<p>${bird?.status === "READY" ? "A BirdCast pilot snapshot is loaded. Select a dated sample to view regional migration." : "BirdCast pilot data are not loaded."} ${this.ecologyLink("https://dashboard.birdcast.org/", "Open BirdCast dashboard")}</p>`;
+        weatherNode.textContent = "Select a dated sample with valid coordinates to view cached weather. No state-centroid weather is substituted.";
+        return;
+      }
+      const from = new Date(window.start).toISOString().slice(0, 10), through = new Date(window.end).toISOString().slice(0, 10);
+      node(".wse-ecology-intro").innerHTML = `<p><strong>Selected WINGS sample: ${esc(sample.sample_id)}</strong> · Collected: ${esc(sample.collection_date)} · Display: ${from} through ${through}</p><p>All charts share this calendar-date axis; dashed burgundy lines mark the sample collection date. eBird retains its original aggregation window, BirdCast uses the local evening date, and weather uses local calendar days. Different units and geographic scales are shown separately; these signals do not establish infection risk or epidemiological linkage.</p>`;
+      const contexts = this.ebirdContexts.filter(item => (item.sample_ids || []).includes(sample.sample_id) && (this.hostFilter === "ALL" || item.host === this.hostFilter));
+      contexts.forEach(item => {
+        const caption = document.createElement("p");
+        caption.textContent = `${item.species}: ${item.date_from} through ${item.date_to} is one aggregate window. Its original checklist denominator is unchanged; the displayed portion is clipped to the shared axis, not recomputed.`;
+        ebirdCharts.appendChild(caption);
+        const start = this.outbreakEpoch(item.date_from), end = this.outbreakEpoch(item.date_to);
+        if (start !== null && end !== null && end >= window.start && start <= window.end) this.renderEcologyChart(ebirdCharts, window, [{date:item.date_from, end:item.date_to, value:100 * item.reporting_checklists / item.complete_checklists}], "Complete-checklist reporting frequency (%)", "#176B3A", true);
+        else { const missing = document.createElement("p"); missing.textContent = "The eBird aggregation window does not overlap this display window."; ebirdCharts.appendChild(missing); }
+      });
+      const state = this.ecologyState(sample);
+      const stateName = this.ecology?.states?.[state] || this.outbreakContext?.states?.[state] || sample.state;
+      const dashboard = state && !["AK", "HI"].includes(state) ? `https://dashboard.birdcast.org/region/US-${state}` : "https://dashboard.birdcast.org/";
+      const birdLink = this.ecologyLink(dashboard, "Open BirdCast dashboard (online)");
+      if (!state || ["AK", "HI"].includes(state)) {
+        birdNode.innerHTML = `<p>This state-level pilot requires a recognized state in the contiguous United States. Sample geography: ${esc(sample.state)}, ${esc(sample.country)}. ${birdLink}</p>`;
+      } else if (bird?.status !== "READY") {
+        birdNode.innerHTML = `<p>${esc(stateName)} · State-level migration. No BirdCast pilot snapshot is loaded; this is unavailable data, not zero migration. ${birdLink}</p>`;
+      } else {
+        const records = bird.records.filter(row => row.state_code === state && this.outbreakEpoch(row.date) >= window.start && this.outbreakEpoch(row.date) <= window.end);
+        const available = records.filter(row => row.status === "AVAILABLE" && typeof row.birds_crossed === "number" && Number.isFinite(row.birds_crossed));
+        const nights = Math.round((window.end - window.start) / 86400000) + 1;
+        const zones = [...new Set(records.map(row => row.timezone))];
+        birdNode.innerHTML = `<p><strong>${esc(stateName)} · State-level radar-derived estimate</strong><br>Estimated birds crossing the state per night (birds/night). Aggregate nocturnal migration across species; this does not measure movement of the sample's host species. Counts depend on regional extent.</p><p>Night = local evening date, sunset to following sunrise. Timezone(s): ${esc(zones.join(", ") || "No nights loaded for this window")}. ${available.length} of ${nights} nights have estimates. Missing nights are gaps, not zero; seasonal and radar coverage can limit availability.</p><p>${birdLink} · Imported: ${esc(bird.retrieved_on)}</p><div class="wse-ecology-chart"></div><details><summary>Nightly values and missing-data reasons</summary><div class="wse-ecology-table"><table><thead><tr><th>Night</th><th>Timezone</th><th>Estimated birds</th><th>Status / reason</th></tr></thead><tbody>${records.map(row => `<tr><td>${esc(row.date)}</td><td>${esc(row.timezone)}</td><td>${row.status === "AVAILABLE" && row.birds_crossed != null ? formatNumber(row.birds_crossed, 2) : "Unavailable"}</td><td>${esc(row.status)} ${esc(row.reason)}</td></tr>`).join("") || '<tr><td colspan="4">No imported records match this state and window.</td></tr>'}</tbody></table></div><p>Nights absent from the imported file have no estimate or recorded reason.</p></details><details><summary>BirdCast source and provenance</summary><p>${esc(bird.citation)}</p><p>Source: ${this.ecologyLink(bird.source_url, "Imported source")} · Retrieved: ${esc(bird.retrieved_on)}<br>Reuse basis: ${esc(bird.reuse_basis)}<br>CSV SHA-256: <code>${esc(bird.sha256)}</code></p></details>`;
+        this.renderEcologyChart(birdNode.querySelector(".wse-ecology-chart"), window, available.map(row => ({date:row.date, value:row.birds_crossed})), "Estimated birds crossing state / night", "#006DAE");
+      }
+      const binding = this.ecology?.bindings?.[sample.sample_id];
+      const weather = binding?.status === "READY" ? this.ecology.weather?.[binding.weather_key] : null;
+      if (!weather) {
+        const reason = !this.validMapCoordinates(sample) ? "Valid sample coordinates are required; no state-centroid weather is substituted." : binding?.reason || "No weather snapshot is loaded for this sample.";
+        weatherNode.innerHTML = `<p>${esc(reason)}</p><p>Weather uses ERA5 gridded reanalysis: daily mean temperature at 2 m (°C), daily precipitation total (mm), and daily maximum wind speed at 10 m (km/h).</p>`;
+        return;
+      }
+      const weatherRows = weather.rows.filter(row => this.outbreakEpoch(row.date) >= window.start && this.outbreakEpoch(row.date) <= window.end);
+      const columns = [ ["temperature_2m_mean", "Daily mean temperature at 2 m (°C)", "#B45309"], ["precipitation_sum", "Daily precipitation total (mm)", "#006DAE"], ["wind_speed_10m_max", "Daily maximum wind speed at 10 m (km/h)", "#6F2DA8"] ];
+      const countDays = Math.round((window.end - window.start) / 86400000) + 1;
+      weatherNode.innerHTML = `<p><strong>ERA5 · ${esc(weather.resolution)} · Gridded reanalysis estimate</strong><br>Requested location: ${esc(sample.latitude)}, ${esc(sample.longitude)}. Returned grid location: ${esc(weather.grid_latitude)}, ${esc(weather.grid_longitude)}. Local daily timezone: ${esc(weather.timezone)}.</p><p>Cached dates: ${esc(weather.rows[0]?.date || "Unavailable")} through ${esc(weather.rows.at(-1)?.date || "Unavailable")}. ${weatherRows.length} of ${countDays} displayed days have source rows; null values remain gaps. These are model-assisted estimates, not measurements at the collection site. ${this.ecologyLink(weather.source_url, "Source documentation")}</p>${columns.map(([key, label]) => `<div data-weather-chart="${key}"></div>`).join("")}<details><summary>Daily weather values</summary><div class="wse-ecology-table"><table><thead><tr><th>Local date</th><th>Mean temperature (°C)</th><th>Precipitation (mm)</th><th>Maximum wind (km/h)</th></tr></thead><tbody>${weatherRows.map(row => `<tr><td>${esc(row.date)}</td>${columns.map(([key]) => `<td>${row[key] == null ? "Unavailable" : formatNumber(row[key], 2)}</td>`).join("")}</tr>`).join("") || '<tr><td colspan="4">No cached weather rows in this window.</td></tr>'}</tbody></table></div></details><details><summary>Weather source and provenance</summary><p>${esc(weather.provider)} · ${esc(weather.license)}<br>Retrieved: ${esc(weather.retrieved_at)}<br>Raw response SHA-256: <code>${esc(weather.raw_sha256)}</code></p><p>${this.ecologyLink(weather.request_url, "Original weather request (online)")}</p></details>`;
+      columns.forEach(([key, label, color]) => {
+        const rows = weatherRows.map(row => ({date:row.date, value:row[key]}));
+        const target = weatherNode.querySelector(`[data-weather-chart="${key}"]`);
+        const heading = document.createElement("p");
+        heading.textContent = `${label} · ${rows.filter(row => typeof row.value === "number" && Number.isFinite(row.value)).length}/${countDays} days with values`;
+        target.appendChild(heading);
+        this.renderEcologyChart(target, window, rows, label, color);
+      });
+    }
+
+    renderEcologyChart(target, window, rows, title, color, aggregate = false) {
+      if (!target) return;
+      const width = 900, height = 180, left = 76, right = 875, top = 20, bottom = 115;
+      const values = rows.filter(row => typeof row.value === "number" && Number.isFinite(row.value));
+      const min = Math.min(0, ...values.map(row => row.value));
+      const max = aggregate ? 100 : Math.max(1, ...values.map(row => row.value));
+      const x = time => left + (time - window.start) / (window.end - window.start + 86400000) * (right - left);
+      const y = value => bottom - (value - min) / (max - min) * (bottom - top);
+      const svg = svgEl("svg", {viewBox:`0 0 ${width} ${height}`, role:"img", "aria-label":title, class:"wse-ecology-plot"});
+      const label = (text, px, py, anchor="middle") => { const el=svgEl("text", {x:px,y:py,"text-anchor":anchor,class:"wse-outbreak-axis"}); el.textContent=text; svg.appendChild(el); };
+      [...new Set([min, max, 0])].forEach(value => {
+        svg.appendChild(svgEl("line", {x1:left,x2:right,y1:y(value),y2:y(value),class:"wse-outbreak-gridline"}));
+        const tick = Math.abs(value) >= 10000 ? value.toLocaleString(undefined, {notation:"compact", maximumFractionDigits:1}) : formatNumber(value, 1);
+        if (value !== 0 || value === min || value === max || (Math.abs(y(0) - y(min)) >= 16 && Math.abs(y(0) - y(max)) >= 16)) label(tick,left-8,y(value)+4,"end");
+      });
+      values.forEach(row => {
+        const start = this.outbreakEpoch(row.date), end = this.outbreakEpoch(row.end || row.date);
+        if (start === null || end === null || end < window.start || start > window.end) return;
+        const from = Math.max(start, window.start), through = Math.min(end + 86400000, window.end + 86400000);
+        const valueY = y(row.value), zeroY = y(0);
+        const mark = row.value === 0 ? svgEl("line", {x1:x(from),x2:x(through)-1,y1:zeroY,y2:zeroY,stroke:color,"stroke-width":3}) : svgEl("rect", {x:x(from),y:Math.min(valueY,zeroY),width:Math.max(1,x(through)-x(from)-1),height:Math.max(1,Math.abs(zeroY-valueY)),fill:color,opacity:aggregate?0.4:0.85});
+        const tip = svgEl("title"); tip.textContent = `${row.date}${row.end ? " through " + row.end + " (one aggregate)" : ""}: ${formatNumber(row.value, 2)} · ${title}`; mark.appendChild(tip); svg.appendChild(mark);
+      });
+      svg.appendChild(svgEl("line", {x1:x(window.center+43200000),x2:x(window.center+43200000),y1:top-4,y2:bottom,class:"wse-outbreak-sample-date"}));
+      label(new Date(window.start).toISOString().slice(0,10),left,bottom+24,"start");
+      label(window.sample.collection_date,x(window.center+43200000),bottom+24);
+      label(new Date(window.end).toISOString().slice(0,10),right,bottom+24,"end");
+      label(title,(left+right)/2,height-9);
+      if (!values.length) label("No values available in this window",(left+right)/2,65);
+      target.appendChild(svg);
+    }
+
 
     renderLegend() {
       const counts = new Map(this.hosts.map((host) => [host, 0]));
@@ -785,6 +946,7 @@
         ${sample.report_href ? `<a class="wse-map-report-link" href="${esc(sample.report_href)}">Open sample report →</a>` : ""}`;
       this.mapSelectionNode.querySelectorAll(".wse-map-sample-choice").forEach(button => {
         button.addEventListener("click", () => {
+          this.selectedReferenceId = null;
           this.selectedSampleId = button.getAttribute("data-sample-id");
           this.hoverSampleId = null;
           this.updateSelection();
@@ -891,7 +1053,21 @@
       const option = (value, label, active) => `<option value="${esc(value)}"${value === active ? " selected" : ""}>${esc(label)}</option>`;
       const basisLabel = this.outbreakBasis === "collection_date" ? "collection date" : "detection date";
       const sample = this.sampleById.get(this.selectedSampleId);
-      const missingSampleDate = this.outbreakFollow && sample && this.outbreakEpoch(sample.collection_date) === null;
+      const sampleDate = this.outbreakEpoch(sample?.collection_date);
+      const markerVisible = view.validWindow && sampleDate !== null && sampleDate >= view.start && sampleDate <= view.end;
+      const sampleState = this.selectedOutbreakState();
+      let sampleDateLabel = "No WINGS sample selected; no collection-date marker shown.";
+      if (sample) {
+        sampleDateLabel = `Selected WINGS sample: ${sample.sample_id} · Collected: ${sampleDate === null ? "unavailable" : sample.collection_date}`;
+        if (sampleState) sampleDateLabel += ` · Sample state: ${context.states[sampleState]}`;
+        sampleDateLabel += markerVisible ? ". Dashed line = this sample's collection date." : sampleDate === null ? ". No collection-date marker shown." : view.validWindow ? ". Collection date is outside the displayed window; no marker shown." : ". Enter a valid date window to show the marker.";
+        if (view.code && view.code !== sampleState) {
+          sampleDateLabel += sampleState
+            ? ` Records shown are for ${context.states[view.code] || view.code}, a different state from the selected sample.`
+            : ` Records shown are for ${context.states[view.code] || view.code}; the selected sample has no confirmed U.S. state match.`;
+        }
+      }
+      const missingSampleDate = this.outbreakFollow && sample && sampleDate === null;
       const range = context.date_ranges[this.outbreakBasis] || {};
       this.outbreakNode.innerHTML = `
         <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Outbreak context</span><h3>APHIS wild-bird detections</h3></div><a href="${esc(context.source_url)}" target="_blank" rel="noopener noreferrer">Open APHIS source table ↗</a></div>
@@ -910,6 +1086,7 @@
           ${view.outsideSnapshot ? '<p class="wse-outbreak-caution">This window is outside the date range represented in this snapshot. Zero matches do not establish absence of detections.</p>' : ""}
           <p class="wse-outbreak-precision">Source precision: county/state. Map: state-level aggregates; shaded areas are not exact detection locations. State matching also applies when sample coordinates are absent. No distance-based linkage is calculated.</p>
           <p class="wse-outbreak-map-key">The shared map shades all U.S. states for the chosen dates, including neighboring states. This timeline and the source records follow the geographic choice above. Click a shaded state to browse its records without changing the selected WINGS sample. Host filters affect sample points only.</p>
+          <p class="wse-outbreak-sample-label" aria-live="polite">${markerVisible ? '<span class="wse-outbreak-sample-swatch" aria-hidden="true"></span>' : ""}<span>${esc(sampleDateLabel)}</span></p>
           <div class="wse-outbreak-timeline"></div>
           <p class="wse-outbreak-timeline-note">${this.outbreakBasis === "collection_date" ? "Collection date is the sample collection date reported by APHIS." : "Date detected is the date of APHIS confirmatory testing; it can be later than collection."} Click a bar to narrow the date window. A dashed line marks the selected WINGS sample's collection date when it falls in this window.</p>
           <details class="wse-outbreak-records"${recordsOpen ? " open" : ""}><summary>Source records (${formatNumber(view.rows.length)})</summary>
@@ -1056,7 +1233,7 @@
       const sampleDate = this.outbreakEpoch(this.sampleById.get(this.selectedSampleId)?.collection_date);
       if (sampleDate !== null && sampleDate >= view.start && sampleDate <= view.end) {
         const line = svgEl("line", {x1:x(sampleDate + 43200000), x2:x(sampleDate + 43200000), y1:top - 6, y2:bottom, class:"wse-outbreak-sample-date"});
-        const title = svgEl("title"); title.textContent = `WINGS sample collection: ${this.sampleById.get(this.selectedSampleId).collection_date}`; line.appendChild(title); svg.appendChild(line);
+        const title = svgEl("title"); title.textContent = `Selected WINGS sample: ${this.selectedSampleId} · Collected: ${this.sampleById.get(this.selectedSampleId).collection_date}`; line.appendChild(title); svg.appendChild(line);
       }
       label(this.outbreakStart, left, bottom + 25, "start");
       label(this.outbreakEnd, right, bottom + 25, "end");
@@ -1136,11 +1313,43 @@
       });
     }
 
+    referenceStatus(status) {
+      return ({PRESENT: "Present in tree", NO_TREE: "Tree unavailable", NOT_IN_MANIFEST: "No metadata record for this segment", ABSENT_FROM_TREE: "Record supplied; tip absent from tree"})[status] || "Not recorded";
+    }
+
+    referenceLink(accession) {
+      return /^[A-Z]{1,6}_?\d{5,12}\.\d+$/.test(accession || "")
+        ? `<a href="https://www.ncbi.nlm.nih.gov/nuccore/${esc(accession)}" target="_blank" rel="noopener noreferrer">${esc(accession)} ↗</a>`
+        : "Accession not recorded";
+    }
+
+    renderReferenceDetails() {
+      if (!this.referenceNode) return;
+      const context = this.referenceContext;
+      if (!context) {
+        this.referenceNode.innerHTML = '<p class="wse-reference-empty">Public reference metadata are not loaded. Existing tree tips are unchanged.</p>';
+        return;
+      }
+      const ref = this.referenceById.get(this.selectedReferenceId);
+      const known = value => esc(value || "Not recorded");
+      const provenance = `<details class="wse-reference-provenance"><summary>Public reference provenance · ${this.references.length} reference groups · ${esc(context.record_count)} records</summary><p>Retrieved: ${known(context.retrieved_on)} · Manifest: ${known(context.source_file)}</p><p>Selection: ${known(context.selection_notes)}</p><p>Citation: ${known(context.citation)}</p><p>${esc(context.records_without_displayed_tips || 0)} manifest records have no displayed tip.</p><p>Manifest SHA-256: <code>${known(context.manifest_sha256)}</code></p>${Object.entries(this.payload.trees || {}).map(([segment, tree]) => `<p>${esc(segment)} tree: ${known(tree.source_file)} · SHA-256: <code>${known(tree.source_sha256)}</code></p>`).join("")}<p>Checksums identify the supplied files; they do not verify the submitter's metadata.</p></details>`;
+      const legend = '<p class="wse-reference-legend">● WINGS sample (host color) · ■ Public reference (teal) · Gray circle: unannotated tip. Selecting a reference retains the selected WINGS sample for comparison. Tree proximity alone does not establish transmission.</p>';
+      if (!ref) {
+        this.referenceNode.innerHTML = legend + '<p>Select a teal square or choose a public reference to see its record and linked segments.</p>' + provenance;
+        return;
+      }
+      const order = this.payload.segment_order || ["HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS"];
+      this.referenceNode.innerHTML = legend + `<article class="wse-reference-card"><h4>Public reference · ${known(ref.isolate || ref.reference_id)}</h4><p>Reference ID: ${known(ref.reference_id)} · Host: ${known(ref.host)} · Location: ${known([ref.state, ref.country].filter(Boolean).join(", "))}</p><p>Collection date: ${known(ref.collection_date)} · Precision: ${known(ref.collection_date_precision)} · Segment linkage: ${known(ref.linkage_basis || "Single record; cross-segment identity not established")}</p><p>Public record metadata; WINGS raw-read QC and coverage are not available for this reference.</p><div class="wse-reference-segments">${order.map(segment => {
+        const record = ref.segments?.[segment] || {};
+        return `<div><strong>${esc(segment)}</strong><span>${esc(this.referenceStatus(record.status))}</span>${record.accession_version ? this.referenceLink(record.accession_version) : ""}${(record.tips || []).map(tip => `<small>Tip: ${esc(tip.name)}<br>Parent-node support (as recorded): ${known(tip.parent_support)}</small>`).join("")}</div>`;
+      }).join("")}</div></article>` + provenance;
+    }
+
     revealSelectedTips() {
       // Scroll inside each tree only; do not move the report viewport.
       this.root.querySelectorAll(".wse-tree").forEach(container => {
         if (container.hidden) return;
-        const tip = [...container.querySelectorAll(".wse-tree-tip")].find(el => el.dataset.sampleId === this.selectedSampleId);
+        const tip = [...container.querySelectorAll(".wse-tree-tip")].find(el => this.selectedReferenceId ? el.dataset.referenceId === this.selectedReferenceId : this.selectedSampleId && el.dataset.sampleId === this.selectedSampleId);
         if (!tip) return;
         const box = tip.getBoundingClientRect(), viewport = container.getBoundingClientRect();
         if (box.top < viewport.top || box.bottom > viewport.bottom) {
@@ -1198,6 +1407,7 @@
           children.forEach((child) => {
             const branch = svgEl("line", {x1:node._x,y1:child._y,x2:child._x,y2:child._y,class:"wse-tree-branch"});
             if (child.sample_id) branch.setAttribute("data-sample-id", child.sample_id);
+            if (child.reference_id) branch.setAttribute("data-reference-id", child.reference_id);
             svg.appendChild(branch);
             if (child.label && /^[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+(?:\.[0-9]+)?)*$/.test(child.label) && child.children?.length) {
               const support = svgEl("text", {x:(node._x+child._x)/2,y:child._y-4,"text-anchor":"middle",class:"wse-support-label"});
@@ -1212,17 +1422,19 @@
 
       layout.leaves.forEach((leaf) => {
         const sample = this.sampleById.get(leaf.sample_id);
+        const reference = this.referenceById.get(leaf.reference_id);
         const visible = !sample || visibleIds.has(leaf.sample_id);
         const group = svgEl("g", {
-          class:`wse-tree-tip${visible ? "" : " is-filtered"}`,
+          class:`wse-tree-tip${reference ? " wse-public-tip" : ""}${visible ? "" : " is-filtered"}`,
           "data-sample-id":leaf.sample_id || "",
-          tabindex: leaf.sample_id ? 0 : -1,
-          role: leaf.sample_id ? "button" : "img",
-          "aria-label": sample ? `Select ${sample.sample_id}; tip ${leaf.name}` : leaf.name,
+          "data-reference-id":reference ? leaf.reference_id : "",
+          tabindex: sample || reference ? 0 : -1,
+          role: sample || reference ? "button" : "img",
+          "aria-label": sample ? `Select ${sample.sample_id}; tip ${leaf.name}` : reference ? `Select public reference ${reference.reference_id}; accession ${leaf.accession_version}` : `Unannotated tip ${leaf.name}`,
         });
-        const dot = svgEl("circle", {cx:leaf._x+7,cy:leaf._y,r:4.8,fill:sample?this.hostColorFor(sample):GRAY,class:"wse-tree-tip-dot"});
+        const dot = reference ? svgEl("rect", {x:leaf._x+2,y:leaf._y-5,width:10,height:10,fill:"#007C83",class:"wse-tree-tip-dot"}) : svgEl("circle", {cx:leaf._x+7,cy:leaf._y,r:4.8,fill:sample?this.hostColorFor(sample):GRAY,class:"wse-tree-tip-dot"});
         const label = svgEl("text", {x:leaf._x+18,y:leaf._y+4,class:"wse-tree-tip-label"});
-        label.textContent = sample ? sample.sample_id : leaf.name;
+        label.textContent = sample ? sample.sample_id : reference ? leaf.accession_version : leaf.name;
         group.append(dot,label);
         if (leaf.sample_id) {
           group.addEventListener("click", () => this.selectSample(leaf.sample_id));
@@ -1230,8 +1442,12 @@
           group.addEventListener("mouseleave", () => this.clearHover());
           group.addEventListener("keydown", (event) => { if(event.key === "Enter" || event.key === " ") { event.preventDefault(); this.selectSample(leaf.sample_id); } });
         }
+        if (reference) {
+          group.addEventListener("click", () => this.selectReference(leaf.reference_id));
+          group.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.selectReference(leaf.reference_id); } });
+        }
         const title = svgEl("title");
-        title.textContent = sample ? `${sample.sample_id}\n${sample.host} · ${dateLabel(sample.collection_date)}\nTip: ${leaf.name}` : leaf.name;
+        title.textContent = sample ? `${sample.sample_id}\n${sample.host} · ${dateLabel(sample.collection_date)}\nTip: ${leaf.name}` : reference ? `Public reference: ${reference.reference_id}\n${leaf.accession_version}\n${reference.host || "Host not recorded"} · ${reference.collection_date || "Date not recorded"}\nTip: ${leaf.name}` : `Unannotated tip: ${leaf.name}`;
         group.appendChild(title);
         svg.appendChild(group);
       });
@@ -1255,7 +1471,11 @@
       this.renderMapSelection();
       this.renderOutbreak();
       this.renderGenomeEvidence();
+      this.renderReferenceDetails();
+      const refSelect = this.genomeControlsNode.querySelector(".wse-reference-select");
+      if (refSelect) refSelect.value = this.selectedReferenceId || "";
       this.renderEbird();
+      this.renderEcology();
       this.updateEmphasis();
       this.revealSelectedTips();
     }
@@ -1267,6 +1487,13 @@
         el.classList.toggle("is-selected", Boolean(focus && id === focus));
         el.classList.toggle("is-hovered", Boolean(this.hoverSampleId && id === this.hoverSampleId));
         if (el.classList.contains("wse-tree-tip") && id) el.setAttribute("aria-pressed", String(id === focus));
+      });
+      this.root.querySelectorAll("[data-reference-id]").forEach(el => {
+        const id = el.getAttribute("data-reference-id");
+        if (!id) return;
+        const selected = Boolean(this.selectedReferenceId && id === this.selectedReferenceId);
+        el.classList.toggle("is-selected", selected);
+        if (el.classList.contains("wse-tree-tip")) el.setAttribute("aria-pressed", String(selected));
       });
       this.root.querySelectorAll("[data-sample-ids]").forEach((el) => {
         const ids = (el.getAttribute("data-sample-ids") || "").split("|");
