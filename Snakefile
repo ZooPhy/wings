@@ -202,6 +202,78 @@ PHYLOGENY_DIR = config_path("phylogeny_dir", "phylogeny")
 PHYLOGENY_PATTERN = str(config.get("phylogeny_pattern", "{segment}_Tree.newick"))
 if "{segment}" not in PHYLOGENY_PATTERN:
     raise ValueError("config key 'phylogeny_pattern' must contain {segment}")
+
+# APHIS context uses a pinned local CSV; report builds never fetch live data.
+OUTBREAK_CONFIG = config.get("outbreak_context", {}) or {}
+if not isinstance(OUTBREAK_CONFIG, dict):
+    raise ValueError("config key 'outbreak_context' must be a mapping")
+APHIS_CSV = str(OUTBREAK_CONFIG.get("csv", "resources/aphis/hpai-wild-birds.csv"))
+APHIS_PROVENANCE = str(OUTBREAK_CONFIG.get("provenance", str(Path(APHIS_CSV).with_suffix(".provenance.json"))))
+OUTBREAK_ENABLED = as_bool(OUTBREAK_CONFIG.get("enabled", Path(APHIS_CSV).is_file()))
+
+# eBird is opt-in; raw and cached EBD records stay outside the repository.
+EBIRD_DECLARED = "ebird" in config
+EBIRD_CONFIG = config.get("ebird", {}) or {}
+if not isinstance(EBIRD_CONFIG, dict):
+    raise ValueError("config key 'ebird' must be a mapping")
+EBIRD_ENABLED = as_bool(EBIRD_CONFIG.get("enabled", False))
+EBIRD_BUILD_CACHE = as_bool(EBIRD_CONFIG.get("build_cache", False))
+if EBIRD_BUILD_CACHE and not EBIRD_ENABLED:
+    raise ValueError("ebird.build_cache requires ebird.enabled: true")
+
+if EBIRD_ENABLED:
+    EBIRD_CACHE = Path(str(EBIRD_CONFIG.get("cache_dir") or "")).expanduser().resolve()
+    EBIRD_SOURCE = str(EBIRD_CONFIG.get("observations_file") or "")
+    EBIRD_SAMPLING = str(EBIRD_CONFIG.get("sampling_file") or "")
+    EBIRD_RELEASE_DIR = Path(str(EBIRD_CONFIG.get("release_dir") or "")).expanduser().resolve()
+    if (not EBIRD_CONFIG.get("cache_dir") or not EBIRD_SAMPLING
+            or not EBIRD_CONFIG.get("release_dir")):
+        raise ValueError("eBird requires cache_dir, sampling_file, and release_dir")
+    if EBIRD_BUILD_CACHE and not EBIRD_SOURCE:
+        raise ValueError("ebird.build_cache requires observations_file")
+    if not all(Path(str(EBIRD_CONFIG[key])).expanduser().is_absolute()
+               for key in ("cache_dir", "sampling_file", "release_dir")):
+        raise ValueError("eBird paths must be absolute (use /Users/... instead of ~)")
+    if EBIRD_BUILD_CACHE and not Path(EBIRD_SOURCE).expanduser().is_absolute():
+        raise ValueError("ebird.observations_file must be an absolute path")
+    if Path(workflow.basedir).resolve() in (EBIRD_CACHE, *EBIRD_CACHE.parents):
+        raise ValueError("ebird.cache_dir must be outside the WINGS repository")
+    if EBIRD_CACHE == EBIRD_RELEASE_DIR:
+        raise ValueError("ebird.cache_dir must differ from release_dir")
+    if Path(EBIRD_SAMPLING).expanduser().resolve() == EBIRD_CACHE / "sampling.txt":
+        raise ValueError("ebird.sampling_file must be a source outside cache_dir")
+    if EBIRD_RELEASE_DIR == Path(f"{RESULTS}/run_summary/ebird").resolve():
+        raise ValueError("ebird.release_dir must differ from the output directory")
+    EBIRD_DAYS = int(EBIRD_CONFIG.get("days", 30))
+    if not 0 <= EBIRD_DAYS <= 365:
+        raise ValueError("ebird.days must be between 0 and 365")
+    EBIRD_RADIUS = EBIRD_CONFIG.get("radius_km")
+    if EBIRD_RADIUS is not None:
+        EBIRD_RADIUS = float(EBIRD_RADIUS)
+        if not 0 < EBIRD_RADIUS <= 1000:
+            raise ValueError("ebird.radius_km must be greater than 0 and at most 1000")
+    EBIRD_MAP = EBIRD_CONFIG.get("host_map", {}) or {}
+    if not isinstance(EBIRD_MAP, dict):
+        raise ValueError("ebird.host_map must be a mapping of host codes to species names")
+    EBIRD_HOST_MAP_FILE = str(EBIRD_CONFIG.get("host_map_file") or
+                              "resources/ebird_host_codes_2025.tsv")
+    if not Path(EBIRD_HOST_MAP_FILE).is_absolute():
+        EBIRD_HOST_MAP_FILE = str(Path(workflow.basedir) / EBIRD_HOST_MAP_FILE)
+    EBIRD_MAP_ARGS = " ".join(
+        "--map " + shlex.quote(f"{code}={name}") for code, name in EBIRD_MAP.items()
+    )
+    if EBIRD_HOST_MAP_FILE:
+        EBIRD_MAP_ARGS = ("--host-map " + shlex.quote(EBIRD_HOST_MAP_FILE)
+                          + " " + EBIRD_MAP_ARGS)
+    EBIRD_RADIUS_ARGS = f"--radius-km {EBIRD_RADIUS}" if EBIRD_RADIUS is not None else ""
+    EBIRD_OBS_CACHE = str(EBIRD_CACHE / "observations.txt.gz")
+    EBIRD_CATALOG = str(EBIRD_CACHE / "species_catalog.tsv")
+    EBIRD_MANIFEST = str(EBIRD_CACHE / "cache_manifest.json")
+    EBIRD_SED_CACHE = str(EBIRD_CACHE / "sampling.txt")
+    EBIRD_SED_MANIFEST = str(EBIRD_CACHE / "sampling_manifest.json")
+    EBIRD_OUTPUT = f"{RESULTS}/run_summary/ebird"
+    EBIRD_RELEASE = str(EBIRD_CONFIG.get("release", "unspecified"))
+
 VADR_IMAGE = str(config.get("vadr_image", "docker://staphb/vadr:1.7"))
 VADR_RUNTIME = str(config.get("vadr_runtime", "auto")).strip().lower()
 VADR_MKEY = str(config.get("vadr_mkey", "flu"))
@@ -1772,17 +1844,136 @@ rule phylogeny_tree:
 # Generated trees are dependencies when phylogeny is enabled; otherwise,
 # existing external trees are included when available.
 # -----------------------------------------------------------------------------
+if EBIRD_ENABLED:
+    if EBIRD_BUILD_CACHE:
+        rule ebird_observation_cache:
+            input:
+                metadata=METADATA_FILE,
+                observations=EBIRD_SOURCE,
+                script="scripts/build_ebird_cache.py"
+            output:
+                observations=EBIRD_OBS_CACHE,
+                catalog=EBIRD_CATALOG,
+                manifest=EBIRD_MANIFEST
+            params:
+                cache=str(EBIRD_CACHE),
+                days=EBIRD_DAYS
+            threads: 1
+            resources: mem_mb=4000
+            log:
+                f"{RESULTS}/run_summary/ebird/cache.log"
+            shell:
+                r"""
+                set -euo pipefail
+                mkdir -p "$(dirname {log:q})"
+                python {input.script:q} --metadata {input.metadata:q} \
+                  --observations {input.observations:q} --cache-dir {params.cache:q} \
+                  --days {params.days} 2>&1 | tee {log:q}
+                """
+
+    rule ebird_sampling_cache:
+        input:
+            metadata=METADATA_FILE,
+            sampling=EBIRD_SAMPLING,
+            observations=EBIRD_OBS_CACHE,
+            catalog=EBIRD_CATALOG,
+            manifest=EBIRD_MANIFEST,
+            script="scripts/build_ebird_cache.py"
+        output:
+            sampling=EBIRD_SED_CACHE,
+            manifest=EBIRD_SED_MANIFEST
+        params:
+            cache=str(EBIRD_CACHE),
+            days=EBIRD_DAYS
+        threads: 1
+        resources: mem_mb=4000
+        log:
+            f"{RESULTS}/run_summary/ebird/sampling.log"
+        shell:
+            r"""
+            set -euo pipefail
+            mkdir -p "$(dirname {log:q})"
+            python {input.script:q} --metadata {input.metadata:q} \
+              --sampling {input.sampling:q} --sampling-only --replace-sampling \
+              --cache-dir {params.cache:q} --days {params.days} 2>&1 | tee {log:q}
+            """
+
+    rule ebird_summary:
+        input:
+            metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+            observations=EBIRD_OBS_CACHE,
+            sampling=EBIRD_SED_CACHE,
+            catalog=EBIRD_CATALOG,
+            manifest=EBIRD_MANIFEST,
+            sampling_manifest=EBIRD_SED_MANIFEST,
+            terms=str(EBIRD_RELEASE_DIR / "terms_of_use.txt"),
+            citation=str(EBIRD_RELEASE_DIR / "recommended_citation.txt"),
+            script="scripts/filter_ebird_for_wings.py",
+            host_map=([EBIRD_HOST_MAP_FILE] if EBIRD_HOST_MAP_FILE else [])
+        output:
+            samples=f"{EBIRD_OUTPUT}/ebird_samples.tsv",
+            monthly=f"{EBIRD_OUTPUT}/ebird_monthly.tsv",
+            species=f"{EBIRD_OUTPUT}/ebird_species.tsv",
+            malformed=f"{EBIRD_OUTPUT}/ebird_malformed_rows.tsv",
+            terms=f"{EBIRD_OUTPUT}/terms_of_use.txt",
+            citation=f"{EBIRD_OUTPUT}/recommended_citation.txt"
+        params:
+            days=EBIRD_DAYS,
+            release=EBIRD_RELEASE,
+            maps=EBIRD_MAP_ARGS,
+            radius=EBIRD_RADIUS_ARGS,
+            output=EBIRD_OUTPUT
+        threads: 1
+        resources: mem_mb=4000
+        log:
+            f"{EBIRD_OUTPUT}/filter.log"
+        shell:
+            r"""
+            set -euo pipefail
+            test -s {input.terms:q}
+            test -s {input.citation:q}
+            python {input.script:q} --metadata {input.metadata:q} \
+              --observations {input.observations:q} \
+              --sampling {input.sampling:q} \
+              --species-catalog {input.catalog:q} \
+              --release {params.release:q} --days {params.days} \
+              --output-dir {params.output:q} {params.maps} {params.radius} \
+              > {log:q} 2>&1
+            cp {input.terms:q} {output.terms:q}
+            cp {input.citation:q} {output.citation:q}
+            """
+
 rule surveillance_explorer_data:
     input:
+        aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
+        aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
         summaries=expand(
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
             sample=SAMPLES,
         ),
         trees=surveillance_tree_inputs,
+        coverage=expand(
+            f"{RESULTS}/{{sample}}/coverage/coverage.tsv",
+            sample=SAMPLES,
+        ),
+        genoflu=(
+            expand(f"{RESULTS}/{{sample}}/genoflu/GenoFLU.tsv", sample=SAMPLES)
+            if RUN_GENOFLU else []
+        ),
         ebird_samples=(
             [f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"]
-            if Path(f"{RESULTS}/run_summary/ebird/ebird_samples.tsv").is_file()
+            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/ebird_samples.tsv").is_file())
+            else []
+        ),
+        ebird_terms=(
+            [f"{RESULTS}/run_summary/ebird/terms_of_use.txt"]
+            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/terms_of_use.txt").is_file())
+            else []
+        ),
+        ebird_citation=(
+            [f"{RESULTS}/run_summary/ebird/recommended_citation.txt"]
+            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/recommended_citation.txt").is_file())
             else []
         )
     output:
@@ -1846,6 +2037,7 @@ rule run_summary_html:
         explorer_json=f"{RESULTS}/run_summary/surveillance_explorer.json",
         run_report_html="scripts/report/run-report.html",
         explorer_css="scripts/report/surveillance-explorer.css",
+        map_boundaries_js="scripts/report/map-boundaries.js",
         explorer_js="scripts/report/surveillance-explorer.js"
     output:
         html=f"{RESULTS}/run_summary/run_summary.html",
@@ -1877,6 +2069,7 @@ rule run_summary_html:
         run_report_html_abs="$(cd "$(dirname {input.run_report_html:q})" && pwd)/$(basename {input.run_report_html:q})"
         explorer_css_abs="$(cd "$(dirname {input.explorer_css:q})" && pwd)/$(basename {input.explorer_css:q})"
         explorer_js_abs="$(cd "$(dirname {input.explorer_js:q})" && pwd)/$(basename {input.explorer_js:q})"
+        map_boundaries_js_abs="$(cd "$(dirname {input.map_boundaries_js:q})" && pwd)/$(basename {input.map_boundaries_js:q})"
 
         temp_qmd="$output_dir/.run_summary.qmd"
         temp_report_dir="$output_dir/report"
@@ -1889,6 +2082,7 @@ rule run_summary_html:
         cp "$run_report_html_abs" "$temp_report_dir/run-report.html"
         cp "$explorer_css_abs" "$temp_report_dir/surveillance-explorer.css"
         cp "$explorer_js_abs" "$temp_report_dir/surveillance-explorer.js"
+        cp "$map_boundaries_js_abs" "$temp_report_dir/map-boundaries.js"
 
         (
             cd "$output_dir"

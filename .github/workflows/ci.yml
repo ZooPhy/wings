@@ -56,4 +56,28 @@ jobs:
         run: |
           python -m pytest -q \
           tests/test_regression.py \
-          tests/test_sample_summary_segments.py
+          tests/test_sample_summary_segments.py \
+          tests/test_surveillance_explorer.py \
+          tests/test_linked_genome_explorer.py \
+          tests/test_outbreak_context.py
+
+  explorer-browser:
+    name: Linked explorer / Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser test dependencies
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Check explorer state and retained local behavior
+        run: node --test tests/test_linked_genome_state.cjs tests/test_surveillance_map.cjs tests/test_outbreak_context.cjs
+      - name: Check linked explorer interactions
+        run: node tests/test_linked_genome_explorer.cjs

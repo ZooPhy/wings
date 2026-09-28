@@ -71,6 +71,22 @@ run_summary: true
 # the first tree is displayed.
 run_surveillance_explorer: true
 
+# Optional eBird reporting context. Keep cache_dir outside the WINGS repository.
+# Turn on only after obtaining sampling-event data from the SAME EBD release
+# for the relevant regions/dates without a species filter.
+ebird:
+  enabled: false
+  build_cache: false    # false reuses a completed local cache; true scans observations once
+  cache_dir: null       # e.g. /Users/you/Documents/ebird_wings_cache
+  observations_file: null  # needed only with build_cache: true
+  sampling_file: null  # absolute path to a matching sampling-event .txt or .txt.gz
+  release_dir: null    # absolute path with terms_of_use.txt and recommended_citation.txt
+  release: Aug-2026
+  days: 30
+  radius_km: null      # state-wide when null; local radius only where coordinates exist
+  host_map_file: resources/ebird_host_codes_2025.tsv  # bundled TSV: host, ebird_species
+  host_map: {}         # optional additional local aliases; CAGO is bundled
+
 phylogeny:
   enabled: false
   min_sequences: 5

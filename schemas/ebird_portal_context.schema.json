@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ZooPhy/wings/main/schemas/ebird_portal_context.schema.json",
+  "title": "WINGS regional monthly eBird context record",
+  "description": "Derived reporting context; one region, month, and taxon. No original checklist or observation records.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "ebird_release",
+    "source",
+    "country_code",
+    "state_code",
+    "month",
+    "common_name",
+    "scientific_name",
+    "complete_checklists",
+    "reporting_checklists",
+    "reporting_frequency"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "ebird_release": {"type": "string", "minLength": 1},
+    "source": {"const": "eBird Basic Dataset"},
+    "country_code": {"type": "string", "minLength": 2},
+    "state_code": {"type": "string", "minLength": 3},
+    "month": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
+    "common_name": {"type": "string", "minLength": 1},
+    "scientific_name": {"type": "string", "minLength": 1},
+    "complete_checklists": {"type": "integer", "minimum": 1},
+    "reporting_checklists": {"type": "integer", "minimum": 0},
+    "reporting_frequency": {"type": "number", "minimum": 0, "maximum": 1}
+  }
+}
