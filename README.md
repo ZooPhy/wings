@@ -8,6 +8,8 @@
 
 WINGS is a portable Snakemake workflow for genomic analysis of avian influenza A virus from Oxford Nanopore sequencing reads. It performs read preprocessing, influenza assembly, segment-level quality assessment, consensus polishing, variant calling, subtype screening, genotype assignment, annotation, and generation of interactive HTML reports.
 
+The Surveillance Explorer combines sample locations with **USDA APHIS wild-bird detection context**, including a shared map with state-level detection counts, a dated timeline, source links, and snapshot provenance. These records provide context and do not establish epidemiological links between detections and WINGS samples.
+
 WINGS was developed in support of the [**Pandemic ESCAPE Center**](https://escape.engr.uky.edu/), with a focus on genomic epidemiology, bioinformatics, and surveillance of avian influenza viruses in wild birds.
 
 The workflow has been validated on Apple Silicon macOS using Snakemake, Conda, and Docker Desktop, and on Linux ARM64 SLURM clusters using Snakemake, Conda, and Apptainer. VADR is currently disabled on Linux ARM64 because the pinned VADR container image does not provide a Linux ARM64 image.
@@ -29,6 +31,7 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - VADR sequence annotation and validation
 - Interactive sample-level HTML reports
 - Interactive sequencing-run summary report
+- [USDA APHIS outbreak context](#usda-aphis-outbreak-context) with state-level map shading, date filters, source-record browsing, and reproducible offline snapshots
 - Portable `.wings` report bundles containing the run summary, all sample reports, and embedded run-level provenance
 - Run-level provenance capturing workflow state, configuration hashes, environment hashes, runtime details, and BLAST database provenance
 - Browser-based local report viewing at `wings.scotchlab.org` with no sequencing-data upload
@@ -450,8 +453,8 @@ The supported schema is:
 | `sample_id` | Required | Must exactly match the `{sample}` identifier derived from the FASTQ filename |
 | `host` | Required | Host species or host code; use `environmental` when there is no animal host |
 | `collection_date` | Required | Collection date in ISO `YYYY-MM-DD` format |
-| `country` | Required | Country of collection |
 | `specimen_type` | Optional | Specimen or swab type |
+| `country` | Required | Country of collection |
 | `state` | Optional | State, province, or equivalent first-level administrative area |
 | `latitude` | Optional | Decimal latitude from -90 to 90 |
 | `longitude` | Optional | Decimal longitude from -180 to 180 |
@@ -833,434 +836,210 @@ Because the run summary depends on all sample reports, target an individual samp
 
 eBird is an external ecological context, not an infection or abundance estimate. Keep the large EBD observation and sampling-event files outside the WINGS repository. After downloading an authorized matching pair, summarize it locally using `scripts/filter_ebird_for_wings.py` with `--metadata metadata.tsv`, `--observations`, `--sampling`, and an explicit `--map CAGO='Canada Goose'` for coded hosts. Save aggregates to `results/run_summary/ebird/` (the script's `--output-dir`). The script discovers which species are in the EBD and writes `ebird_samples.tsv`, `ebird_monthly.tsv`, and `ebird_species.tsv`; it does not copy raw EBD records into WINGS.
 
+To have Snakemake build eBird summaries automatically before the Surveillance Explorer, set `ebird.enabled: true` in your local `config.yaml`. For an existing cache, set `build_cache: false`, use the absolute path to its directory, and supply a matching sampling-event export and release files:
+
+```yaml
+ebird:
+  enabled: true
+  build_cache: false
+  cache_dir: /Users/matthewscotch/Documents/ebird_wings_cache
+  sampling_file: /absolute/path/to/matching_sampling_events.txt.gz
+  release_dir: /Users/matthewscotch/Downloads/ebd_relAug-2026
+  release: Aug-2026
+  days: 30
+  radius_km: null
+  host_map_file: resources/ebird_host_codes_2025.tsv
+  host_map: {}
+```
+
+Use sampling-event data from the same release and with all relevant regions, dates, and checklists; a species-filtered download is insufficient for automatically comparing other hosts. WINGS includes `resources/ebird_host_codes_2025.tsv` for coded host names, derived from the [Institute for Bird Populations' 2025 four-letter list](https://www.birdpop.org/pages/birdSpeciesCodes.php): 2,212 species codes plus the local `CAGO` alias. Set `host_map_file` to another TSV with `host` and `ebird_species` columns when using another code reference; paths relative to WINGS are supported. `host_map` supplies additional local aliases; conflicting entries are rejected. The IBP list covers North and Central America and the Caribbean, not all birds worldwide. In that list Canada Goose is `CANG`; `CAGO` is a local WINGS alias. Hosts entered as eBird common or scientific names require no code mapping. Unknown codes remain `UNMAPPED_HOST`; verify name changes against the current eBird taxonomy rather than assigning a plausible species. This bundled reference contains no original eBird observation or sampling records. With this configuration, the ordinary `results/run_summary/run_summary.html` or `results/wings_report_bundle.wings` target first attaches the sampling events (if needed), computes the eBird summary, embeds the release terms and citation, and then builds the report. Setting `ebird.enabled: false` explicitly hides older eBird results in the Explorer. The eBird stage stays disabled until both the sampling file and paths have been configured.
+
+To build a **new** cache through Snakemake, set `build_cache: true` and `observations_file` to the full EBD `.txt.gz` in an **empty** `cache_dir` outside WINGS. This reads the complete observation archive once and may take hours. For the already completed 837,883-record cache, keep `build_cache: false`; the raw archive is never reopened by routine report builds. Changes to the sampling source or host mappings trigger the relevant downstream steps. If metadata expands beyond the cached geography/date windows or the source EBD release changes, build a new cache. The original cache records remain outside Git and the report bundle.
+
+For very large EBD releases, create a local cache once, using metadata to select country/state/date windows while keeping **all taxa** in those windows:
+
+```bash
+python3 scripts/build_ebird_cache.py \
+  --metadata metadata.tsv \
+  --observations "$HOME/Downloads/ebd_relAug-2026/ebd_relAug-2026.txt.gz" \
+  --cache-dir "$HOME/Documents/ebird_wings_cache" \
+  --days 30
+
+# When a matching sampling-event file becomes available, add it to this cache:
+python3 scripts/build_ebird_cache.py \
+  --metadata metadata.tsv \
+  --sampling /path/to/matching_sampling_events.txt.gz \
+  --sampling-only \
+  --cache-dir "$HOME/Documents/ebird_wings_cache" \
+  --days 30
+
+python3 scripts/filter_ebird_for_wings.py \
+  --metadata metadata.tsv \
+  --observations "$HOME/Documents/ebird_wings_cache/observations.txt.gz" \
+  --sampling "$HOME/Documents/ebird_wings_cache/sampling.txt" \
+  --species-catalog "$HOME/Documents/ebird_wings_cache/species_catalog.tsv" \
+  --map 'CAGO=Canada Goose' \
+  --release Aug-2026 \
+  --output-dir results/run_summary/ebird
+```
+
+The first command still reads the entire compressed observation file once; later filtering uses the smaller cache. A matching eBird sampling-event download is required for the complete-checklist denominator; the cache builder can attach it later without rescanning observations. The catalog covers **all taxa in the original observations**, so a species with zero reports in the cached region remains distinguishable from a species absent from the original file. The cache holds original eBird records and must stay outside Git, public downloads, and `.wings` bundles. Its metadata scope and `--days` are recorded in `cache_manifest.json`; rebuild it if later samples fall outside that scope or if you switch EBD releases. Reuse it for different host mappings and sample coordinates within the cached locations and dates.
+
+If you obtain a better matching sampling-event export for the same EBD release and metadata scope, repeat the `--sampling-only` command with `--replace-sampling`. This replaces only the cached sampling events, without reopening the full observation archive. Check that the sampling-event export covers the locations and dates of every host species being compared; a taxon-specific request may not provide a suitable denominator for all hosts.
+
 If `ebird_samples.tsv` exists when Snakemake builds the run summary, the Surveillance Explorer displays READY results in a dedicated eBird panel. Samples sharing a host species, geographic scope, and collection-date window share **one** checklist context; do not add those checklist totals across samples. State-only metadata yield state-wide context; a local radius requires both sample coordinates and `--radius-km`. When eBird aggregates are absent, the panel is hidden and the standard report still works. Rebuild `results/run_summary/run_summary.html` after updating eBird aggregates, then rebuild the portable bundle if needed.
 
-### Build the portable WINGS report bundle
+### Linked eight-segment genome explorer
 
-Build the portable report bundle with:
+The Surveillance Explorer selects one sample across the collection timeline, map,
+and all eight segment trees. Use **Sample** to select even an undated or
+ungeolocated sample. **All eight segments** shows available trees together;
+**Single segment** or a segment tab opens a larger tree. Selection is retained
+when changing views or host filters. A selected sample outside the host filter
+is explicitly identified and remains highlighted in the trees.
+No sample is selected initially. Clicking a selected sample again, choosing the
+empty sample option, or using **Clear selection** clears it. **Clear selection**
+also restores **All eight segments**. Host filtering uses the host-distribution
+buttons, and the timeline retains its full-run axis.
+
+The map includes U.S. state boundaries (including Alaska and Hawaii), Canadian
+province and territory boundaries, and generalized country outlines elsewhere.
+**Sample area** fits all valid coordinates in the run and stays fixed when
+filtering hosts. Use **North America** or **World** for broader context.
+Drag the map to pan, use **+ / −** to zoom, and use **Reset view** to return to
+the sample area. With the map focused, arrow keys pan, +/− zoom, and 0 resets.
+Map navigation retains the selected sample. A drag beginning on a point does
+not select or cycle that point's samples.
+
+Click a sample point to show its ID, host, collection date, and sample-report
+link directly beneath the map. Numbered points group samples sharing the same
+coordinates: click repeatedly to cycle through them, or choose a sample by name
+in the selection panel. State/province labels are placed within their visible
+geometry; narrow areas use abbreviations where full names will not fit.
+Locations outside a chosen extent are counted explicitly; samples without valid
+coordinates remain available through the sample selector. Boundaries are bundled
+with the report and work offline. See
+[`map-boundaries.md`](scripts/report/map-boundaries.md) for sources and limitations.
+
+The explorer shows the recorded GenoFLU consensus genotype and linked segment
+trees. Detailed segment QC and coverage remain in the existing sample report;
+the Surveillance Explorer does not repeat the segment-evidence table.
+**Open sample report** leads to the detailed report and its supporting outputs,
+including in the portable bundle.
+
+An unavailable tree and a sample absent from an available tree are distinct
+states. An absent tip alone does not establish QC failure. Multiple matching
+tips are all highlighted. Recorded tree support labels are displayed without
+assuming a method, percentage scale, or confidence threshold.
+
+The data builder reads existing per-sample coverage tables and GenoFLU outputs.
+Snakemake tracks these as report dependencies. Standalone callers may supply
+repeated `--coverage <sample>/coverage/coverage.tsv` and
+`--genoflu <sample>/genoflu/GenoFLU.tsv` arguments. Older explorer data still
+display trees, with unavailable evidence labeled **Not recorded**.
+
+After updating WINGS, rebuild the explorer and report bundle from your usual
+configured results directory (replace `results` if needed):
 
 ```bash
+snakemake results/run_summary/surveillance_explorer.json \
+  --configfile config.yaml --sdm conda --cores 4 \
+  --resources mem_mb=90000 kaleido=1 --force &&
+snakemake results/run_summary/run_summary.html \
+  --configfile config.yaml --sdm conda --cores 4 \
+  --resources mem_mb=90000 kaleido=1 --force &&
 snakemake results/wings_report_bundle.wings \
-  --configfile config.yaml \
-  --sdm conda \
-  --cores 4 \
-  --resources mem_mb=90000 kaleido=1
+  --configfile config.yaml --sdm conda --cores 4 \
+  --resources mem_mb=90000 kaleido=1 --force
 ```
 
-The resulting `results/wings_report_bundle.wings` file contains the rendered run summary, all rendered sample reports, and the run-level provenance JSON in a single portable package. It can be opened at `wings.scotchlab.org` by selecting or dragging the `.wings` file into the report viewer. The browser reads the bundle locally; the sequencing results are not uploaded to the WINGS website.
+Validate with one complete and one incomplete sample: confirm selection in every
+available tree and open a sample report from the rebuilt bundle to inspect
+its detailed segment evidence. These commands rebuild the data, then the HTML,
+then the bundle so embedded JavaScript and snapshot data are refreshed. Existing
+upstream analysis results are reused when their dependencies are current.
+Reopen the newly generated bundle after rebuilding.
 
-For a public demonstration, a deliberately selected example bundle can be placed at:
-
-```text
-demo/wings_demo.wings
-```
-
-Only use non-sensitive data that are appropriate for public distribution in the demo bundle.
-
-### View reports locally
-
-The preferred way to review a completed analysis is to open `results/wings_report_bundle.wings` at `wings.scotchlab.org`. The site can display the run summary and navigate to individual sample reports directly from the local bundle without uploading the report contents.
-
-The included local report server remains available as an alternative for development, offline use, or direct browsing of the generated HTML files. Some browsers, including Safari, restrict navigation between local `file://` HTML documents, so use the local server rather than opening the HTML files directly.
-
-Launch the local report server from the repository root with:
+Developer checks:
 
 ```bash
-./view_reports.sh
+python -m unittest discover -s tests -p test_linked_genome_explorer.py -v
+python -m unittest discover -s tests -p test_outbreak_context.py -v
+node --test tests/test_linked_genome_state.cjs tests/test_surveillance_map.cjs tests/test_outbreak_context.cjs
+# Requires Playwright plus its Chromium browser:
+node tests/test_linked_genome_explorer.cjs
 ```
 
-The wrapper starts `scripts/serve_reports.py`, which by default binds only to the local loopback interface and opens:
 
-```text
-http://127.0.0.1:4174/run_summary/run_summary.html
-```
+### USDA APHIS outbreak context
 
-The report server serves the existing static HTML reports from the local `results/` directory. By default it binds only to the loopback interface, so it does not upload sequencing data or publish the reports to the network.
+The U.S. Department of Agriculture (USDA) Animal and Plant Health Inspection Service (APHIS) publishes wild-bird detections of highly pathogenic avian influenza (HPAI).
 
-Press `Ctrl+C` to stop the server.
+The Surveillance Explorer can display a pinned USDA APHIS wild-bird detection CSV as
+an offline state-shading layer on the existing sample map, a dated timeline,
+and a paginated source-record browser. Neighboring states retain their detection
+counts when a sample is selected. Host-colored points represent WINGS samples;
+teal state shading represents APHIS source-record counts. The national relative
+color scale is shared across all states for the displayed date window.
 
-The Python launcher can also be run directly:
+- **Click a state:** open an on-map summary with its full name, record count,
+  date basis, date window, and missing-date count. **View records** opens the
+  corresponding source records, including county details.
+- **Zoom to [state]:** fit the clicked state without requiring a selected WINGS
+  sample. A sample without coordinates is represented by its recorded state
+  outline, with its geographic precision labeled; no point is invented.
+- **Lock date window:** keep the displayed dates while comparing samples.
+  Editing From or Through also locks the window.
+- **APHIS state shading:** show or hide the shading while retaining the timeline
+  and source records.
+- **Solid burgundy outline:** selected WINGS sample's recorded U.S. state.
+  **Dashed outline:** state being browsed in the APHIS timeline and record list.
 
-```bash
-python scripts/serve_reports.py
-```
+Clicking a state changes the APHIS record scope without changing the selected
+WINGS sample. Selecting a different sample restores the record scope to that
+sample's state. Host filters affect WINGS sample points only.
+Selecting a WINGS sample defaults to matching its recorded U.S. state and a
+collection-date window of ±30 days. Sample coordinates are not required. Change
+the window, geography, or date basis in the panel. Date detected is kept separate
+from collection date; a missing collection date is never replaced silently.
 
-To use another port:
+APHIS reports county/state geography in this CSV. WINGS shades state aggregates,
+with county names retained in the source records. It does not infer exact
+locations or calculate distance-based associations. Counts represent CSV rows;
+repeated rows are retained because the export has no unique record IDs.
+Geographic or temporal overlap does not imply epidemiological linkage.
+Non-U.S. areas are outside this APHIS layer's coverage. A zero count means no
+matching dated rows in the loaded snapshot and filters; it does not establish
+absence of infections. Counts are not incidence or prevalence estimates.
 
-```bash
-python scripts/serve_reports.py --port 8080
-```
+The CSV has no unique APHIS record identifiers or record-specific URLs. Source
+links open the APHIS table. Local record references identify the snapshot by its
+SHA-256 digest and one-based CSV data-record number. The provenance panel shows
+the snapshot date, date ranges, checksum, and retained repeat-row count.
 
-To start the server without automatically opening a browser:
-
-```bash
-python scripts/serve_reports.py --no-browser
-```
-
-## Segment QC criterion
-
-Each influenza segment is evaluated independently before Medaka polishing. Per-position depth is calculated from the normalized IRMA BAM with `samtools depth -aa -q 0 -Q 0`. The `-aa` option ensures that zero-depth reference positions are included in the denominator. Coverage breadth is the fraction of reference positions whose depth is greater than or equal to `coverage_min_depth`. WINGS also evaluates the normalized IRMA consensus FASTA for segment length and the fraction of ambiguous `N` bases. The configured lower length bound is a hard minimum; the upper bound is a review guide rather than a hard failure threshold.
-
-Defaults:
+A snapshot at `resources/aphis/hpai-wild-birds.csv` is detected automatically.
+For explicit configuration, add to `config.yaml`:
 
 ```yaml
-coverage_min_depth: 50
-coverage_min_breadth: 0.95
-segment_max_n_fraction: 0.01
-segment_expected_lengths:
-  PB2: [2200, 2400]
-  PB1: [2200, 2400]
-  PA: [2100, 2300]
-  HA: [1600, 1800]
-  NP: [1450, 1600]
-  NA: [1300, 1500]
-  MP: [950, 1050]
-  NS: [800, 950]
-```
-
-With these defaults, a segment passes the hard QC gate when **all** of the following are true: median depth is at least **50x**; at least **95% of reference positions are at 50x or greater**; consensus length is at least the configured segment-specific minimum; and no more than **1% of consensus bases are `N`**. A consensus longer than the configured upper length guide remains eligible for downstream analysis but receives a length `WARNING` for review. The reported `breadth_covered` value therefore represents breadth at the configured depth threshold, not merely the fraction of positions with any coverage.
-
-The segment-length bounds are configurable QC guardrails rather than subtype-confirmation criteria. The lower bound protects against truncated assemblies. The upper bound highlights unexpectedly long consensuses without automatically rejecting sequences that may contain valid terminal or assay-specific sequence. Bounds should be changed only when the assay design or validated biological targets justify different values.
-
-The per-segment statistics record the individual `coverage_status`, `length_status`, and `n_content_status` values as well as the final `overall_status`. The existing `results/<sample>/coverage_flags/<segment>.flag` path is retained for workflow compatibility, but its `PASS` now means that the segment passed the complete segment-QC criterion rather than coverage alone.
-
-If IRMA does not recover a segment, WINGS treats that absence as an explicit analytical state rather than a workflow error. The normalized IRMA manifest still contains a row for the segment with `status=MISSING`; `check_coverage` writes corresponding `MISSING` flag and statistics outputs; and the final `coverage.tsv` retains all eight influenza A segment rows. This allows incomplete genomes to proceed through reporting without fabricating FASTA or BAM files for unrecovered segments.
-
-Only segments passing the hard segment-QC criteria proceed through Medaka and BLAST analysis; an upper-length warning alone does not block downstream analysis.
-
-For each segment, WINGS selects a normalized IRMA candidate deterministically and records the candidate count, selection status, selected contig, and selection reason in the manifest and segment QC outputs. When IRMA produces more than one candidate for a segment, the selected candidate remains eligible for the normal hard QC gate, but the sample receives a `multiple_irma_candidates` review flag and the ambiguity is surfaced in sample- and run-level reports.
-
-## BLAST evidence and confidence
-
-For each QC-passing segment, WINGS runs `blastn` against the configured influenza A nucleotide database and retains up to `blast_max_target_seqs` subject sequences with at most `blast_max_hsps` HSPs per subject. The default settings are:
-
-```yaml
-blast_min_identity: 95.0
-blast_min_query_coverage: 90.0
-blast_max_target_seqs: 10
-blast_max_hsps: 1
-```
-
-The raw `results/<sample>/blast/<segment>.blast.txt` files retain the evidence rows. `results/<sample>/summary/blast_top_hits.csv` summarizes the top HSP for each segment with subject accession/title, percent identity, alignment length, query length, query coverage, E-value, bit score, and a confidence state. Query coverage is calculated as alignment length divided by query length for the selected top HSP; HSPs are not merged.
-
-BLAST summary states are:
-
-- `HIGH_CONFIDENCE`: a hit exists and meets both the identity and query-coverage thresholds.
-- `LOW_CONFIDENCE`: a hit exists but fails one or both thresholds.
-- `NO_HIT`: BLAST ran for a QC-passing segment but returned no hit.
-- `SKIPPED_QC`: BLAST was not run because the segment failed the upstream hard QC gate.
-
-The BLAST database provenance is recorded in `resources/flu_db/database_manifest.tsv` and is incorporated into the run-level provenance record.
-
-## H5Nx screening
-
-The H5Nx rule is a screening criterion based on IRMA-supported HA and NA assignments and segment QC. It requires:
-
-- an H5-associated HA assignment
-- a subtype-resolved NA assignment of any N subtype (for example, N1, N2, N5, N6, or N8)
-- passing HA segment QC
-- passing NA segment QC
-
-The H5Nx screen uses three states. `DETECTED` means the HA segment passes QC and is identified as H5, and the NA segment also passes QC with an informative NA subtype assignment. The NA subtype is retained and reported but is not restricted to N1. `NOT_DETECTED` means the QC-qualified HA evidence is informative and indicates a non-H5 subtype. `INDETERMINATE` means the HA evidence is not sufficiently QC-qualified to determine H5 status, or an H5 HA is present but the NA segment is missing, fails QC, or lacks an informative subtype assignment. `DETECTED` is an analytical screening flag rather than an independent confirmatory subtype test. GenoFLU is run only for `DETECTED` H5Nx samples.
-
-## Troubleshooting
-
-### Metadata validation fails
-
-WINGS validates `metadata.tsv` before sample-level metadata are propagated into reports. Common causes of failure include missing required columns, duplicate `sample_id` values, sample identifiers that do not match FASTQ filenames, non-ISO collection dates, or invalid coordinates.
-
-Check the configured metadata path:
-
-```yaml
-metadata_file: "metadata.tsv"
-metadata_require_all_samples: true
-```
-
-Then inspect the identifiers derived from the input FASTQs and compare them with the first column of `metadata.tsv`:
-
-```bash
-printf "FASTQ samples:\n"
-find data -maxdepth 1 -type f -name '*.fastq.gz' -print \
-  | sed 's#^.*/##; s/\.fastq\.gz$//' \
-  | sort
-
-printf "\nMetadata sample_id values:\n"
-cut -f1 metadata.tsv | tail -n +2 | sort
-```
-
-With `metadata_require_all_samples: true`, every detected FASTQ sample must have a matching metadata record.
-
-### No samples are detected
-
-Message:
-
-```text
-WARNING: no samples matched 'data/{sample}.fastq.gz'
-```
-
-Confirm that:
-
-- FASTQ files are present under `reads_dir`
-- filenames match `reads_pattern`
-- `reads_pattern` contains `{sample}`
-
-### Docker is installed but IRMA cannot start
-
-Message:
-
-```text
-Cannot connect to the Docker daemon
-```
-
-Start Docker Desktop and verify:
-
-```bash
-docker info
-```
-
-Then rerun the complete Snakemake command. Completed upstream files will be reused.
-
-### IRMA is killed or reports no QC'd data
-
-Messages may include:
-
-```text
-Killed
-found no QC'd data
-```
-
-This commonly indicates that the container runtime did not have enough memory. On macOS, increase Docker Desktop memory, restart Docker Desktop, remove the affected sample's incomplete IRMA and downstream outputs, and rerun only that sample report target.
-
-Check Docker memory with:
-
-```bash
-docker run --rm alpine sh -c 'free -h'
-```
-
-Monitor the affected sample with:
-
-```bash
-tail -f results/<sample>/irma/irma.log
-```
-
-The workflow should stop on these failures rather than interpreting them as a biological negative result.
-
-### Rerun one sample after an IRMA failure
-
-Remove only that sample's IRMA and downstream outputs:
-
-```bash
-rm -rf \
-  results/<sample>/irma \
-  results/<sample>/coverage \
-  results/<sample>/coverage_flags \
-  results/<sample>/coverage_stats \
-  results/<sample>/medaka \
-  results/<sample>/blast \
-  results/<sample>/merged \
-  results/<sample>/genoflu \
-  results/<sample>/vadr \
-  results/<sample>/summary
-```
-
-Then target only that sample's HTML report:
-
-```bash
-snakemake \
-  --configfile config.yaml \
-  --sdm conda \
-  --cores 4 \
-  --resources mem_mb=90000 kaleido=1 \
-  --rerun-incomplete \
-  results/<sample>/summary/<sample>.sample_summary.html
-```
-
-### VADR influenza models are not installed
-
-If VADR reports that `flu.minfo` is missing, or WINGS reports that the configured VADR model directory is absent or incomplete, install the pinned influenza models:
-
-```bash
-./scripts/install_vadr_models.sh
-```
-
-Then confirm:
-
-```bash
-ls -lh resources/vadr-models/vadr-models-flu-1.7-1/flu.minfo \
-       resources/vadr-models/vadr-models-flu-1.7-1/flu.cm \
-       resources/vadr-models/vadr-models-flu-1.7-1/flu.fa
-```
-
-The pinned `staphb/vadr:1.7` image contains VADR itself but does not contain the influenza model bundle used by WINGS. WINGS supplies the models separately through `vadr_model_dir`.
-
-### BLAST database files are not found
-
-Message:
-
-```text
-No BLAST database files found for prefix
-```
-
-Build the database:
-
-```bash
-./scripts/build_blast_db.sh
-```
-
-Then confirm that `config.yaml` contains:
-
-```yaml
-blast_db: "resources/flu_db/fluA_db"
-```
-
-Verify the files:
-
-```bash
-ls -lh resources/flu_db/fluA_db.*
-```
-
-### Porechop command is not found on Apple Silicon
-
-The workflow uses the maintained `porechop_abi` package on Apple Silicon and Linux ARM64. Confirm that the configuration contains:
-
-```yaml
-porechop_command: "porechop_abi"
-```
-
-The corresponding Conda environment should provide an executable named `porechop_abi`.
-
-### A Conda environment fails to solve
-
-First enable strict channel priority:
-
-```bash
-conda config --set channel_priority strict
-```
-
-Then remove only Snakemake's generated environments and allow them to be rebuilt:
-
-```bash
-rm -rf .snakemake/conda
-```
-
-Rerun the environment creation or complete workflow command.
-
-## Reproducibility and data management
-
-- `porechop_abi` is used instead of the original Porechop package for Apple Silicon and Linux ARM64 portability, with ab-initio adapter inference enabled.
-- `fastplong` performs long-read quality and length filtering with its adapter-trimming step disabled to avoid a second adapter-trimming pass after Porechop ABI.
-- Segment depth is calculated with `samtools depth -aa -q 0 -Q 0`; breadth is the fraction of all reference positions meeting the configured depth threshold.
-- Sample metadata are validated before report generation and propagated into sample-specific metadata outputs.
-- The Oxford Nanopore basecaller model is detected from the original FASTQ metadata for each sample, and the resulting Medaka selector is recorded in `results/<sample>/medaka/model.tsv`.
-- Segment QC requires the configured depth, breadth-at-depth, minimum-length, and N-content criteria; by default this is median depth >=50x, >=95% of positions at >=50x, the configured segment-specific minimum length, and <=1% Ns. Consensus lengths above the configured upper guide generate a warning rather than a hard failure.
-- Rule-specific Conda environments are stored under `.snakemake/conda/`.
-- IRMA runs in Docker on macOS and in Apptainer or Singularity on the ARM64 cluster.
-- The BLAST database build records source and build provenance in `resources/flu_db/database_manifest.tsv`; the default BLAST build image is pinned to `ncbi/blast-static:2.17.0`.
-- Run-level provenance is written to `results/run_summary/run_provenance.tsv` and `.json`, and the JSON record is embedded in the portable `.wings` bundle.
-- The BLAST reference archive, generated database, input reads, results, local configuration, and Snakemake working files should not be committed to Git. Commit the BLAST provenance manifest only when intentionally maintaining a fixed reference build record in the repository.
-- `results/wings_report_bundle.wings` is generated from local reports and should be treated as analysis output; do not publish it unless its contents are appropriate for public release.
-- IRMA and VADR use pinned container tags (`ghcr.io/cdcgov/irma:v1.3.5` and `staphb/vadr:1.7`). VADR influenza models are independently pinned to model release `1.7-1` and archive SHA-256 `5f09b8d95413251499a2e49a0b93ea119bc96814b4742d92ba55fd3bdadac7ec`; GenoFLU and other primary workflow tools use pinned Conda package versions to improve reproducibility.
-
-Recommended `.gitignore` entries:
-
-```text
-/config.yaml
-/metadata.tsv
-/software/
-.snakemake/
-results/
-data/*.fastq
-data/*.fastq.gz
-data/*.fq
-data/*.fq.gz
-resources/fluA_reference.fasta.zip
-resources/flu_db/
-resources/vadr-models/
-*.log
-.DS_Store
-```
-
-## Acknowledgements
-
-WINGS integrates or builds on the following projects:
-
-- Snakemake
-- CDC IRMA
-- Porechop ABI
-- fastplong
-- Medaka
-- NCBI BLAST+
-- GenoFLU
-- VADR
-- NanoPlot
-- Oxford Nanopore Technologies sequencing software and file formats
-
-Please cite the underlying tools used in an analysis according to their respective documentation and publications.
-
-## Roadmap
-
-Planned or under-development enhancements include:
-
-- Additional interactive run-level visualizations and comparative views
-- Improved genotype visualizations
-- Automated public-health narrative summaries
-- Additional export formats, including PDF
-
-## Use of large language models and ChatGPT
-
-Large language models, including OpenAI ChatGPT, were used during development of WINGS as a software-development and documentation assistant. Uses included brainstorming workflow design, reviewing and refining code, troubleshooting Snakemake and reporting behavior, and drafting or editing documentation.
-
-All workflow logic, code changes, configuration decisions, and scientific interpretations remain the responsibility of the WINGS developers and should be independently reviewed and validated. ChatGPT is not used by the workflow to generate sequencing results, assemble influenza genomes, assign subtypes or genotypes, call variants, or replace the underlying bioinformatics tools described above.
-
-Users adapting WINGS should apply the same standard to any LLM-assisted changes: review the generated code, verify tool parameters and dependencies, test changes on appropriate data, and document substantive LLM assistance when required by institutional, journal, or funding-agency policies.
-
-## Optional segment phylogenies
-
-The stage is off by default. To infer trees, add this block to `config.yaml` (or set `enabled: true` in an existing `phylogeny` block):
-
-```yaml
-phylogeny:
+outbreak_context:
   enabled: true
-  min_sequences: 5
-  threads: 4
+  csv: resources/aphis/hpai-wild-birds.csv
+  provenance: resources/aphis/hpai-wild-birds.provenance.json
 ```
 
-Run the report from the repository root with Docker Desktop running on macOS:
+Set `enabled: false` to disable context even if a snapshot exists. To refresh,
+download a CSV from the [APHIS wild-bird detections page](https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/wild-birds),
+then import it and matching provenance with:
 
 ```bash
-snakemake --configfile config.yaml --sdm conda --cores 4 \
-  --resources mem_mb=90000 kaleido=1 \
-  --rerun-incomplete results/run_summary/run_summary.html
+python scripts/import_aphis_snapshot.py /path/to/downloaded-aphis.csv
 ```
 
-WINGS selects QC-passing final consensus sequences for HA, NA, PB2, PB1, PA, NP, MP, and NS. It aligns each segment with MAFFT `--auto`, then uses IQ-TREE 2 with `-m MFP` for maximum-likelihood inference and automatic model selection and `-B 1000` for ultrafast bootstrap (UFBoot) branch support. On reruns, `-redo` lets IQ-TREE recompute a completed analysis when Snakemake finds its output out of date. Outputs are `phylogeny/{segment}_Tree.newick`, per-segment status and alignment files under `results/run_summary/phylogeny/`, and the Surveillance Explorer in `results/run_summary/run_summary.html`. Snakemake creates the tool environment from `envs/phylogeny.yaml`.
-
-Every segment needs at least `phylogeny.min_sequences` QC-passing sequences (minimum 5). If a segment has fewer, check its `results/run_summary/phylogeny/{segment}.status.tsv` for the count and exclusions. With the stage disabled, the Explorer reads existing external trees from `phylogeny_dir` when available; generating all eight trees requires `enabled: true`.
-
-After the run, check that the Explorer parsed all eight trees and that their tip counts match the QC-passing input counts:
-
-```bash
-python3 - <<'PY'
-import csv
-import json
-from pathlib import Path
-
-segments = ("HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS")
-data = json.loads(Path("results/run_summary/surveillance_explorer.json").read_text())
-assert set(data["trees"]) == set(segments), data["trees"].keys()
-
-for segment in segments:
-    status_path = Path(f"results/run_summary/phylogeny/{segment}.status.tsv")
-    with status_path.open(newline="") as handle:
-        status = next(csv.DictReader(handle, delimiter="\t"))
-    tree = data["trees"][segment]
-    assert status["status"] == "READY", (segment, status)
-    assert tree["tip_count"] == int(status["sequence_count"]), segment
-    assert tree["unmatched_tip_count"] == 0, segment
-    print(f"{segment}: {tree['tip_count']} tips")
-
-print("Explorer warnings:", data["warnings"])
-PY
-```
-
-Review any Explorer warnings, the alignments, and `results/run_summary/phylogeny/{segment}.iqtree.iqtree` before interpreting the trees. Check sequence identity, selected models, and UFBoot support values in the IQ-TREE report; the Explorer displays numeric support labels of at least 70. UFBoot is an approximation, not the standard nonparametric bootstrap. Inspect the trees for unexpected placements; successful execution alone does not establish biological validity. See the [IQ-TREE tutorial](https://iqtree.github.io/doc/Tutorial) for UFBoot interpretation.
+The importer validates the export, preserves its bytes, and writes matching
+provenance. Its recorded import date is not an APHIS release date.
+Report builds use the local snapshot and do not fetch live data. Rebuild the
+explorer JSON, HTML, and bundle using the three commands above after an import.
+Previously saved or shared bundles retain the snapshot embedded when they were
+built. See
+[Outbreak context](docs/outbreak-context.md) for semantics, provenance, and exact
+rebuild commands.

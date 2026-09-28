@@ -25,6 +25,8 @@ that species in the matching area and period. This is not proof of absence.
 
 import argparse
 import csv
+import gzip
+import json
 import math
 import sys
 from collections import defaultdict
@@ -84,7 +86,9 @@ def parse_coordinate(text, lower, upper, field, sample_id):
 
 
 def tsv_rows(path, required, malformed=None, literal_quotes=False):
-    with path.open(newline="", encoding="utf-8-sig") as stream:
+    # Stream large EBD .txt.gz inputs without extracting them to disk.
+    opener = gzip.open if path.suffix.casefold() == ".gz" else open
+    with opener(path, "rt", newline="", encoding="utf-8-sig") as stream:
         # EBD records are literal tab-separated lines; quote characters in
         # free-text fields must not make the reader join adjacent records.
         reader = csv.DictReader(
@@ -178,6 +182,28 @@ def read_samples(path, maps, days, radius_km):
     if not samples:
         raise ValueError(f"No sample rows found in {path}")
     return samples
+
+
+def check_cache_scope(samples, observations):
+    """Fail if a new query extends beyond the original metadata cache scope."""
+    manifest_path = observations.parent / "cache_manifest.json"
+    if not manifest_path.is_file():
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    scopes = manifest.get("coverage_scopes", [])
+    if not scopes:
+        raise ValueError(f"Cache manifest has no coverage scopes: {manifest_path}")
+    for sample in samples:
+        country = sample.country_code or sample.country_name
+        matched = any(
+            scope["country"].casefold() == country.casefold()
+            and (not scope["state"] or scope["state"].casefold() == sample.state.casefold())
+            and scope["start"] <= sample.start and sample.end <= scope["end"]
+            for scope in scopes
+        )
+        if not matched:
+            raise ValueError(f"{sample.sample_id}: location/date window is outside the "
+                             f"observation cache; rebuild it for the new metadata ({manifest_path})")
 
 
 def haversine_km(lat1, lon1, lat2, lon2):
@@ -309,12 +335,32 @@ def summarize(samples, observations, sampling, malformed):
     return denominator, numerator, catalog
 
 
+def inventory_species(observations, malformed):
+    """Inventory names in an EBD observation file without sampling events."""
+    counts = defaultdict(int)
+    labels = {}
+    for row in tsv_rows(observations, {"COMMON NAME", "SCIENTIFIC NAME"},
+                        malformed, literal_quotes=True):
+        common = value(row["COMMON NAME"])
+        scientific = value(row["SCIENTIFIC NAME"])
+        if common or scientific:
+            key = (common.casefold(), scientific.casefold())
+            counts[key] += 1
+            labels[key] = (common, scientific)
+    return sorted((labels[key][0], labels[key][1], count)
+                  for key, count in counts.items())
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--metadata", required=True, type=Path, help="WINGS metadata.tsv or validated_metadata.tsv")
-    parser.add_argument("--observations", required=True, type=Path, help="EBD observation file (.txt)")
-    parser.add_argument("--sampling", required=True, type=Path, help="Matching EBD sampling file (_sampling.txt)")
+    parser.add_argument("--metadata", type=Path, help="WINGS metadata.tsv or validated_metadata.tsv")
+    parser.add_argument("--observations", required=True, type=Path, help="EBD observations (.txt or .txt.gz)")
+    parser.add_argument("--sampling", type=Path, help="Matching sampling events (.txt or .txt.gz)")
+    parser.add_argument("--species-catalog", type=Path,
+                        help="Full observation-file species catalog saved by build_ebird_cache.py")
     parser.add_argument("--output-dir", required=True, type=Path, help="Directory for aggregated TSVs")
+    parser.add_argument("--list-species", action="store_true",
+                        help="Inventory the observations without metadata or sampling events")
     parser.add_argument("--map", action="append", default=[], metavar="HOST=SPECIES",
                         help="Explicit WINGS host-code to eBird common or scientific name; repeatable")
     parser.add_argument("--host-map", type=Path,
@@ -332,9 +378,30 @@ def main(argv=None):
     if args.max_malformed_rows < 0:
         parser.error("--max-malformed-rows must be nonnegative")
     malformed = {"limit": args.max_malformed_rows, "rows": []}
+    if args.list_species:
+        try:
+            catalog = inventory_species(args.observations, malformed)
+            write_tsv(args.output_dir / "ebird_species.tsv",
+                      ["common_name", "scientific_name", "observation_rows"],
+                      ({"common_name": common, "scientific_name": scientific,
+                        "observation_rows": count} for common, scientific, count in catalog))
+            write_tsv(args.output_dir / "ebird_malformed_rows.tsv",
+                      ["source_file", "line", "extra_fields", "reason"], malformed["rows"])
+        except (ValueError, OSError, EOFError, csv.Error) as exc:
+            parser.exit(1, f"eBird inventory failed: {exc}\n")
+        print(f"Found {len(catalog)} distinct eBird taxa in {args.observations}; "
+              f"saved to {args.output_dir / 'ebird_species.tsv'}")
+        if malformed["rows"]:
+            print(f"WARNING: skipped {len(malformed['rows'])} malformed row(s); "
+                  f"see {args.output_dir / 'ebird_malformed_rows.tsv'}", file=sys.stderr)
+        return
+    if args.metadata is None or args.sampling is None:
+        parser.error("--metadata and --sampling are required unless --list-species is set")
     try:
         samples = read_samples(args.metadata, parse_maps(args.map, args.host_map), args.days,
                                args.radius_km)
+        if args.species_catalog is not None:
+            check_cache_scope(samples, args.observations)
         denominator, numerator, catalog = summarize(
             samples, args.observations, args.sampling, malformed
         )
@@ -345,6 +412,11 @@ def main(argv=None):
             "date_window_days": args.days}
     monthly = []
     summary = []
+    if args.species_catalog is not None:
+        catalog = [(value(row["common_name"]), value(row["scientific_name"]),
+                    row["observation_rows"])
+                   for row in tsv_rows(args.species_catalog,
+                                       {"common_name", "scientific_name", "observation_rows"})]
     available = {name.casefold() for common, scientific, _ in catalog
                  for name in (common, scientific) if name}
     for sample in samples:

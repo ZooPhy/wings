@@ -268,10 +268,11 @@ def first_newick_tree_and_count(path: Path) -> tuple[str, int]:
 
 
 def map_tip_to_sample(tip: str, sample_ids: set[str]) -> str | None:
-    if "__" in tip:
-        candidate = tip.split("__", 1)[0]
-        if candidate in sample_ids:
-            return candidate
+    if tip in sample_ids:
+        return tip
+    matches = [sample_id for sample_id in sample_ids if tip.startswith(sample_id + "__")]
+    if matches:
+        return max(matches, key=len)
 
     # Backward-compatible fallback for labels such as sample_A_HA_H5.
     matches = [sample_id for sample_id in sample_ids if tip == sample_id or tip.startswith(sample_id + "_")]
@@ -335,18 +336,243 @@ def build_tree_records(tree_paths: Iterable[Path], sample_ids: set[str]) -> tupl
     return trees, warnings
 
 
+def read_recorded_genotype(path: Path | None, status: str) -> dict[str, Any]:
+    """Display the existing GenoFLU result; do not derive a genotype."""
+    result = {"status": status or "NOT_RECORDED", "call": None, "reason": "", "source_file": None}
+    if status == "DISABLED_BY_CONFIG":
+        result["reason"] = "GenoFLU was disabled for this run."
+        return result
+    if path is None or not path.is_file() or not path.stat().st_size:
+        result["reason"] = "No GenoFLU output was supplied to the explorer."
+        return result
+    result["source_file"] = f"{path.parent.name}/{path.name}"
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) == 2 and lines[0].startswith("sample\tstatus"):
+        result["status"] = lines[1].split("\t", 1)[-1]
+        result["reason"] = "GenoFLU did not run; the recorded eligibility status is shown."
+        return result
+    match = re.search(r"consensus\s+Genotype\s+-->\s*([^:\r\n]+):\s*([^\r\n]*)", text, re.I)
+    if match:
+        value = match.group(1).strip()
+        result["reason"] = match.group(2).strip()
+        if value.casefold() not in {"not assigned", "unassigned", "not available", "not run", "unknown", "indeterminate"}:
+            result["call"] = value
+        result["status"] = "RECORDED" if result["call"] else "NOT_ASSIGNED"
+    else:
+        result["status"] = "NOT_ASSIGNED"
+        result["reason"] = "No consensus genotype was recorded in the supplied output."
+    return result
+
+
+def attach_genome_evidence(samples, summaries, coverage_paths, genoflu_paths, trees, warnings):
+    """Join existing report evidence by sample ID and segment, preserving missing values."""
+    sample_ids = {sample["sample_id"] for sample in samples}
+    coverage = {}
+    for path in coverage_paths:
+        if not path.is_file() or not path.stat().st_size:
+            warnings.append(f"Coverage evidence unavailable: {path.name}")
+            continue
+        for row in read_tsv(path):
+            sample_id = _clean(row.get("sample_id") or row.get("sample")) or path.parent.parent.name
+            # NA is a segment name here, not a missing-value token.
+            segment = str(row.get("segment", "")).strip().upper()
+            if sample_id not in sample_ids or segment not in SEGMENT_ORDER:
+                warnings.append(f"Unmatched coverage record in {path.name}: {sample_id} / {segment}")
+                continue
+            key = (sample_id, segment)
+            if key in coverage:
+                raise ValueError(f"Duplicate coverage evidence for {sample_id} / {segment}")
+            coverage[key] = row
+    genotypes = {}
+    for path in genoflu_paths:
+        sample_id = path.parent.parent.name
+        if sample_id not in sample_ids:
+            warnings.append(f"Unmatched GenoFLU sample directory: {sample_id}")
+            continue
+        if sample_id in genotypes:
+            raise ValueError(f"Duplicate GenoFLU output for {sample_id}")
+        genotypes[sample_id] = path
+
+    tip_evidence = {}
+    def visit(node, segment, parent=None):
+        if node.get("children"):
+            for child in node["children"]:
+                visit(child, segment, node)
+            return
+        sample_id = node.get("sample_id")
+        if sample_id:
+            label = str((parent or {}).get("label", ""))
+            # Preserve numeric and compound support labels without assuming a
+            # support method, percentage scale, or confidence threshold.
+            support = label if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:/[0-9]+(?:\.[0-9]+)?)*", label) else None
+            tip_evidence.setdefault((sample_id, segment), []).append({
+                "name": node["name"], "parent_support": support,
+            })
+    for segment, tree in trees.items():
+        visit(tree["root"], segment)
+
+    for sample in samples:
+        sample_id = sample["sample_id"]
+        status = _clean(summaries.get(sample_id, {}).get("genoflu_status"))
+        sample["genotype"] = read_recorded_genotype(genotypes.get(sample_id), status)
+        sample["segments"] = {}
+        for segment in SEGMENT_ORDER:
+            row = coverage.get((sample_id, segment))
+            source = row or {}
+            missing_sequence = any(str(source.get(key, "")).upper() == "MISSING"
+                                   for key in ("assembly_status", "selection_status"))
+            tips = tip_evidence.get((sample_id, segment), [])
+            record = {
+                "segment": segment,
+                "record_status": "NOT_RECORDED" if row is None else "MISSING_SEQUENCE" if missing_sequence else "AVAILABLE",
+                "source_file": "coverage/coverage.tsv" if row is not None else None,
+                "tree_status": "NO_TREE" if segment not in trees else "PRESENT" if tips else "ABSENT_FROM_TREE",
+                "tree_source": trees.get(segment, {}).get("source_file"),
+                "tips": tips,
+                "contig": _clean(source.get("contig")),
+                "overall_status": _clean(source.get("overall_status") or source.get("coverage_flag"), "NOT_RECORDED"),
+                "coverage_status": _clean(source.get("coverage_status"), "NOT_RECORDED"),
+                "length_status": _clean(source.get("length_status"), "NOT_RECORDED"),
+                "n_content_status": _clean(source.get("n_content_status"), "NOT_RECORDED"),
+                "selection_reason": _clean(source.get("selection_reason")),
+                "qc_reason": _clean(source.get("qc_reason")),
+            }
+            for field in ("length", "median_depth", "mean_depth", "breadth_covered", "n_fraction"):
+                record[field] = _number(source.get(field))
+            sample["segments"][segment] = record
+
+
+APHIS_SOURCE_URL = "https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/wild-birds"
+APHIS_COLUMNS = ("State", "County", "Collection Date", "Date Detected", "HPAI Strain", "Bird Species", "WOAH Classification", "Sampling Method", "Submitting Agency")
+US_STATES = dict(item.split(":", 1) for item in (
+    "AL:Alabama|AK:Alaska|AZ:Arizona|AR:Arkansas|CA:California|CO:Colorado|CT:Connecticut|DE:Delaware|DC:District of Columbia|FL:Florida|GA:Georgia|HI:Hawaii|ID:Idaho|IL:Illinois|IN:Indiana|IA:Iowa|KS:Kansas|KY:Kentucky|LA:Louisiana|ME:Maine|MD:Maryland|MA:Massachusetts|MI:Michigan|MN:Minnesota|MS:Mississippi|MO:Missouri|MT:Montana|NE:Nebraska|NV:Nevada|NH:New Hampshire|NJ:New Jersey|NM:New Mexico|NY:New York|NC:North Carolina|ND:North Dakota|OH:Ohio|OK:Oklahoma|OR:Oregon|PA:Pennsylvania|RI:Rhode Island|SC:South Carolina|SD:South Dakota|TN:Tennessee|TX:Texas|UT:Utah|VT:Vermont|VA:Virginia|WA:Washington|WV:West Virginia|WI:Wisconsin|WY:Wyoming"
+).split("|"))
+
+
+def us_state_code(value):
+    text = str(value or "").strip().casefold()
+    if text.startswith("us-"):
+        text = text[3:]
+    return next((code for code, name in US_STATES.items() if text in {code.casefold(), name.casefold()}), None)
+
+
+def aphis_date(value):
+    from datetime import datetime
+    text = str(value or "").strip()
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return None
+
+
+def build_outbreak_context(path, provenance_path=None):
+    """Read a pinned APHIS CSV; preserve every source record and both dates."""
+    import hashlib
+    if path is None:
+        return {"status": "NOT_CONFIGURED", "records": [], "source_url": APHIS_SOURCE_URL}
+    path = Path(path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    provenance = {}
+    if provenance_path is not None:
+        provenance = json.loads(Path(provenance_path).read_text(encoding="utf-8"))
+        if provenance.get("sha256") != digest:
+            raise ValueError("APHIS provenance SHA-256 does not match the CSV; update the snapshot and its provenance together")
+    records = []
+    unknown_states = set()
+    invalid_dates = {"collection_date": 0, "detected_date": 0}
+    seen = set()
+    repeated = 0
+    with path.open(encoding="utf-8-sig", newline="") as stream:
+        reader = csv.DictReader(stream)
+        headers = reader.fieldnames or []
+        if len(headers) != len(set(headers)) or set(APHIS_COLUMNS) - set(headers):
+            raise ValueError("APHIS CSV must have unique headers including: " + ", ".join(APHIS_COLUMNS))
+        for index, row in enumerate(reader, 1):
+            if None in row or any(row.get(key) is None for key in APHIS_COLUMNS):
+                raise ValueError(f"Malformed APHIS CSV record {index}")
+            values = tuple(row[key].strip() for key in APHIS_COLUMNS)
+            repeated += values in seen
+            seen.add(values)
+            state, county, collection, detected, strain, species, classification, method, agency = values
+            code = us_state_code(state)
+            if code is None:
+                unknown_states.add(state or "(missing)")
+            collection_date, detected_date = aphis_date(collection), aphis_date(detected)
+            invalid_dates["collection_date"] += collection_date is None
+            invalid_dates["detected_date"] += detected_date is None
+            records.append({
+                "source_row": index, "state": state, "state_code": code, "county": county,
+                "collection_date": collection_date, "detected_date": detected_date,
+                "collection_date_raw": collection, "detected_date_raw": detected,
+                "strain": strain, "species": species, "classification": classification,
+                "sampling_method": method, "submitting_agency": agency,
+                "geographic_precision": "county" if _clean(county) else "state" if code else "unknown",
+            })
+    ranges = {}
+    for field in invalid_dates:
+        dates = sorted(record[field] for record in records if record[field])
+        ranges[field] = {"min": dates[0] if dates else None, "max": dates[-1] if dates else None}
+    return {
+        "status": "READY", "source_name": "USDA APHIS wild-bird HPAI detections",
+        "source_url": APHIS_SOURCE_URL, "source_file": path.name, "sha256": digest,
+        "snapshot_supplied_date": provenance.get("snapshot_supplied_date"),
+        "snapshot_date_basis": provenance.get("snapshot_date_basis", "Not recorded"),
+        "record_count": len(records), "records": records, "states": US_STATES,
+        "date_ranges": ranges, "undated_counts": invalid_dates,
+        "repeated_rows_retained": repeated, "unmapped_states": sorted(unknown_states),
+        "geographic_display_precision": "state",
+        "record_reference": "SHA-256 of CSV plus 1-based data-record number; not an APHIS case ID",
+        "notes": [
+            "Counts are source rows, not unique outbreaks, infection prevalence, or estimates of incidence.",
+            "Source geography is county/state. Map shading aggregates by state; no exact detection locations are inferred.",
+            "Collection dates and confirmatory detection dates are distinct. Missing dates are never substituted.",
+            "Date and place overlap provide context only and do not imply epidemiological linkage.",
+            "The CSV provides no unique record IDs or record-specific web URLs. Links open the APHIS source table.",
+        ],
+    }
+
+
 def build_payload(
     metadata: Path,
     summaries: Iterable[Path],
     trees: Iterable[Path],
     ebird_samples: Path | None = None,
+    ebird_terms: Path | None = None,
+    ebird_citation: Path | None = None,
+    coverage: Iterable[Path] = (),
+    genoflu: Iterable[Path] = (),
+    aphis_csv: Path | None = None,
+    aphis_provenance: Path | None = None,
 ) -> dict[str, Any]:
     metadata_rows = read_metadata(metadata)
     summary_rows = read_sample_summaries(summaries)
     samples = build_sample_records(metadata_rows, summary_rows)
     sample_ids = {sample["sample_id"] for sample in samples}
     tree_records, warnings = build_tree_records(trees, sample_ids)
+    attach_genome_evidence(samples, summary_rows, coverage, genoflu, tree_records, warnings)
     ebird_contexts = build_ebird_contexts(samples, ebird_samples, warnings)
+    ebird_attribution = None
+    if ebird_contexts:
+        source_dir = ebird_samples.parent
+        terms_path = ebird_terms or source_dir / "terms_of_use.txt"
+        citation_path = ebird_citation or source_dir / "recommended_citation.txt"
+        if not terms_path.is_file() or not citation_path.is_file():
+            raise ValueError(
+                "eBird context requires terms_of_use.txt and recommended_citation.txt "
+                f"in {source_dir}. Copy both from the eBird release before building the report."
+            )
+        terms_text = terms_path.read_text(encoding="utf-8-sig").strip()
+        citation_text = citation_path.read_text(encoding="utf-8-sig").strip()
+        if not terms_text or not citation_text:
+            raise ValueError("eBird terms and recommended citation must be nonempty")
+        ebird_attribution = {
+            "terms": terms_text,
+            "citation": citation_text,
+            "source_url": "https://ebird.org/data/download",
+        }
 
     geolocated = sum(1 for sample in samples if sample["has_coordinates"])
     dates = sorted(
@@ -355,11 +581,13 @@ def build_payload(
     hosts = sorted({sample["host"] for sample in samples if sample["host"] != "Unknown"})
 
     return {
-        "version": 1,
+        "version": 2,
         "title": "WINGS Surveillance Explorer",
         "samples": samples,
         "trees": tree_records,
         "ebird_contexts": ebird_contexts,
+        "ebird_attribution": ebird_attribution,
+        "outbreak_context": build_outbreak_context(aphis_csv, aphis_provenance),
         "segment_order": list(SEGMENT_ORDER),
         "summary": {
             "sample_count": len(samples),
@@ -443,13 +671,16 @@ def build_ebird_contexts(
     return list(grouped.values())
 
 
-def _paths_from_snakemake() -> tuple[Path, list[Path], list[Path], Path, Path | None]:
+def _paths_from_snakemake() -> tuple[Path, list[Path], list[Path], Path, Path | None, Path | None, Path | None]:
     metadata = Path(snakemake.input.metadata)
     summaries = [Path(value) for value in snakemake.input.summaries]
     trees = [Path(value) for value in getattr(snakemake.input, "trees", [])]
     output = Path(snakemake.output.json)
     ebird = getattr(snakemake.input, "ebird_samples", [])
-    return metadata, summaries, trees, output, Path(ebird[0]) if ebird else None
+    terms = getattr(snakemake.input, "ebird_terms", [])
+    citation = getattr(snakemake.input, "ebird_citation", [])
+    return (metadata, summaries, trees, output, Path(ebird[0]) if ebird else None,
+            Path(terms[0]) if terms else None, Path(citation[0]) if citation else None)
 
 
 def parse_args() -> argparse.Namespace:
@@ -458,20 +689,39 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary", type=Path, action="append", default=[])
     parser.add_argument("--tree", type=Path, action="append", default=[])
     parser.add_argument("--ebird-samples", type=Path)
+    parser.add_argument("--ebird-terms", type=Path)
+    parser.add_argument("--ebird-citation", type=Path)
+    parser.add_argument("--coverage", type=Path, action="append", default=[],
+                        help="Existing per-sample coverage TSV (repeat for each sample).")
+    parser.add_argument("--genoflu", type=Path, action="append", default=[],
+                        help="Existing <sample>/genoflu/GenoFLU.tsv (repeat for each sample).")
+    parser.add_argument("--aphis-csv", type=Path)
+    parser.add_argument("--aphis-provenance", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
 
 def main() -> None:
     if "snakemake" in globals():
-        metadata, summaries, trees, output, ebird = _paths_from_snakemake()
+        metadata, summaries, trees, output, ebird, terms, citation = _paths_from_snakemake()
+        coverage = [Path(value) for value in getattr(snakemake.input, "coverage", [])]
+        genoflu = [Path(value) for value in getattr(snakemake.input, "genoflu", [])]
+        aphis = list(getattr(snakemake.input, "aphis_csv", []))
+        provenance = list(getattr(snakemake.input, "aphis_provenance", []))
+        aphis_csv = Path(aphis[0]) if aphis else None
+        aphis_provenance = Path(provenance[0]) if provenance else None
     else:
         args = parse_args()
-        metadata, summaries, trees, output, ebird = (
-            args.metadata, args.summary, args.tree, args.output, args.ebird_samples
+        metadata, summaries, trees, output, ebird, terms, citation = (
+            args.metadata, args.summary, args.tree, args.output, args.ebird_samples,
+            args.ebird_terms, args.ebird_citation,
         )
+        coverage, genoflu = args.coverage, args.genoflu
+        aphis_csv, aphis_provenance = args.aphis_csv, args.aphis_provenance
 
-    payload = build_payload(metadata, summaries, trees, ebird)
+    payload = build_payload(metadata, summaries, trees, ebird, terms, citation,
+                            coverage=coverage, genoflu=genoflu,
+                            aphis_csv=aphis_csv, aphis_provenance=aphis_provenance)
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.
