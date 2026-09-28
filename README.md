@@ -8,6 +8,8 @@
 
 WINGS is a portable Snakemake workflow for genomic analysis of avian influenza A virus from Oxford Nanopore sequencing reads. It performs read preprocessing, influenza assembly, segment-level quality assessment, consensus polishing, variant calling, subtype screening, genotype assignment, annotation, and generation of interactive HTML reports.
 
+The Surveillance Explorer combines sample locations with **USDA APHIS wild-bird detection context**, including a shared map with state-level detection counts, a dated timeline, source links, and snapshot provenance. These records provide context and do not establish epidemiological links between detections and WINGS samples.
+
 WINGS was developed in support of the [**Pandemic ESCAPE Center**](https://escape.engr.uky.edu/), with a focus on genomic epidemiology, bioinformatics, and surveillance of avian influenza viruses in wild birds.
 
 The workflow has been validated on Apple Silicon macOS using Snakemake, Conda, and Docker Desktop, and on Linux ARM64 SLURM clusters using Snakemake, Conda, and Apptainer. VADR is currently disabled on Linux ARM64 because the pinned VADR container image does not provide a Linux ARM64 image.
@@ -29,6 +31,7 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - VADR sequence annotation and validation
 - Interactive sample-level HTML reports
 - Interactive sequencing-run summary report
+- [USDA APHIS outbreak context](#usda-aphis-outbreak-context) with state-level map shading, date filters, source-record browsing, and reproducible offline snapshots
 - Portable `.wings` report bundles containing the run summary, all sample reports, and embedded run-level provenance
 - Run-level provenance capturing workflow state, configuration hashes, environment hashes, runtime details, and BLAST database provenance
 - Browser-based local report viewing at `wings.scotchlab.org` with no sequencing-data upload
@@ -968,9 +971,11 @@ node tests/test_linked_genome_explorer.cjs
 ```
 
 
-### APHIS outbreak context
+### USDA APHIS outbreak context
 
-The Surveillance Explorer can display a pinned APHIS wild-bird detection CSV as
+The U.S. Department of Agriculture (USDA) Animal and Plant Health Inspection Service (APHIS) publishes wild-bird detections of highly pathogenic avian influenza (HPAI).
+
+The Surveillance Explorer can display a pinned USDA APHIS wild-bird detection CSV as
 an offline state-shading layer on the existing sample map, a dated timeline,
 and a paginated source-record browser. Neighboring states retain their detection
 counts when a sample is selected. Host-colored points represent WINGS samples;
