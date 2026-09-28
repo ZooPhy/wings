@@ -1,0 +1,4 @@
+# Reviewed inputs are run-specific; commit only deliberately published snapshots.
+*
+!.gitignore
+!manifest-template.tsv

@@ -498,6 +498,8 @@
 .wse-outbreak-bar { fill: #147d78; cursor: pointer; }
 .wse-outbreak-bar:hover, .wse-outbreak-bar:focus-visible { fill: #8c1d40; outline: none; }
 .wse-outbreak-sample-date { stroke: #8c1d40; stroke-width: 2; stroke-dasharray: 5 3; pointer-events: none; }
+.wse-outbreak-sample-label { display: flex; align-items: baseline; gap: .6rem; margin: .8rem 0 .2rem; color: #8c1d40; font-size: .9rem; overflow-wrap: anywhere; }
+.wse-outbreak-sample-swatch { display: inline-block; flex: 0 0 1.8rem; border-top: 2px dashed #8c1d40; align-self: center; }
 .wse-outbreak-records, .wse-outbreak-provenance { margin-top: .8rem; padding: .65rem; border: 1px solid #d8dde1; border-radius: .4rem; }
 .wse-outbreak-records summary, .wse-outbreak-provenance summary { cursor: pointer; font-weight: 700; }
 .wse-outbreak-table-wrap { overflow-x: auto; }
@@ -536,3 +538,35 @@
 .wse-state-card-actions button { font: inherit; padding: .35rem .5rem; border: 1px solid #999; border-radius: .3rem; background: #fafafa; color: #202124; cursor: pointer; }
 .wse-map-state-card button:focus-visible { outline: 3px solid #8c1d40; outline-offset: 1px; }
 @media (max-width: 540px) { .wse-map-state-card { position: relative; top: auto; left: auto; width: auto; margin: .5rem .9rem; } }
+
+/* Ecological sources share chart bounds, while retaining their own units. */
+.wse-ecology-panel { margin-top: 1rem; }
+.wse-ecology-panel .wse-panel-heading { flex-wrap: wrap; gap: .7rem; }
+.wse-ecology-panel select { padding: .3rem; border: 1px solid #aeb4bc; border-radius: .3rem; background: white; }
+.wse-ecology-intro, .wse-ecology-provenance { padding: .3rem 1rem; }
+.wse-ecology-intro p + p, .wse-ecology-provenance { font-size: .87rem; color: #555; }
+.wse-ecology-source { padding: .75rem 1rem; border-top: 1px solid #dfe3e8; }
+.wse-ecology-source h4 { margin: .2rem 0 .8rem; font-size: 1.05rem; }
+.wse-ecology-source p { font-size: .87rem; line-height: 1.5; }
+.wse-ecology-source .wse-ebird { padding: 0; }
+.wse-ecology-source details { margin: .7rem 0; font-size: .85rem; }
+.wse-ecology-source summary, .wse-ecology-provenance summary { cursor: pointer; }
+.wse-ecology-source code, .wse-ecology-provenance code { overflow-wrap: anywhere; }
+.wse-ecology-plot { display: block; width: 100%; height: auto; }
+.wse-ecology-table { overflow-x: auto; max-height: 20rem; }
+.wse-ecology-table table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.wse-ecology-table td, .wse-ecology-table th { padding: .4rem .6rem; text-align: left; border-bottom: 1px solid #e4e7eb; }
+@media (max-width: 600px) { .wse-ecology-source { padding: .6rem; } .wse-ecology-panel .wse-panel-heading { align-items: flex-start; } }
+/* Public reference metadata are separate from WINGS sample QC. */
+.wse-reference-details { margin: .8rem 0; font-size: .82rem; }
+.wse-reference-empty, .wse-reference-legend { color: #5f6368; }
+.wse-reference-card { border: 1px solid #007c83; border-left: 5px solid #007c83; border-radius: .5rem; padding: .9rem; background: #f5fbfb; }
+.wse-reference-card h4 { margin: 0 0 .5rem; }
+.wse-reference-card p { margin: .45rem 0; }
+.wse-reference-segments { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .6rem; margin-top: .8rem; }
+.wse-reference-segments > div { display: flex; flex-direction: column; gap: .35rem; padding: .6rem; background: #fff; border: 1px solid #c8dede; border-radius: .3rem; overflow-wrap: anywhere; }
+.wse-reference-provenance { margin-top: .7rem; color: #454b50; overflow-wrap: anywhere; }
+.wse-reference-provenance summary { cursor: pointer; }
+.wse-reference-provenance code { font-size: .72rem; white-space: normal; }
+.wse-public-tip.is-selected .wse-tree-tip-dot { stroke: #003c40; stroke-width: 3; }
+.wse-tree-tip[role="img"] { cursor: default; }

@@ -9,6 +9,7 @@ infer, reroot, date, or otherwise modify a phylogeny.
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import re
@@ -327,6 +328,7 @@ def build_tree_records(tree_paths: Iterable[Path], sample_ids: set[str]) -> tupl
         trees[segment] = {
             "segment": segment,
             "source_file": path.name,
+            "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "tree_count_in_file": tree_count,
             "displayed_tree_index": 1,
             "tip_count": tip_count,
@@ -546,12 +548,23 @@ def build_payload(
     genoflu: Iterable[Path] = (),
     aphis_csv: Path | None = None,
     aphis_provenance: Path | None = None,
+    ecological_context: Path | None = None,
+    ecological_loader: Path | None = None,
+    reference_manifest: Path | None = None,
+    reference_provenance: Path | None = None,
+    reference_loader: Path | None = None,
 ) -> dict[str, Any]:
     metadata_rows = read_metadata(metadata)
     summary_rows = read_sample_summaries(summaries)
     samples = build_sample_records(metadata_rows, summary_rows)
     sample_ids = {sample["sample_id"] for sample in samples}
     tree_records, warnings = build_tree_records(trees, sample_ids)
+    references = None
+    if reference_manifest is not None:
+        import runpy
+        loader = reference_loader or Path(__file__).with_name("public_reference_context.py")
+        references = runpy.run_path(str(loader))["attach_reference_context"](
+            tree_records, samples, reference_manifest, reference_provenance, warnings)
     attach_genome_evidence(samples, summary_rows, coverage, genoflu, tree_records, warnings)
     ebird_contexts = build_ebird_contexts(samples, ebird_samples, warnings)
     ebird_attribution = None
@@ -574,6 +587,12 @@ def build_payload(
             "source_url": "https://ebird.org/data/download",
         }
 
+    ecology = None
+    if ecological_context is not None:
+        import runpy
+        loader = ecological_loader or Path(__file__).with_name("build_ecological_context.py")
+        ecology = runpy.run_path(str(loader))["load_snapshot"](ecological_context, samples)
+
     geolocated = sum(1 for sample in samples if sample["has_coordinates"])
     dates = sorted(
         {sample["collection_date"] for sample in samples if sample["collection_date"] != "Unknown"}
@@ -588,6 +607,8 @@ def build_payload(
         "ebird_contexts": ebird_contexts,
         "ebird_attribution": ebird_attribution,
         "outbreak_context": build_outbreak_context(aphis_csv, aphis_provenance),
+        "ecological_context": ecology,
+        "public_reference_context": references,
         "segment_order": list(SEGMENT_ORDER),
         "summary": {
             "sample_count": len(samples),
@@ -697,6 +718,9 @@ def parse_args() -> argparse.Namespace:
                         help="Existing <sample>/genoflu/GenoFLU.tsv (repeat for each sample).")
     parser.add_argument("--aphis-csv", type=Path)
     parser.add_argument("--aphis-provenance", type=Path)
+    parser.add_argument("--reference-manifest", type=Path)
+    parser.add_argument("--reference-provenance", type=Path)
+    parser.add_argument("--ecological-context", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -704,24 +728,37 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     if "snakemake" in globals():
         metadata, summaries, trees, output, ebird, terms, citation = _paths_from_snakemake()
+        refs = list(getattr(snakemake.input, "reference_manifest", []))
+        ref_prov = list(getattr(snakemake.input, "reference_provenance", []))
+        reference_manifest = Path(refs[0]) if refs else None
+        reference_provenance = Path(ref_prov[0]) if ref_prov else None
+        reference_loader = Path(snakemake.input.reference_loader) if refs else None
         coverage = [Path(value) for value in getattr(snakemake.input, "coverage", [])]
         genoflu = [Path(value) for value in getattr(snakemake.input, "genoflu", [])]
         aphis = list(getattr(snakemake.input, "aphis_csv", []))
         provenance = list(getattr(snakemake.input, "aphis_provenance", []))
         aphis_csv = Path(aphis[0]) if aphis else None
         aphis_provenance = Path(provenance[0]) if provenance else None
+        ecology = list(getattr(snakemake.input, "ecological_context", []))
+        ecological_context = Path(ecology[0]) if ecology else None
+        ecological_loader = Path(snakemake.input.ecological_loader) if ecology else None
     else:
         args = parse_args()
+        reference_manifest, reference_provenance, reference_loader = args.reference_manifest, args.reference_provenance, None
         metadata, summaries, trees, output, ebird, terms, citation = (
             args.metadata, args.summary, args.tree, args.output, args.ebird_samples,
             args.ebird_terms, args.ebird_citation,
         )
         coverage, genoflu = args.coverage, args.genoflu
         aphis_csv, aphis_provenance = args.aphis_csv, args.aphis_provenance
+        ecological_context, ecological_loader = args.ecological_context, None
 
     payload = build_payload(metadata, summaries, trees, ebird, terms, citation,
                             coverage=coverage, genoflu=genoflu,
-                            aphis_csv=aphis_csv, aphis_provenance=aphis_provenance)
+                            aphis_csv=aphis_csv, aphis_provenance=aphis_provenance,
+                            ecological_context=ecological_context, ecological_loader=ecological_loader,
+                            reference_manifest=reference_manifest, reference_provenance=reference_provenance,
+                            reference_loader=reference_loader)
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.
