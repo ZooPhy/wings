@@ -203,17 +203,129 @@ PHYLOGENY_PATTERN = str(config.get("phylogeny_pattern", "{segment}_Tree.newick")
 if "{segment}" not in PHYLOGENY_PATTERN:
     raise ValueError("config key 'phylogeny_pattern' must contain {segment}")
 
-# Public metadata annotate reviewed contextual trees supplied for display.
+# Public reference metadata can either annotate externally supplied contextual
+# trees or drive the reproducible WINGS contextual-reference workflow.
 REFERENCE_CONFIG = config.get("public_references", {}) or {}
 if not isinstance(REFERENCE_CONFIG, dict):
     raise ValueError("public_references must be a mapping")
+
 REFERENCE_ENABLED = as_bool(REFERENCE_CONFIG.get("enabled", False))
-REFERENCE_MANIFEST = str(REFERENCE_CONFIG.get("manifest", "resources/references/manifest.tsv"))
-REFERENCE_PROVENANCE = str(REFERENCE_CONFIG.get("provenance", "resources/references/provenance.json"))
-REFERENCE_TREE_DIR = REFERENCE_CONFIG.get("tree_dir")
-REFERENCE_TREE_PATTERN = str(REFERENCE_CONFIG.get("tree_pattern", "{segment}_Tree.newick"))
+REFERENCE_BUILD_CONTEXTUAL = as_bool(
+    REFERENCE_CONFIG.get("build_contextual", False)
+)
+
+REFERENCE_WORK_DIR = os.path.normpath(
+    str(
+        REFERENCE_CONFIG.get(
+            "work_dir",
+            f"{RESULTS}/run_summary/public_references",
+        )
+    )
+)
+
+REFERENCE_SOURCE_FASTA = str(
+    Path(str(REFERENCE_CONFIG["source_fasta"])).expanduser()
+) if REFERENCE_CONFIG.get("source_fasta") else ""
+
+REFERENCE_SOURCE_METADATA = str(
+    Path(str(REFERENCE_CONFIG["source_metadata"])).expanduser()
+) if REFERENCE_CONFIG.get("source_metadata") else ""
+
+REFERENCE_RETRIEVED_ON = str(
+    REFERENCE_CONFIG.get("retrieved_on", "")
+)
+REFERENCE_COUNTRIES = str(
+    REFERENCE_CONFIG.get("countries", "USA,Canada,Mexico")
+)
+REFERENCE_MIN_YEAR = int(
+    REFERENCE_CONFIG.get("min_year", 2021)
+)
+REFERENCE_GENOFLU_WORKERS = int(
+    REFERENCE_CONFIG.get("genotype_workers", 4)
+)
+REFERENCE_MAX_PER_SEGMENT = int(
+    REFERENCE_CONFIG.get("max_per_segment", 250)
+)
+REFERENCE_SAME_GENOTYPE_QUOTA = int(
+    REFERENCE_CONFIG.get("same_genotype_quota", 160)
+)
+REFERENCE_SAME_SEGMENT_TYPE_QUOTA = int(
+    REFERENCE_CONFIG.get("same_segment_type_quota", 60)
+)
+REFERENCE_BACKGROUND_QUOTA = int(
+    REFERENCE_CONFIG.get("background_quota", 30)
+)
+REFERENCE_MIN_TOTAL_SEQUENCES = int(
+    REFERENCE_CONFIG.get("min_total_sequences", 5)
+)
+REFERENCE_CONTEXT_THREADS = int(
+    REFERENCE_CONFIG.get("contextual_threads", PHYLOGENY_THREADS)
+)
+
+REFERENCE_PREPARED_DIR = os.path.join(
+    REFERENCE_WORK_DIR, "prepared"
+)
+REFERENCE_GENOTYPE_DIR = os.path.join(
+    REFERENCE_WORK_DIR, "genotype_assignment"
+)
+REFERENCE_SELECTED_DIR = os.path.join(
+    REFERENCE_WORK_DIR, "selected"
+)
+REFERENCE_CONTEXT_DIR = os.path.join(
+    RESULTS, "run_summary", "contextual_phylogeny"
+)
+REFERENCE_DISPLAY_DIR = os.path.join(
+    REFERENCE_WORK_DIR, "contextual_display"
+)
+
+REFERENCE_TREE_PATTERN = str(
+    REFERENCE_CONFIG.get("tree_pattern", "{segment}_Tree.newick")
+)
 if "{segment}" not in REFERENCE_TREE_PATTERN:
     raise ValueError("public_references.tree_pattern must contain {segment}")
+
+if REFERENCE_BUILD_CONTEXTUAL:
+    if not REFERENCE_ENABLED:
+        raise ValueError(
+            "public_references.build_contextual requires enabled: true"
+        )
+    if not RUN_GENOFLU:
+        raise ValueError(
+            "public_references.build_contextual requires run_genoflu: true"
+        )
+    if not REFERENCE_SOURCE_FASTA or not REFERENCE_SOURCE_METADATA:
+        raise ValueError(
+            "public_references.build_contextual requires source_fasta "
+            "and source_metadata"
+        )
+    if not REFERENCE_RETRIEVED_ON:
+        raise ValueError(
+            "public_references.build_contextual requires retrieved_on"
+        )
+
+    REFERENCE_MANIFEST = os.path.join(
+        REFERENCE_DISPLAY_DIR, "manifest.tsv"
+    )
+    REFERENCE_PROVENANCE = os.path.join(
+        REFERENCE_DISPLAY_DIR, "provenance.json"
+    )
+    REFERENCE_TREE_DIR = os.path.join(
+        REFERENCE_DISPLAY_DIR, "trees"
+    )
+else:
+    REFERENCE_MANIFEST = str(
+        REFERENCE_CONFIG.get(
+            "manifest",
+            "resources/references/manifest.tsv",
+        )
+    )
+    REFERENCE_PROVENANCE = str(
+        REFERENCE_CONFIG.get(
+            "provenance",
+            "resources/references/provenance.json",
+        )
+    )
+    REFERENCE_TREE_DIR = REFERENCE_CONFIG.get("tree_dir")
 
 # Ecological context uses an explicitly refreshed offline snapshot.
 ECOLOGY_CONFIG = config.get("ecological_context", {}) or {}
@@ -339,22 +451,49 @@ SEGMENT_SEQUENCE = ("HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS")
 
 
 def surveillance_tree_inputs(_wildcards):
-    """Return supplied segment trees that exist at DAG construction time."""
+    """Return segment trees used by the Surveillance Explorer."""
     if not RUN_SURVEILLANCE_EXPLORER:
         return []
+
     if REFERENCE_ENABLED and REFERENCE_TREE_DIR:
-        paths = [Path(REFERENCE_TREE_DIR) / REFERENCE_TREE_PATTERN.format(segment=segment)
-                 for segment in SEGMENT_SEQUENCE]
-        existing = [str(path) for path in paths if path.is_file() and path.stat().st_size]
+        paths = [
+            Path(REFERENCE_TREE_DIR)
+            / REFERENCE_TREE_PATTERN.format(segment=segment)
+            for segment in SEGMENT_SEQUENCE
+        ]
+
+        # Contextual trees generated by this workflow may not exist yet when
+        # Snakemake constructs the DAG. Return their expected paths so the
+        # upstream rules become explicit dependencies.
+        if REFERENCE_BUILD_CONTEXTUAL:
+            return [str(path) for path in paths]
+
+        existing = [
+            str(path)
+            for path in paths
+            if path.is_file() and path.stat().st_size
+        ]
         if not existing:
-            raise ValueError("No contextual trees found in public_references.tree_dir")
+            raise ValueError(
+                "No contextual trees found in public_references.tree_dir"
+            )
         return existing
+
     if RUN_PHYLOGENY:
-        return [str(Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment))
-                for segment in SEGMENT_SEQUENCE]
+        return [
+            str(
+                Path(PHYLOGENY_DIR)
+                / PHYLOGENY_PATTERN.format(segment=segment)
+            )
+            for segment in SEGMENT_SEQUENCE
+        ]
+
     paths = []
     for segment in SEGMENT_SEQUENCE:
-        candidate = Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment)
+        candidate = (
+            Path(PHYLOGENY_DIR)
+            / PHYLOGENY_PATTERN.format(segment=segment)
+        )
         if candidate.is_file() and candidate.stat().st_size > 0:
             paths.append(str(candidate))
     return paths
@@ -1787,6 +1926,336 @@ rule sample_summary_html:
         rm -rf "$output_dir/.sample_summary_files"
         rm -rf "$temp_report_dir"
         """
+
+
+
+# -----------------------------------------------------------------------------
+# Automatic public contextual-reference workflow.
+#
+# Raw NCBI/GenBank FASTA and metadata remain external inputs. Lightweight
+# normalized metadata, GenoFLU assignments, selected references, contextual
+# alignments/trees, and Explorer display inputs are generated under the
+# configured public_references.work_dir.
+# -----------------------------------------------------------------------------
+if REFERENCE_ENABLED and REFERENCE_BUILD_CONTEXTUAL:
+
+    rule prepare_public_references:
+        input:
+            fasta=REFERENCE_SOURCE_FASTA,
+            metadata=REFERENCE_SOURCE_METADATA,
+            script="scripts/prepare_public_references.py"
+        output:
+            metadata=os.path.join(
+                REFERENCE_PREPARED_DIR,
+                "normalized_metadata.tsv",
+            ),
+            fasta_index=os.path.join(
+                REFERENCE_PREPARED_DIR,
+                "fasta_index.tsv",
+            ),
+            candidates=os.path.join(
+                REFERENCE_PREPARED_DIR,
+                "public_reference_candidates.tsv",
+            ),
+            validation=os.path.join(
+                REFERENCE_PREPARED_DIR,
+                "validation.tsv",
+            ),
+            summary=os.path.join(
+                REFERENCE_PREPARED_DIR,
+                "summary.json",
+            )
+        conda:
+            "envs/py-tools.yaml"
+        shell:
+            r"""
+            set -euo pipefail
+            python {input.script:q} \
+              --fasta {input.fasta:q} \
+              --metadata {input.metadata:q} \
+              --output-dir {REFERENCE_PREPARED_DIR:q}
+            """
+
+
+    rule assign_public_reference_genotypes:
+        input:
+            candidates=os.path.join(
+                REFERENCE_PREPARED_DIR,
+                "public_reference_candidates.tsv",
+            ),
+            fasta=REFERENCE_SOURCE_FASTA,
+            script="scripts/assign_public_reference_genotypes.py"
+        output:
+            genotypes=os.path.join(
+                REFERENCE_GENOTYPE_DIR,
+                "public_reference_genotypes.tsv",
+            ),
+            groups=os.path.join(
+                REFERENCE_GENOTYPE_DIR,
+                "public_genome_groups.tsv",
+            ),
+            issues=os.path.join(
+                REFERENCE_GENOTYPE_DIR,
+                "grouping_issues.tsv",
+            ),
+            summary=os.path.join(
+                REFERENCE_GENOTYPE_DIR,
+                "summary.json",
+            )
+        threads:
+            REFERENCE_GENOFLU_WORKERS
+        conda:
+            "envs/genoflu.yaml"
+        shell:
+            r"""
+            set -euo pipefail
+            python {input.script:q} \
+              --candidates {input.candidates:q} \
+              --fasta {input.fasta:q} \
+              --output-dir {REFERENCE_GENOTYPE_DIR:q} \
+              --genoflu-exe genoflu.py \
+              --workers {threads} \
+              --min-year {REFERENCE_MIN_YEAR} \
+              --countries {REFERENCE_COUNTRIES:q}
+            """
+
+
+    rule select_contextual_references:
+        input:
+            public_genotypes=os.path.join(
+                REFERENCE_GENOTYPE_DIR,
+                "public_reference_genotypes.tsv",
+            ),
+            fasta=REFERENCE_SOURCE_FASTA,
+            metadata=METADATA_FILE,
+            genoflu=expand(
+                f"{RESULTS}/{{sample}}/genoflu/GenoFLU.tsv",
+                sample=SAMPLES,
+            ),
+            script="scripts/select_contextual_references.py"
+        output:
+            table=os.path.join(
+                REFERENCE_SELECTED_DIR,
+                "selected_references.tsv",
+            ),
+            summary=os.path.join(
+                REFERENCE_SELECTED_DIR,
+                "selection_summary.json",
+            ),
+            fasta=expand(
+                os.path.join(
+                    REFERENCE_SELECTED_DIR,
+                    "selected_{segment}.fasta",
+                ),
+                segment=SEGMENT_SEQUENCE,
+            ),
+            accessions=expand(
+                os.path.join(
+                    REFERENCE_SELECTED_DIR,
+                    "selected_{segment}.txt",
+                ),
+                segment=SEGMENT_SEQUENCE,
+            )
+        conda:
+            "envs/py-tools.yaml"
+        shell:
+            r"""
+            set -euo pipefail
+            python {input.script:q} \
+              --public-genotypes {input.public_genotypes:q} \
+              --results-dir {RESULTS:q} \
+              --metadata {input.metadata:q} \
+              --fasta {input.fasta:q} \
+              --output-dir {REFERENCE_SELECTED_DIR:q} \
+              --max-per-segment {REFERENCE_MAX_PER_SEGMENT} \
+              --same-genotype-quota {REFERENCE_SAME_GENOTYPE_QUOTA} \
+              --same-segment-type-quota {REFERENCE_SAME_SEGMENT_TYPE_QUOTA} \
+              --background-quota {REFERENCE_BACKGROUND_QUOTA}
+            """
+
+
+    rule contextual_phylogeny_inputs:
+        input:
+            selected=os.path.join(
+                REFERENCE_SELECTED_DIR,
+                "selected_references.tsv",
+            ),
+            selected_fastas=expand(
+                os.path.join(
+                    REFERENCE_SELECTED_DIR,
+                    "selected_{segment}.fasta",
+                ),
+                segment=SEGMENT_SEQUENCE,
+            ),
+            merged=expand(
+                f"{RESULTS}/{{sample}}/merged/consensus_all_segments.fasta",
+                sample=SAMPLES,
+            ),
+            coverage=expand(
+                f"{RESULTS}/{{sample}}/coverage/coverage.tsv",
+                sample=SAMPLES,
+            ),
+            metadata=METADATA_FILE,
+            script="scripts/build_contextual_phylogeny_inputs.py"
+        output:
+            fasta=expand(
+                os.path.join(
+                    REFERENCE_CONTEXT_DIR,
+                    "{segment}.contextual.input.fasta",
+                ),
+                segment=SEGMENT_SEQUENCE,
+            ),
+            tip_manifest=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "contextual_tip_manifest.tsv",
+            ),
+            status=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "segment_status.tsv",
+            ),
+            summary=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "build_summary.json",
+            )
+        conda:
+            "envs/py-tools.yaml"
+        shell:
+            r"""
+            set -euo pipefail
+            python {input.script:q} \
+              --results-dir {RESULTS:q} \
+              --selected-dir {REFERENCE_SELECTED_DIR:q} \
+              --metadata {input.metadata:q} \
+              --output-dir {REFERENCE_CONTEXT_DIR:q} \
+              --min-total-sequences {REFERENCE_MIN_TOTAL_SEQUENCES}
+            """
+
+
+    rule contextual_phylogeny_align:
+        input:
+            fasta=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "{segment}.contextual.input.fasta",
+            ),
+            status=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "segment_status.tsv",
+            )
+        output:
+            alignment=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "{segment}.contextual.aligned.fasta",
+            )
+        log:
+            os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "{segment}.mafft.log",
+            )
+        threads:
+            REFERENCE_CONTEXT_THREADS
+        conda:
+            "envs/phylogeny.yaml"
+        shell:
+            r"""
+            set -euo pipefail
+            mafft --auto --thread {threads} \
+              {input.fasta:q} \
+              > {output.alignment:q} \
+              2> {log:q}
+            test -s {output.alignment:q}
+            """
+
+
+    rule contextual_phylogeny_tree:
+        input:
+            alignment=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "{segment}.contextual.aligned.fasta",
+            )
+        output:
+            tree=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "{segment}.contextual.treefile",
+            )
+        log:
+            os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "{segment}.iqtree.log",
+            )
+        threads:
+            REFERENCE_CONTEXT_THREADS
+        params:
+            prefix=lambda wildcards: os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                f"{wildcards.segment}.contextual",
+            )
+        conda:
+            "envs/phylogeny.yaml"
+        shell:
+            r"""
+            set -euo pipefail
+            iqtree2 \
+              -s {input.alignment:q} \
+              -m MFP \
+              -B 1000 \
+              -nt {threads} \
+              -seed 1 \
+              -redo \
+              -pre {params.prefix:q} \
+              > {log:q} 2>&1
+            test -s {output.tree:q}
+            """
+
+
+    rule finalize_contextual_references:
+        input:
+            tip_manifest=os.path.join(
+                REFERENCE_CONTEXT_DIR,
+                "contextual_tip_manifest.tsv",
+            ),
+            trees=expand(
+                os.path.join(
+                    REFERENCE_CONTEXT_DIR,
+                    "{segment}.contextual.treefile",
+                ),
+                segment=SEGMENT_SEQUENCE,
+            ),
+            script="scripts/finalize_contextual_references.py"
+        output:
+            manifest=os.path.join(
+                REFERENCE_DISPLAY_DIR,
+                "manifest.tsv",
+            ),
+            provenance=os.path.join(
+                REFERENCE_DISPLAY_DIR,
+                "provenance.json",
+            ),
+            config=os.path.join(
+                REFERENCE_DISPLAY_DIR,
+                "public_references.config.yaml",
+            ),
+            summary=os.path.join(
+                REFERENCE_DISPLAY_DIR,
+                "finalize_summary.json",
+            ),
+            trees=expand(
+                os.path.join(
+                    REFERENCE_DISPLAY_DIR,
+                    "trees",
+                    "{segment}_Tree.newick",
+                ),
+                segment=SEGMENT_SEQUENCE,
+            )
+        conda:
+            "envs/py-tools.yaml"
+        shell:
+            r"""
+            set -euo pipefail
+            python {input.script:q} \
+              --context-dir {REFERENCE_CONTEXT_DIR:q} \
+              --output-dir {REFERENCE_DISPLAY_DIR:q} \
+              --retrieved-on {REFERENCE_RETRIEVED_ON:q}
+            """
 
 
 # -----------------------------------------------------------------------------
