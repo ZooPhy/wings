@@ -79,10 +79,10 @@ class PublicReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checksum"):
             self.build(manifest_sha256="bad")
 
-    def test_accession_version_required(self):
+    def test_unversioned_accession_allowed(self):
         self.rows[0]["accession_version"] = "ZZ999991"
-        with self.assertRaisesRegex(ValueError, "accession.version"):
-            self.build()
+        p = self.build()
+        self.assertIsNotNone(p["public_reference_context"])
 
     def test_no_guessed_cross_segment_linkage(self):
         for row in self.rows:

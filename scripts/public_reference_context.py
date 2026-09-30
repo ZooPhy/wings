@@ -10,6 +10,7 @@ from pathlib import Path
 SEGMENTS = ("HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS")
 FIELDS = ("reference_id", "segment", "tip_label", "accession_version", "isolate", "host",
           "collection_date", "country", "state", "linkage_basis")
+ACCESSION_RE = re.compile(r"[A-Z]{1,6}_?\d{5,12}(?:\.\d+)?")
 
 
 def date_precision(value):
@@ -54,8 +55,11 @@ def attach_reference_context(trees, samples, manifest, provenance, warnings):
     for line, source in enumerate(reader, 2):
         row = {key: (source.get(key) or "").strip() for key in FIELDS}
         accession, segment = row["accession_version"], row["segment"].upper()
-        if not re.fullmatch(r"[A-Z]{1,6}_?\d{5,12}\.\d+", accession):
-            raise ValueError(f"Reference row {line}: accession.version is required")
+        if not ACCESSION_RE.fullmatch(accession):
+            raise ValueError(
+                f"Reference row {line}: valid NCBI nucleotide accession is required "
+                "(accession.version is accepted when supplied; versions are not fabricated)"
+            )
         if segment not in SEGMENTS or not row["tip_label"]:
             raise ValueError(f"Reference row {line}: valid segment and exact tip_label required")
         if row["tip_label"] in sample_ids:
@@ -66,7 +70,7 @@ def attach_reference_context(trees, samples, manifest, provenance, warnings):
         row["source_url"] = "https://www.ncbi.nlm.nih.gov/nuccore/" + accession
         key = (segment, row["tip_label"])
         if key in by_tip or accession in seen_accessions:
-            raise ValueError(f"Reference row {line}: duplicate segment/tip or accession.version")
+            raise ValueError(f"Reference row {line}: duplicate segment/tip or accession")
         seen_accessions.add(accession)
         group = groups.setdefault(row["reference_id"], {"reference_id": row["reference_id"], "records": []})
         if any(r["segment"] == segment for r in group["records"]):
@@ -90,9 +94,12 @@ def attach_reference_context(trees, samples, manifest, provenance, warnings):
         group["segments"] = {}
         for segment in SEGMENTS:
             row = next((r for r in rows if r["segment"] == segment), None)
-            group["segments"][segment] = {"status": "NO_TREE" if segment not in trees else "NOT_IN_MANIFEST" if row is None else "ABSENT_FROM_TREE",
-                                           "accession_version": row["accession_version"] if row else None,
-                                           "source_url": row["source_url"] if row else None, "tips": []}
+            group["segments"][segment] = {
+                "status": "NO_TREE" if segment not in trees else "NOT_IN_MANIFEST" if row is None else "ABSENT_FROM_TREE",
+                "accession_version": row["accession_version"] if row else None,
+                "source_url": row["source_url"] if row else None,
+                "tips": [],
+            }
     for segment, tree in trees.items():
         matched, unmatched, matched_samples, seen = [], [], [], set()
         def visit(node, parent=None):
@@ -126,12 +133,27 @@ def attach_reference_context(trees, samples, manifest, provenance, warnings):
         old = f"{segment} tree contains {tree['unmatched_tip_count']} tip(s) that do not match metadata sample IDs"
         if old in warnings:
             warnings.remove(old)
-        tree.update(public_reference_tip_count=len(matched), wings_sample_tip_count=len(matched_samples), unmatched_tip_count=len(unmatched))
+        tree.update(
+            public_reference_tip_count=len(matched),
+            wings_sample_tip_count=len(matched_samples),
+            unmatched_tip_count=len(unmatched),
+        )
         if unmatched:
             warnings.append(f"{segment} tree contains {len(unmatched)} unannotated tip(s); no public identity inferred")
-    missing = sum(e["status"] != "PRESENT" for g in groups.values() for e in g["segments"].values() if e["accession_version"])
-    return {"schema_version": 1, "status": "READY", "source_file": Path(manifest).name,
-            **{key: meta[key] for key in ("retrieved_on", "selection_notes", "citation")},
-            "manifest_sha256": sha, "references": list(groups.values()),
-            "record_count": len(by_tip), "records_without_displayed_tips": missing,
-            "note": "Metadata annotate supplied trees. No public sequences are downloaded, added to trees, or used to infer relationships by this display importer."}
+    missing = sum(
+        e["status"] != "PRESENT"
+        for g in groups.values()
+        for e in g["segments"].values()
+        if e["accession_version"]
+    )
+    return {
+        "schema_version": 1,
+        "status": "READY",
+        "source_file": Path(manifest).name,
+        **{key: meta[key] for key in ("retrieved_on", "selection_notes", "citation")},
+        "manifest_sha256": sha,
+        "references": list(groups.values()),
+        "record_count": len(by_tip),
+        "records_without_displayed_tips": missing,
+        "note": "Metadata annotate supplied trees. Public accessions are preserved exactly; accession versions are not fabricated when absent.",
+    }
