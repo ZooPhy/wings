@@ -1183,3 +1183,7 @@ or add references to sample-only trees; contextual trees must already be supplie
 
 See [public reference context](docs/public-reference-context.md) and
 [example configuration](config/public-references.example.yaml).
+
+## Use of AI Statement
+
+Generative AI tools were used during the development of WINGS to assist with software development tasks including code drafting, debugging, documentation, test development, and workflow refinement. All AI-generated or AI-assisted content was reviewed, tested, and modified by the project developers before inclusion in the repository. Scientific, analytical, and software-design decisions remain the responsibility of the authors and maintainers of WINGS.
