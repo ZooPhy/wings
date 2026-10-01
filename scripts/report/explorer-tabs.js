@@ -244,7 +244,11 @@
     }, true);
 
     treeDetails.addEventListener("toggle", () => {
-      if (treeDetails.open) requestAnimationFrame(() => explorer.renderTrees?.());
+      if (treeDetails.open) requestAnimationFrame(() => {
+        explorer.renderTrees?.();
+        explorer.updateEmphasis?.();
+        explorer.revealSelectedTips?.();
+      });
     });
 
     sync();
