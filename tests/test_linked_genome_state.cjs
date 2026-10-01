@@ -54,22 +54,35 @@ test("hover never changes the selected sample", () => {
   assert.equal(app.selectedSampleId, "a");
 });
 
-test("host filtering retains selection and the full-run timeline axis", () => {
+test("host filtering clears incompatible selection and preserves the full-run timeline axis", () => {
   const app = explorer();
   app.timelineNode = new Element();
   app.renderTimeline();
+
   const axis = () => JSON.stringify(app.timelineNode.children[0].children
     .filter(node => node.attributes.class?.startsWith("wse-axis"))
     .map(node => [node.attributes, node.textContent]));
+
   const full = axis();
+
   app.selectedSampleId = "a";
   app.renderEbird = app.renderMap = app.renderTrees = app.renderLegend = app.updateSelection = () => {};
+
   app.setHostFilter("Host B");
-  assert.equal(app.selectedSampleId, "a");
+
+  assert.equal(app.selectedSampleId, null);
   assert.equal(axis(), full);
-  const marks = app.timelineNode.children[0].children.filter(node => node.attributes["data-sample-id"]);
+
+  const marks = app.timelineNode.children[0].children.filter(
+    node => node.attributes["data-sample-id"]
+  );
+
   assert.equal(marks.length, 1);
   assert.equal(marks[0].attributes["data-sample-id"], "b");
+
+  app.selectedSampleId = "b";
+  app.setHostFilter("Host B");
+  assert.equal(app.selectedSampleId, "b");
 });
 
 test("missing segment evidence remains distinct from tree presence", () => {
