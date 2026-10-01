@@ -378,6 +378,75 @@ SURVEILLANCE_EFFORT_ENABLED = as_bool(
 )
 # WINGS_SIGNAL_SAMPLING_CONFIG_END
 
+
+
+
+
+
+
+
+# WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CONFIG_BEGIN
+# Zero-configuration, metadata-driven post-analysis research module.
+# Ordinary users do not need a config block; overrides below are advanced only.
+CONCORDANCE_CONFIG = config.get("genomic_ecological_concordance", {}) or {}
+if not isinstance(CONCORDANCE_CONFIG, dict):
+    raise ValueError("genomic_ecological_concordance must be a mapping")
+RUN_CONCORDANCE = as_bool(CONCORDANCE_CONFIG.get(
+    "enabled", RUN_SURVEILLANCE_EXPLORER and RUN_PHYLOGENY
+))
+CONCORDANCE_PERMUTATIONS = int(CONCORDANCE_CONFIG.get("permutations", 999))
+CONCORDANCE_SEED = int(CONCORDANCE_CONFIG.get("seed", 20261001))
+CONCORDANCE_MIN_UNIQUE_SAMPLES = int(CONCORDANCE_CONFIG.get("min_unique_samples", 8))
+if CONCORDANCE_PERMUTATIONS < 0:
+    raise ValueError("genomic_ecological_concordance.permutations must be >= 0")
+if CONCORDANCE_MIN_UNIQUE_SAMPLES < 4:
+    raise ValueError("genomic_ecological_concordance.min_unique_samples must be >= 4")
+CONCORDANCE_DIR = f"{RESULTS}/run_summary/concordance"
+CONCORDANCE_REPORT_EXPLORER_JSON = f"{RESULTS}/run_summary/surveillance_explorer.concordance.json"
+
+# Existing WINGS ecological context is preferred. If none is enabled, the
+# concordance module creates a run-specific ERA5 snapshot automatically.
+ECOLOGY_EXPLICITLY_DISABLED = (
+    "enabled" in ECOLOGY_CONFIG and not as_bool(ECOLOGY_CONFIG.get("enabled"))
+)
+CONCORDANCE_AUTO_WEATHER = as_bool(CONCORDANCE_CONFIG.get(
+    "auto_weather", not ECOLOGY_EXPLICITLY_DISABLED
+))
+CONCORDANCE_WEATHER_CACHE = Path(str(
+    CONCORDANCE_CONFIG.get("weather_cache_dir")
+    or os.environ.get("WINGS_WEATHER_CACHE")
+    or "~/.cache/wings/ecology-weather"
+)).expanduser().resolve()
+if Path(workflow.basedir).resolve() in (
+    CONCORDANCE_WEATHER_CACHE, *CONCORDANCE_WEATHER_CACHE.parents
+):
+    raise ValueError("genomic_ecological_concordance.weather_cache_dir must be outside the WINGS repository")
+CONCORDANCE_AUTO_ECOLOGY_JSON = f"{CONCORDANCE_DIR}/ecological-context.json"
+CONCORDANCE_ECOLOGY_INPUT = (
+    [ECOLOGY_JSON]
+    if RUN_CONCORDANCE and ECOLOGY_ENABLED
+    else [CONCORDANCE_AUTO_ECOLOGY_JSON]
+    if RUN_CONCORDANCE and CONCORDANCE_AUTO_WEATHER
+    else []
+)
+
+# Embedded phenology is preferred. Otherwise use an existing run-level file;
+# with EBIRDST_ACCESS_KEY present, Snakemake may build the standard WINGS
+# phenology output automatically using the existing phenology rule/defaults.
+CONCORDANCE_AUTO_PHENOLOGY = as_bool(CONCORDANCE_CONFIG.get("auto_phenology", True))
+CONCORDANCE_PHENOLOGY_INPUT = (
+    [PHENOLOGY_OUTPUT]
+    if RUN_CONCORDANCE and (
+        PHENOLOGY_ENABLED
+        or Path(PHENOLOGY_OUTPUT).is_file()
+        or (CONCORDANCE_AUTO_PHENOLOGY and bool(os.environ.get("EBIRDST_ACCESS_KEY")))
+    )
+    else []
+)
+if RUN_CONCORDANCE and not RUN_SURVEILLANCE_EXPLORER:
+    raise ValueError("genomic_ecological_concordance requires run_surveillance_explorer: true")
+# WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CONFIG_END
+
 # APHIS context uses a pinned local CSV; report builds never fetch live data.
 OUTBREAK_CONFIG = config.get("outbreak_context", {}) or {}
 if not isinstance(OUTBREAK_CONFIG, dict):
@@ -718,6 +787,27 @@ if RUN_SUMMARY:
         f"{RESULTS}/run_summary/run_provenance.tsv",
         f"{RESULTS}/run_summary/run_provenance.json",
     ])
+
+
+
+
+
+
+
+
+
+
+
+# WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_TARGETS_BEGIN
+if RUN_CONCORDANCE:
+    FINAL_TARGETS.extend([
+        f"{CONCORDANCE_DIR}/sample_features.tsv",
+        f"{CONCORDANCE_DIR}/pairs.tsv",
+        f"{CONCORDANCE_DIR}/models.tsv",
+        f"{CONCORDANCE_DIR}/concordance.json",
+    ])
+# WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_TARGETS_END
+
 
 
 rule all:
@@ -2565,6 +2655,99 @@ rule surveillance_explorer_data:
         "scripts/build_surveillance_explorer.py"
 
 
+
+
+
+
+
+
+
+# WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_RULE_BEGIN
+rule concordance_ecological_context:
+    input:
+        metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        script="scripts/build_ecological_context.py"
+    output:
+        json=CONCORDANCE_AUTO_ECOLOGY_JSON
+    log:
+        f"{CONCORDANCE_DIR}/ecological-context.log"
+    conda:
+        "envs/py-tools.yaml"
+    params:
+        cache=str(CONCORDANCE_WEATHER_CACHE)
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.json:q})"
+        python {input.script:q} \
+          --metadata {input.metadata:q} \
+          --output {output.json:q} \
+          --cache-dir {params.cache:q} \
+          --days 7 \
+          --fetch-weather \
+          > {log:q} 2>&1
+        """
+
+
+rule genomic_ecological_concordance:
+    input:
+        explorer=f"{RESULTS}/run_summary/surveillance_explorer.json",
+        script="scripts/build_genomic_ecological_concordance.py",
+        ecological_context=CONCORDANCE_ECOLOGY_INPUT,
+        phenology=CONCORDANCE_PHENOLOGY_INPUT
+    output:
+        samples=f"{CONCORDANCE_DIR}/sample_features.tsv",
+        pairs=f"{CONCORDANCE_DIR}/pairs.tsv",
+        models=f"{CONCORDANCE_DIR}/models.tsv",
+        json=f"{CONCORDANCE_DIR}/concordance.json"
+    conda:
+        "envs/py-tools.yaml"
+    params:
+        permutations=CONCORDANCE_PERMUTATIONS,
+        seed=CONCORDANCE_SEED,
+        min_samples=CONCORDANCE_MIN_UNIQUE_SAMPLES,
+        output_dir=CONCORDANCE_DIR,
+        ecology_arg=(
+            "--ecological-context " + shlex.quote(CONCORDANCE_ECOLOGY_INPUT[0])
+            if CONCORDANCE_ECOLOGY_INPUT else ""
+        ),
+        phenology_arg=(
+            "--phenology " + shlex.quote(CONCORDANCE_PHENOLOGY_INPUT[0])
+            if CONCORDANCE_PHENOLOGY_INPUT else ""
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --explorer {input.explorer:q} \
+          --output-dir {params.output_dir:q} \
+          --permutations {params.permutations} \
+          --seed {params.seed} \
+          --min-unique-samples {params.min_samples} \
+          {params.ecology_arg} \
+          {params.phenology_arg}
+        """
+
+
+rule attach_genomic_ecological_concordance:
+    input:
+        explorer=f"{RESULTS}/run_summary/surveillance_explorer.json",
+        concordance=f"{CONCORDANCE_DIR}/concordance.json",
+        script="scripts/attach_genomic_ecological_concordance.py"
+    output:
+        json=CONCORDANCE_REPORT_EXPLORER_JSON
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --explorer {input.explorer:q} \
+          --concordance {input.concordance:q} \
+          --output {output.json:q}
+        """
+# WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_RULE_END
+
 # Produce a run-level report across all FASTQ-derived samples
 # -----------------------------------------------------------------------------
 rule run_summary_html:
@@ -2617,7 +2800,7 @@ rule run_summary_html:
         css="scripts/report/sample-report.css",
         report_html="scripts/report/escape-report.html",
         report_js="scripts/report/escape-report.js",
-        explorer_json=f"{RESULTS}/run_summary/surveillance_explorer.json",
+        explorer_json=(CONCORDANCE_REPORT_EXPLORER_JSON if RUN_CONCORDANCE else f"{RESULTS}/run_summary/surveillance_explorer.json"),
         run_report_html="scripts/report/run-report.html",
         explorer_css="scripts/report/surveillance-explorer.css",
         map_boundaries_js="scripts/report/map-boundaries.js",

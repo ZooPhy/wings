@@ -1,0 +1,8 @@
+# No block is required for normal use. These are advanced overrides/opt-outs.
+genomic_ecological_concordance:
+  enabled: true
+  auto_weather: true
+  auto_phenology: true
+  permutations: 999
+  seed: 20261001
+  min_unique_samples: 8
