@@ -1,0 +1,32 @@
+/* Parent-report launcher only; the Tree Studio pop-out carries its own offline CSS. */
+.wse-tree-studio-launch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem .85rem;
+  margin-bottom: .9rem;
+  border: 1px solid #cdd9da;
+  border-left: 4px solid #007c83;
+  border-radius: .6rem;
+  background: #f4f9f8;
+}
+.wse-tree-studio-launch > div { display: grid; gap: .15rem; min-width: 0; }
+.wse-tree-studio-launch strong { color: #263b43; }
+.wse-tree-studio-launch span { color: #62747b; font-size: .78rem; }
+.wse-tree-studio-open {
+  flex: 0 0 auto;
+  padding: .55rem .8rem;
+  border: 1px solid #007c83;
+  border-radius: .45rem;
+  background: #007c83;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+.wse-tree-studio-open:hover { background: #006a70; border-color: #006a70; }
+.wse-tree-studio-open:focus-visible { outline: 3px solid #ffc627; outline-offset: 2px; }
+@media (max-width: 680px) {
+  .wse-tree-studio-launch { align-items: stretch; flex-direction: column; }
+  .wse-tree-studio-open { width: 100%; }
+}

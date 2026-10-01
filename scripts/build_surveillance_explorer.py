@@ -537,6 +537,34 @@ def build_outbreak_context(path, provenance_path=None):
     }
 
 
+# WINGS_DYNAMIC_PHENOLOGY_LOADER_BEGIN
+def load_phenology_snapshot(path: Path, samples: list[dict[str, Any]], metadata: Path) -> dict[str, Any]:
+    """Load a derived clock snapshot and reject stale or cross-run bindings."""
+    raw = Path(path).read_bytes()
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Phenology snapshot is not valid JSON") from exc
+    if data.get("schema_version") != "wings.phenology.v1" or not isinstance(data.get("profiles"), list):
+        raise ValueError("Unsupported phenology snapshot; expected wings.phenology.v1")
+    if not isinstance(data.get("synthetic"), bool):
+        raise ValueError("Phenology snapshot must explicitly declare synthetic")
+    recorded = data.get("inputs", {}).get("metadata_sha256")
+    current = hashlib.sha256(Path(metadata).read_bytes()).hexdigest()
+    if recorded != current:
+        raise ValueError("Phenology snapshot does not match the current validated metadata; rebuild phenology")
+    sample_ids = {sample["sample_id"] for sample in samples}
+    for status in data.get("sample_status", []):
+        if status.get("sample_id") not in sample_ids:
+            raise ValueError("Phenology sample_status references a sample outside current metadata")
+    for profile in data["profiles"]:
+        if profile.get("sample_id") not in sample_ids:
+            raise ValueError("Phenology profile references a sample outside current metadata")
+    data["snapshot_sha256"] = hashlib.sha256(raw).hexdigest()
+    data["source_file"] = Path(path).name
+    return data
+# WINGS_DYNAMIC_PHENOLOGY_LOADER_END
+
 def build_payload(
     metadata: Path,
     summaries: Iterable[Path],
@@ -553,6 +581,7 @@ def build_payload(
     reference_manifest: Path | None = None,
     reference_provenance: Path | None = None,
     reference_loader: Path | None = None,
+    phenology: Path | None = None,
 ) -> dict[str, Any]:
     metadata_rows = read_metadata(metadata)
     summary_rows = read_sample_summaries(summaries)
@@ -593,6 +622,8 @@ def build_payload(
         loader = ecological_loader or Path(__file__).with_name("build_ecological_context.py")
         ecology = runpy.run_path(str(loader))["load_snapshot"](ecological_context, samples)
 
+    clock = load_phenology_snapshot(phenology, samples, metadata) if phenology is not None else None
+
     geolocated = sum(1 for sample in samples if sample["has_coordinates"])
     dates = sorted(
         {sample["collection_date"] for sample in samples if sample["collection_date"] != "Unknown"}
@@ -608,6 +639,7 @@ def build_payload(
         "ebird_attribution": ebird_attribution,
         "outbreak_context": build_outbreak_context(aphis_csv, aphis_provenance),
         "ecological_context": ecology,
+        "ecological_clock": clock,
         "public_reference_context": references,
         "segment_order": list(SEGMENT_ORDER),
         "summary": {
@@ -721,6 +753,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference-manifest", type=Path)
     parser.add_argument("--reference-provenance", type=Path)
     parser.add_argument("--ecological-context", type=Path)
+    parser.add_argument("--phenology", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -742,6 +775,8 @@ def main() -> None:
         ecology = list(getattr(snakemake.input, "ecological_context", []))
         ecological_context = Path(ecology[0]) if ecology else None
         ecological_loader = Path(snakemake.input.ecological_loader) if ecology else None
+        phenology_inputs = list(getattr(snakemake.input, "phenology", []))
+        phenology = Path(phenology_inputs[0]) if phenology_inputs else None
     else:
         args = parse_args()
         reference_manifest, reference_provenance, reference_loader = args.reference_manifest, args.reference_provenance, None
@@ -752,13 +787,15 @@ def main() -> None:
         coverage, genoflu = args.coverage, args.genoflu
         aphis_csv, aphis_provenance = args.aphis_csv, args.aphis_provenance
         ecological_context, ecological_loader = args.ecological_context, None
+        phenology = args.phenology
 
     payload = build_payload(metadata, summaries, trees, ebird, terms, citation,
                             coverage=coverage, genoflu=genoflu,
                             aphis_csv=aphis_csv, aphis_provenance=aphis_provenance,
                             ecological_context=ecological_context, ecological_loader=ecological_loader,
                             reference_manifest=reference_manifest, reference_provenance=reference_provenance,
-                            reference_loader=reference_loader)
+                            reference_loader=reference_loader,
+                            phenology=phenology)
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.

@@ -1,4 +1,4 @@
-/* WINGS Genome Braid + Ecological Clock v0.1.0. Offline, dependency-free. */
+/* WINGS Genome Braid + Ecological Clock v0.2.3. Offline, dependency-free. */
 (function (root, factory) {
   'use strict';
   const api = factory();
@@ -6,7 +6,7 @@
   root.WINGS_BRAID_CLOCK = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.4';
   const SEGMENTS = ['PB2', 'PB1', 'PA', 'HA', 'NP', 'NA', 'MP', 'NS'];
   const DAY = 86400000;
   const COLORS = ['#8c1d40', '#007f84', '#80601d', '#496ea0', '#7b5a8f', '#417b62', '#b05730'];
@@ -195,21 +195,50 @@
     if (peaks.some((b,i)=>i>0 && b.s !== peaks[i-1].e+1)) return {status:'AMBIGUOUS_PEAK'};
     return {status:'AVAILABLE', start:peaks[0].s, end:peaks.at(-1).e, label:'Peak supplied bin', basis:'Maximum of supplied nonmissing bins; interval is temporal resolution, not a confidence interval.', method:'maximum_bin'};
   }
+  function shiftDayYear(day, delta) {
+    const d=new Date(Math.round(day)*DAY), y=d.getUTCFullYear()+delta, m=d.getUTCMonth(), dom=d.getUTCDate();
+    let shifted=Date.UTC(y,m,dom)/DAY;
+    const chk=new Date(Math.round(shifted)*DAY);
+    if(chk.getUTCMonth()!==m) shifted=Date.UTC(y,m+1,0)/DAY; // Feb 29 -> Feb 28 in non-leap years.
+    return shifted;
+  }
+  function nearestAnnualAnchor(date, anchor, baselineKind) {
+    if (baselineKind !== 'reference_season' || anchor.status !== 'AVAILABLE') return anchor;
+    const target=mid(date);
+    const candidates=[-1,0,1].map(delta=>({...anchor,start:shiftDayYear(anchor.start,delta),end:shiftDayYear(anchor.end,delta),year_shift:delta}));
+    return candidates.reduce((best,candidate)=>Math.abs(mid(candidate)-target)<Math.abs(mid(best)-target)?candidate:best,candidates[0]);
+  }
+  function phenologyStatusForSample(sample, phenology) {
+    const sid=keyText(sample.sample_id || sample.sample);
+    if (!sid || !Array.isArray(phenology?.sample_status)) return null;
+    return phenology.sample_status.find(r=>keyText(r.sample_id)===sid) || null;
+  }
   function clockRecord(sample, phenology) {
     const date=dateInterval(sample.collection_date);
     if (!date) return {status:'NO_COLLECTION_DATE'};
     if (!phenology) return {status:'NO_PHENOLOGY'};
-    const exact=phenology.profiles.filter(p => keyText(p.scope.host) === keyText(sample.host) && normalizeCountry(p.scope.country) === normalizeCountry(sample.country) && keyText(p.scope.state) === keyText(sample.state) && date.start >= p.start && date.end <= p.end);
-    if (!exact.length) return {status:'NO_MATCHING_PROFILE', date};
+    const sid=keyText(sample.sample_id || sample.sample);
+    const direct=phenology.profiles.filter(p => text(p.sample_id) && keyText(p.sample_id)===sid && date.start >= p.start && date.end <= p.end);
+    if (direct.length > 1) return {status:'AMBIGUOUS_PROFILE', date};
+    let exact=direct;
+    if (!exact.length) {
+      exact=phenology.profiles.filter(p => !text(p.sample_id) && keyText(p.scope.host) === keyText(sample.host) && normalizeCountry(p.scope.country) === normalizeCountry(sample.country) && keyText(p.scope.state) === keyText(sample.state) && date.start >= p.start && date.end <= p.end);
+    }
+    if (!exact.length) {
+      const supplied=phenologyStatusForSample(sample,phenology);
+      return supplied ? {status:supplied.status||'NO_MATCHING_PROFILE', reason:supplied.reason||'', date, supplied} : {status:'NO_MATCHING_PROFILE', date};
+    }
     if (exact.length !== 1) return {status:'AMBIGUOUS_PROFILE', date};
-    const profile=exact[0], anchor=profile.anchor;
+    const profile=exact[0], anchor=nearestAnnualAnchor(date,profile.anchor,profile.baseline_kind);
     if (anchor.status !== 'AVAILABLE') return {status:anchor.status, date, profile};
     const lower=date.start-anchor.end, upper=date.end-anchor.start;
     return {status:'AVAILABLE', date, profile, anchor, lower, upper, midpoint:(lower+upper)/2};
   }
   function lagText(record) {
     if (record.status !== 'AVAILABLE') return record.status.toLowerCase().replace(/_/g,' ');
-    return record.lower === record.upper ? `${signed(record.lower)} days` : `${signed(record.lower)} to ${signed(record.upper)} days`;
+    if (record.upper < 0) { const near=Math.abs(record.upper), far=Math.abs(record.lower); return near===far ? `${near} days before expected peak` : `${near}–${far} days before expected peak`; }
+    if (record.lower > 0) { const near=Math.abs(record.lower), far=Math.abs(record.upper); return near===far ? `${near} days after expected peak` : `${near}–${far} days after expected peak`; }
+    return 'Overlaps expected peak interval';
   }
   function svg(name, attrs, contents) {
     const n=document.createElementNS('http://www.w3.org/2000/svg',name);
@@ -227,7 +256,7 @@
   class Dashboard {
     constructor(root, payload, options={}) {
       this.root=root; this.options=options; this.payload=payload; this.m=model(payload);
-      this.selected=null; this.selectedReference=null; this.host='ALL'; this.includeReferences=false; this.mode='calendar'; this.k=3;
+      this.selected=null; this.selectedReference=null; this.host='ALL'; this.includeReferences=false; this.mode='calendar'; this.clockView='selected'; this.k=3;
       this.phenology=payload.ecological_clock ? validatePhenology(payload.ecological_clock) : null;
       this.cache=new Map(); this.notice='';
       this.build(); this.refresh();
@@ -238,11 +267,11 @@
       this.root.innerHTML=`
         <header class="wbc-masthead"><div><span class="wbc-overline">WINGS / OBSERVATORY</span><h2>Eight segments. One ecological story.</h2><p>Follow the same record through the genome. Read its collection date against the bird's seasonal clock.</p></div><span class="wbc-release">RESEARCH PREVIEW <b>v${VERSION}</b></span></header>
         <div class="wbc-banner" role="status"></div>
-        <div class="wbc-tools"><label>Focus sample<select class="wbc-sample" aria-label="Braid focus sample"></select></label><label>Host<select class="wbc-host" aria-label="Braid host filter"></select></label><button type="button" class="wbc-clear">Clear focus</button><div class="wbc-file-tools"><label class="wbc-file-button" tabindex="0">Load phenology<input class="wbc-import-phenology" type="file" accept=".json,application/json"></label><button type="button" class="wbc-export">Export evidence</button></div></div>
+        <div class="wbc-tools"><label>Focus sample<select class="wbc-sample" aria-label="Braid focus sample"></select></label><label>Host<select class="wbc-host" aria-label="Braid host filter"></select></label><button type="button" class="wbc-clear">Clear focus</button><div class="wbc-file-tools"><label class="wbc-file-button" tabindex="0">Load / override phenology<input class="wbc-import-phenology" type="file" accept=".json,application/json"></label><button type="button" class="wbc-export">Export evidence</button></div></div>
         <div class="wbc-stats"></div>
         <div class="wbc-workbench"><div class="wbc-card wbc-braid-card"><div class="wbc-card-title"><div><span class="wbc-kicker">01 / GENOME BRAID</span><h3>One identity, eight views</h3></div><label class="wbc-checkbox"><input type="checkbox" class="wbc-references"> Show public links</label></div><div class="wbc-braid-scroll"><div class="wbc-braid"></div></div><div class="wbc-braid-caption"></div><details class="wbc-method"><summary>What the braid does and does not mean</summary><p>Vertical position follows tip order in each supplied tree, restricted to displayed identities. Rotating a tree can change crossings without changing its relationships. Crossings are not a reassortment statistic or a route of transmission. Lines only join adjacent lanes with one unambiguous tip; gaps remain gaps.</p><p>Public records are joined only by supplied reference_id. A metadata-derived linkage remains a candidate, not verified common-specimen identity. Public groups do not enter the sample-neighborhood metric.</p></details></div>
         <div class="wbc-card wbc-focus"><span class="wbc-kicker">EVIDENCE / SELECT A RECORD</span><div class="wbc-evidence" aria-live="polite"></div></div></div>
-        <section class="wbc-card wbc-clock-card"><div class="wbc-card-title"><div><span class="wbc-kicker">02 / ECOLOGICAL CLOCK</span><h3>Same observation. A different time axis.</h3></div><div class="wbc-switch" role="group" aria-label="Clock time axis"><button type="button" data-wbc-mode="calendar" aria-pressed="true">Calendar</button><button type="button" data-wbc-mode="ecological" aria-pressed="false">Ecological time</button></div></div><p class="wbc-clock-subtitle"></p><div class="wbc-clock-scroll"><div class="wbc-clock"></div></div><div class="wbc-clock-caption"></div><details class="wbc-method"><summary>Phenology matching, precision, and provenance</summary><p>The clock uses an exact supplied host, country, state, and season match. No species is inferred from a host code. Missing or ambiguous profiles remain unavailable. Collection date is not infection date. Expected seasonal profiles are labeled separately from year-specific estimates.</p><p>Offset interval = [collection start - anchor latest, collection end - anchor earliest]. An interval from a weekly peak bin describes temporal resolution, not a statistical confidence interval. Empty bins are not zero; curves are never extended through missing observations.</p><div class="wbc-provenance"></div></details></section>
+        <section class="wbc-card wbc-clock-card"><div class="wbc-card-title"><div><span class="wbc-kicker">02 / ECOLOGICAL CLOCK</span><h3>Same observation. A different time axis.</h3></div><div><div class="wbc-switch" role="group" aria-label="Clock time axis"><button type="button" data-wbc-mode="calendar" aria-pressed="true">Calendar</button><button type="button" data-wbc-mode="ecological" aria-pressed="false">Ecological time</button></div><div class="wbc-switch" role="group" aria-label="Clock records" style="margin-top:.45rem"><button type="button" data-wbc-clock-view="selected" aria-pressed="true">Selected sample</button><button type="button" data-wbc-clock-view="compare" aria-pressed="false">Compare samples</button></div></div></div><p class="wbc-clock-subtitle"></p><div class="wbc-clock-scroll"><div class="wbc-clock"></div></div><div class="wbc-clock-caption"></div><details class="wbc-method"><summary>Phenology matching, precision, and provenance</summary><p>The clock uses an exact supplied host, country, state, and season match. No species is inferred from a host code. Missing or ambiguous profiles remain unavailable. Collection date is not infection date. Expected seasonal profiles are labeled separately from year-specific estimates.</p><p>Offset interval = [collection start - anchor latest, collection end - anchor earliest]. An interval from a weekly peak bin describes temporal resolution, not a statistical confidence interval. Empty bins are not zero; curves are never extended through missing observations.</p><div class="wbc-provenance"></div></details></section>
         <details class="wbc-card wbc-audit"><summary>Inspect the evidence table</summary><div class="wbc-evidence-table"></div></details>
         <footer class="wbc-footer">Exploratory description, not a risk score. No transmission, reassortment, infection timing, or causal climate effect is inferred. Files stay in this browser; no data are uploaded.</footer>`;
       const q=s=>this.root.querySelector(s);
@@ -253,6 +282,7 @@
       q('.wbc-clear').addEventListener('click',()=>this.choose(null,false));
       q('.wbc-references').addEventListener('change',e=>{this.includeReferences=e.target.checked;this.refresh();});
       this.root.querySelectorAll('[data-wbc-mode]').forEach(b=>b.addEventListener('click',()=>{this.mode=b.dataset.wbcMode;this.renderClock();}));
+      this.root.querySelectorAll('[data-wbc-clock-view]').forEach(b=>b.addEventListener('click',()=>{this.clockView=b.dataset.wbcClockView;this.renderClock();}));
       q('.wbc-import-phenology').addEventListener('change',async e=>{
         const f=e.target.files[0]; if (!f) return;
         try {if(f.size>20000000) throw new Error('Phenology file exceeds the 20 MB preview limit.');this.phenology=validatePhenology(JSON.parse(await f.text()));this.notice=`Loaded ${f.name} locally. This import is session-only in an embedded Explorer.`;this.refresh();}
@@ -288,7 +318,7 @@
       this.root.querySelector('.wbc-host').value=this.host;
       const mapped=this.m.samples.filter(e=>clockRecord(e.raw,this.phenology).status==='AVAILABLE').length;
       const pairInfo=this.selected ? this.profile(this.selected):null;
-      this.root.querySelector('.wbc-stats').innerHTML=[['LOCAL SAMPLES',this.m.samples.length,'Identities, not deduplicated specimens'],['SEGMENT TREES',`${Object.keys(this.m.bySegment).length} / 8`,'Supplied tree geometry'],['PHENOLOGY MATCHES',`${mapped} / ${this.m.samples.length}`,'Exact host / place / season'],['SHARED-NEIGHBOR OVERLAP',pairInfo?.mean!==null&&pairInfo ? pct(pairInfo.mean):'Select a sample',pairInfo ? `${pairInfo.available} / 28 available comparisons`:'Descriptive; local sample cohort only']].map(([a,b,c])=>`<div><span>${esc(a)}</span><strong>${esc(b)}</strong><small>${esc(c)}</small></div>`).join('');
+      this.root.querySelector('.wbc-stats').innerHTML=[['LOCAL SAMPLES',this.m.samples.length,'Identities, not deduplicated specimens'],['SEGMENT TREES',`${Object.keys(this.m.bySegment).length} / 8`,'Supplied tree geometry'],['PHENOLOGY MATCHES',`${mapped} / ${this.m.samples.length}`,'Point or regional seasonal profile'],['SHARED-NEIGHBOR OVERLAP',pairInfo?.mean!==null&&pairInfo ? pct(pairInfo.mean):'Select a sample',pairInfo ? `${pairInfo.available} / 28 available comparisons`:'Descriptive; local sample cohort only']].map(([a,b,c])=>`<div><span>${esc(a)}</span><strong>${esc(b)}</strong><small>${esc(c)}</small></div>`).join('');
       this.renderBraid();this.renderEvidence();this.renderClock();this.renderTable();
     }
     renderBraid() {
@@ -346,36 +376,60 @@
     }
     renderClock() {
       this.root.querySelectorAll('[data-wbc-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.wbcMode===this.mode)));
+      this.root.querySelectorAll('[data-wbc-clock-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.wbcClockView===this.clockView)));
       const target=this.root.querySelector('.wbc-clock');target.replaceChildren();
-      const visible=this.visible(),records=visible.map(e=>({entity:e,c:clockRecord(e.raw,this.phenology)}));
-      if(this.selected&&!visible.some(e=>e.key===this.selected)){const e=this.m.entities.get(this.selected);if(e)records.push({entity:e,c:clockRecord(e.raw,this.phenology)});}
+      const subtitle=this.root.querySelector('.wbc-clock-subtitle'),caption=this.root.querySelector('.wbc-clock-caption');
+      const visible=this.visible(),allRecords=visible.map(e=>({entity:e,c:clockRecord(e.raw,this.phenology)}));
+      if(this.selected&&!visible.some(e=>e.key===this.selected)){const e=this.m.entities.get(this.selected);if(e)allRecords.push({entity:e,c:clockRecord(e.raw,this.phenology)});}
+      let records=allRecords;
+      if(this.clockView==='selected'){
+        if(!this.selected||this.selectedReference){
+          subtitle.textContent='Select a WINGS sample to place its collection date on the host seasonal curve.';
+          target.innerHTML='<div class="wbc-no-data"><h4>Select a sample</h4><p>The default clock shows one WINGS sample at a time. Use Compare samples when you want to inspect multiple profiles together.</p></div>';
+          caption.textContent='No sample is currently selected. Nothing is inferred from the cohort until you choose Compare samples.';
+          this.renderProvenance([]);return;
+        }
+        const selectedEntity=this.m.entities.get(this.selected);
+        records=selectedEntity?[{entity:selectedEntity,c:clockRecord(selectedEntity.raw,this.phenology)}]:[];
+      }
       const available=records.filter(r=>r.c.status==='AVAILABLE');
       const profiles=[...new Map(available.map(r=>[r.c.profile.profile_id,r.c.profile])).values()];
-      const subtitle=this.root.querySelector('.wbc-clock-subtitle'),caption=this.root.querySelector('.wbc-clock-caption');
       if(!profiles.length){
-        subtitle.textContent=this.mode==='calendar'?'Collection dates remain visible without a seasonal anchor.':'Ecological time is unavailable until a matching phenology profile is supplied.';
-        if(this.mode==='calendar')this.renderCalendarOnly(target,records);
-        else target.innerHTML='<div class="wbc-no-data"><h4>No defensible seasonal anchor yet</h4><p>Load a documented host-and-region phenology JSON. Existing eBird window aggregates, weather values, and aggregate radar counts are not silently converted into species arrival dates.</p></div>';
-        caption.textContent=`${records.length} sample records; 0 assigned an ecological offset. Missing information is not zero.`;
+        const r=records[0];
+        const detail=r?.c?.reason||lagText(r?.c||{status:'NO_MATCHING_PROFILE'});
+        subtitle.textContent=this.mode==='calendar'?(this.clockView==='selected'&&r?`${r.entity.id} · ${r.entity.raw.collection_date||'date unavailable'} · phenology unavailable (${detail}).`:'Collection dates remain visible without a seasonal anchor.'):'Ecological time is unavailable until a matching phenology profile is supplied.';
+        if(this.mode==='calendar'&&records.length)this.renderCalendarOnly(target,records);
+        else target.innerHTML='<div class="wbc-no-data"><h4>No defensible seasonal anchor yet</h4><p>A matching Status & Trends profile is required. Missing geography or model coverage remains explicitly unavailable rather than being converted into a synthetic point estimate.</p></div>';
+        caption.textContent=`${records.length} sample record${records.length===1?'':'s'}; 0 assigned an ecological offset. Missing information is not zero.`;
         this.renderProvenance([]);return;
       }
-      subtitle.textContent=this.mode==='calendar'?'Collection dates and supplied seasonal profiles on the calendar.':'Each profile is centered on its own seasonal anchor. Sample intervals retain collection-date and anchor precision.';
-      let shown=profiles.slice(0,8);
+      const spatialText=p=>p.spatial?.method==='POINT'?'point-specific 27-km cell':p.spatial?.method==='REGIONAL_STATE_MEAN'?'state regional mean':'supplied spatial profile';
+      const versionText=p=>text(p.status_version_year)||(text(p.provenance?.source).match(/(?:Version\s*)?(\d{4})/)||[])[1]||'version not recorded';
+      if(this.clockView==='selected'){
+        const r=available[0],p=r.profile||r.c.profile;
+        subtitle.textContent=`${r.entity.id} · collection ${r.entity.raw.collection_date} · Status week ${p.collection?.status_week??'not available'} · ${spatialText(p)}.`;
+      } else {
+        subtitle.textContent=this.mode==='calendar'?'Compare collection dates against expected seasonal profiles.':'Compare samples after centering each profile on its own expected seasonal anchor.';
+      }
+      let shown=this.clockView==='selected'?profiles.slice(0,1):profiles.slice(0,8);
       const focus=records.find(r=>r.entity.key===this.selected)?.c.profile;
-      if(focus&&!shown.includes(focus)){shown=shown.slice(0,7).concat(focus);}
-      const W=1240,left=225,right=40,rowH=106,top=36,H=top+shown.length*rowH+48;
+      if(this.clockView==='compare'&&focus&&!shown.includes(focus)){shown=shown.slice(0,7).concat(focus);}
+      const W=1340,left=310,right=40,rowH=106,top=36,H=top+shown.length*rowH+48;
       const ranges=shown.flatMap(p=>this.mode==='calendar'?[p.start,p.end]:[p.start-mid(p.anchor),p.end-mid(p.anchor)]);
       let low=Math.min(...ranges),high=Math.max(...ranges);if(high===low)high++;
       const x=n=>left+(n-low)/(high-low)*(W-left-right);
-      const el=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'group','aria-label':`Ecological Clock, ${this.mode} axis`});
+      const el=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'group','aria-label':`Ecological Clock, ${this.mode} axis, ${this.clockView} view`});
       for(let i=0;i<=5;i++){const v=low+(high-low)*i/5;const label=this.mode==='calendar'?isoDay(v):`${signed(Math.round(v))} d`;el.append(svg('line',{x1:x(v),x2:x(v),y1:top-10,y2:H-35,stroke:'#e4e8eb'}),svg('text',{x:x(v),y:H-12,'text-anchor':'middle',class:'wbc-tick'},label));}
       shown.forEach((p,i)=>{
         const y=top+i*rowH,base=y+66;
         const anchorMid=mid(p.anchor),off=this.mode==='calendar'?0:anchorMid;
         const peakX=x(p.anchor.start-off),peakEnd=x(p.anchor.end-off);
         el.append(svg('rect',{x:peakX,y:y-7,width:Math.max(2,peakEnd-peakX),height:80,fill:'#efddb1',opacity:.55}));
-        el.append(svg('text',{x:14,y:y+14,class:'wbc-row-title'},p.scope.host),svg('text',{x:14,y:y+33,class:'wbc-small'},`${p.scope.state} / ${p.baseline_kind==='reference_season'?'expected season':'year-specific'}`));
-        el.append(svg('text',{x:14,y:y+51,class:'wbc-small'},`${p.season_start.slice(0,4)} / ${p.measure}`));
+        const common=text(p.species?.common_name)||p.scope.host;
+        const place=text(p.spatial?.state_name)||p.scope.state;
+        const basis=p.spatial?.method==='POINT'?`${place} · point-specific expected season`:p.spatial?.method==='REGIONAL_STATE_MEAN'?`${place} · state regional mean`:`${place} · expected season`;
+        el.append(svg('text',{x:14,y:y+14,class:'wbc-row-title'},common),svg('text',{x:14,y:y+33,class:'wbc-small'},`${p.scope.host} · ${basis}`));
+        el.append(svg('text',{x:14,y:y+51,class:'wbc-small'},`eBird S&T ${versionText(p)} · median weekly relative abundance`));
         const max=Math.max(1e-10,...p.bins.filter(b=>b.value!==null).map(b=>b.value));
         for(const b of p.bins){if(b.value===null)continue;const height=b.value/max*45;const rect=svg('rect',{x:x(b.s-off),y:base-height,width:Math.max(1,x(b.e+1-off)-x(b.s-off)-1),height,fill:'#70b0b2',opacity:.48});rect.append(svg('title',{},`${b.start} to ${b.end}: ${b.value} ${p.unit}`));el.append(rect);}
         el.append(svg('line',{x1:left,x2:W-right,y1:base,y2:base,stroke:'#a9b4bd'}));
@@ -386,12 +440,17 @@
           const mark=svg('g',{'data-wbc-clock-sample':r.entity.id,class:active?'wbc-clock-active':''});
           mark.append(svg('line',{x1:x(s),x2:x(e),y1:yy,y2:yy,stroke:this.color(r.entity),'stroke-width':3}));
           mark.append(svg('circle',{cx:x((s+e)/2),cy:yy,r:active?7:4.5,fill:this.color(r.entity),stroke:active?'#f4c652':'#fff','stroke-width':active?3:1}));
-          buttonNode(mark,`${r.entity.id}: ${r.entity.raw.collection_date}; ${lagText(c)} relative to ${c.anchor.label}`,()=>this.choose(r.entity.key));el.append(mark);
+          buttonNode(mark,`${r.entity.id}: ${r.entity.raw.collection_date}; Status week ${p.collection?.status_week??'not available'}; ${spatialText(p)}; ${lagText(c)} relative to ${c.anchor.label}`,()=>this.choose(r.entity.key));el.append(mark);
         });
       });
       if(this.mode==='ecological'&&low<=0&&high>=0)el.append(svg('line',{x1:x(0),x2:x(0),y1:15,y2:H-35,stroke:'#8f691e','stroke-dasharray':'4 5'}),svg('text',{x:x(0),y:12,'text-anchor':'middle',class:'wbc-anchor-label'},'Seasonal anchor'));
       target.append(el);
-      caption.textContent=`${available.length} / ${records.length} visible sample records have an exact profile match. ${records.length-available.length} remain unavailable in ecological time. ${profiles.length>8?'Showing at most 8 profile rows plus selected focus. ':''}Bars are scaled within each profile; heights are not comparable abundance between hosts. Gold bands show anchor intervals, not infection windows.`;
+      if(this.clockView==='selected'){
+        const p=shown[0];
+        caption.textContent=`Selected-sample view. ${spatialText(p)}. Bars are scaled within this profile. Gold band is the WINGS-derived expected relative-abundance peak interval, not an infection window or confidence interval.`;
+      } else {
+        caption.textContent=`${available.length} / ${records.length} visible sample records have an exact profile match. ${records.length-available.length} remain unavailable in ecological time. ${profiles.length>8?'Showing at most 8 profile rows plus selected focus. ':''}Bars are scaled within each profile; heights are not comparable abundance between hosts. Gold bands show anchor intervals, not infection windows.`;
+      }
       this.renderProvenance(shown);
     }
     renderCalendarOnly(target,records) {

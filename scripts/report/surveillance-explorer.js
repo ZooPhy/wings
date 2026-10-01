@@ -1,5 +1,997 @@
+/* WINGS_TREE_STUDIO_JS_BEGIN */
+(() => {
+  "use strict";
+
+  const VERSION = "0.1.9";
+  const SEGMENTS = ["PB2", "PB1", "PA", "HA", "NP", "NA", "MP", "NS"];
+  const COLORS = ["#8c1d40", "#007c83", "#176b3a", "#6f2da8", "#c45500", "#006dae", "#7d6608", "#37474f", "#b3261e", "#00838f", "#5c1229", "#7a5b00"];
+  const NEUTRAL = "#69777d";
+  const LIGHT = "#dfe5e7";
+  const GOLD = "#ffc627";
+  const FILTER_MISSING = "__WINGS_FILTER_MISSING__";
+  let sessionCounter = 0;
+  const sessions = new Map();
+
+  const POPUP_CSS = String.raw`
+:root{--ink:#22363e;--muted:#64777e;--line:#d6dfe1;--panel:#fff;--wash:#f5f8f8;--maroon:#8c1d40;--teal:#007c83;--gold:#ffc627}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:#eef3f3}button,select,input{font:inherit}button,select,input[type=text]{border:1px solid #b9c6ca;border-radius:6px;background:#fff;color:var(--ink);min-height:36px;padding:7px 10px}.ts-shell{display:grid;grid-template-rows:auto auto minmax(0,1fr);min-height:100vh}.ts-head{display:flex;gap:20px;align-items:flex-start;justify-content:space-between;padding:16px 20px;background:#fff;border-top:7px solid #000;border-bottom:1px solid var(--line)}.ts-overline{font-size:10px;letter-spacing:.18em;color:var(--maroon);font-weight:800;text-transform:uppercase}.ts-title{font-size:24px;font-weight:800;margin-top:3px;letter-spacing:-.45px}.ts-sub{color:var(--muted);font-size:12px;margin-top:5px}.ts-badge{font-size:10px;border:1px solid #b8cfcc;background:#eaf4f2;color:#246d6b;border-radius:5px;padding:6px 9px;white-space:nowrap}.ts-controls{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:end;padding:10px 16px;background:#f9fbfb;border-bottom:1px solid var(--line)}.ts-control{display:grid;gap:3px}.ts-control>span{font-size:9px;letter-spacing:.08em;font-weight:800;text-transform:uppercase;color:var(--muted)}.ts-search{min-width:210px}.ts-spacer{flex:1}.ts-btn{cursor:pointer;font-weight:700}.ts-btn:hover{border-color:var(--teal);background:#eef7f6}.ts-btn:disabled{cursor:not-allowed;opacity:.45;background:#f4f6f6;border-color:#d7dfe1}.ts-btn[aria-pressed=true]{background:#22363e;color:#fff;border-color:#22363e}.ts-btn[aria-pressed=true]:hover{background:#314a54;border-color:#314a54}.ts-main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;padding:12px;min-height:0}.ts-canvas-card,.ts-side{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}.ts-canvas-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px}.ts-status{color:var(--muted)}.ts-canvas-wrap{position:relative;height:calc(100vh - 185px);min-height:520px;background:#fff;overflow:hidden}.ts-canvas-wrap svg{width:100%;height:100%;display:block;touch-action:none;user-select:none}.ts-canvas-wrap.ts-lasso-active svg{cursor:crosshair}.ts-lasso-path{fill:rgba(0,124,131,.08);stroke:var(--teal);stroke-width:2;stroke-dasharray:7 5;vector-effect:non-scaling-stroke;pointer-events:none}.ts-branch{fill:none;stroke:#6c757b;stroke-width:1.4;vector-effect:non-scaling-stroke}.ts-branch.ts-dim{opacity:.2}.ts-tip{cursor:pointer;outline:none}.ts-tip text{font-size:11px;fill:#24383f}.ts-tip circle{stroke:#fff;stroke-width:1.2;vector-effect:non-scaling-stroke}.ts-tip.ts-selected circle{stroke:var(--gold);stroke-width:4}.ts-tip.ts-selected text{font-weight:800;fill:var(--maroon)}.ts-tip.ts-multi-selected circle{stroke:var(--gold);stroke-width:4}.ts-tip.ts-multi-selected text{font-weight:800;fill:var(--maroon)}.ts-tip.ts-search-hit text{text-decoration:underline;font-weight:800}.ts-tip.ts-dim{opacity:.14}.ts-tip.ts-selected.ts-dim,.ts-tip.ts-multi-selected.ts-dim{opacity:.5}.ts-tip.ts-filter-hit circle{stroke:#40545c;stroke-width:1.8}.ts-tip.ts-filter-hit.ts-selected circle,.ts-tip.ts-filter-hit.ts-multi-selected circle{stroke:var(--gold);stroke-width:4}.ts-support{font-size:8px;fill:#7d898e}.ts-root{fill:#fff;stroke:var(--maroon);stroke-width:2;vector-effect:non-scaling-stroke}.ts-scale{stroke:#202124;stroke-width:2;vector-effect:non-scaling-stroke}.ts-scale-label{font-size:9px;fill:#46545a}.ts-side{padding:14px;overflow:auto;max-height:calc(100vh - 185px)}.ts-side h3{font-size:16px;margin:0 0 10px}.ts-side h4{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 7px}.ts-meta{display:grid;gap:6px;font-size:12px}.ts-meta-row{display:grid;grid-template-columns:95px minmax(0,1fr);gap:8px;border-bottom:1px solid #edf0f1;padding-bottom:5px}.ts-meta-row span:first-child{color:var(--muted)}.ts-note{font-size:11px;line-height:1.45;color:var(--muted);padding:8px 9px;background:#f5f8f8;border-left:3px solid var(--teal);margin:10px 0}.ts-warning{border-left-color:#b27617;background:#fbf3df;color:#6a5426}.ts-legend{display:grid;gap:5px}.ts-legend-row{display:flex;align-items:center;gap:7px;font-size:11px}.ts-swatch{width:11px;height:11px;border-radius:50%;flex:0 0 auto}.ts-empty{color:var(--muted);font-size:12px;padding:10px 0}.ts-pills{display:flex;gap:5px;flex-wrap:wrap}.ts-pill{background:#edf4f3;border:1px solid #d3e3e1;color:#216964;border-radius:5px;padding:3px 6px;font-size:10px}.ts-selection-list{display:flex;gap:5px;flex-wrap:wrap;max-height:120px;overflow:auto}.ts-selection-list .ts-pill{background:#fff7df;border-color:#ead18a;color:#654f12}.ts-filter-values{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 4px}.ts-filter-chip{cursor:pointer;border:1px solid #c8d3d5;background:#fff;color:var(--ink);border-radius:999px;padding:5px 8px;font-size:10px;min-height:0}.ts-filter-chip[aria-pressed=true]{background:#22363e;color:#fff;border-color:#22363e}.ts-filter-chip:hover{border-color:var(--teal)}.ts-filter-summary{font-size:11px;color:var(--muted);line-height:1.45}.ts-filter-clear{margin-top:7px;min-height:30px!important;padding:4px 8px!important;font-size:10px}.ts-help{font-size:10px;color:var(--muted);margin-top:7px}.ts-no-tree{display:grid;place-items:center;height:100%;color:var(--muted);font-weight:700}.ts-footer-note{font-size:10px;color:var(--muted);margin-top:12px;line-height:1.5}@media(max-width:900px){.ts-main{grid-template-columns:1fr}.ts-side{max-height:none}.ts-canvas-wrap{height:65vh;min-height:430px}.ts-head{display:block}.ts-badge{display:inline-block;margin-top:8px}}
+`;
+
+  const escHtml = (value) => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[ch]));
+  const escAttr = value => escHtml(value);
+  const clean = (value) => value == null ? "" : String(value).trim();
+  const scalarText = value => {
+    if (value == null) return "";
+    if (["string","number","boolean"].includes(typeof value)) return String(value).trim();
+    return "";
+  };
+  function genotypeText(value) {
+    const scalar = scalarText(value);
+    if (scalar) return scalar;
+    if (!value || typeof value !== "object") return "";
+    for (const key of ["call","genotype","label","name","value"]) {
+      const nested = genotypeText(value[key]);
+      if (nested) return nested;
+    }
+    return "";
+  }
+
+  const US_STATE_CODES = Object.freeze({
+    "ALABAMA":"AL","ALASKA":"AK","ARIZONA":"AZ","ARKANSAS":"AR","CALIFORNIA":"CA",
+    "COLORADO":"CO","CONNECTICUT":"CT","DELAWARE":"DE","DISTRICT OF COLUMBIA":"DC",
+    "FLORIDA":"FL","GEORGIA":"GA","HAWAII":"HI","IDAHO":"ID","ILLINOIS":"IL",
+    "INDIANA":"IN","IOWA":"IA","KANSAS":"KS","KENTUCKY":"KY","LOUISIANA":"LA",
+    "MAINE":"ME","MARYLAND":"MD","MASSACHUSETTS":"MA","MICHIGAN":"MI","MINNESOTA":"MN",
+    "MISSISSIPPI":"MS","MISSOURI":"MO","MONTANA":"MT","NEBRASKA":"NE","NEVADA":"NV",
+    "NEW HAMPSHIRE":"NH","NEW JERSEY":"NJ","NEW MEXICO":"NM","NEW YORK":"NY",
+    "NORTH CAROLINA":"NC","NORTH DAKOTA":"ND","OHIO":"OH","OKLAHOMA":"OK","OREGON":"OR",
+    "PENNSYLVANIA":"PA","RHODE ISLAND":"RI","SOUTH CAROLINA":"SC","SOUTH DAKOTA":"SD",
+    "TENNESSEE":"TN","TEXAS":"TX","UTAH":"UT","VERMONT":"VT","VIRGINIA":"VA",
+    "WASHINGTON":"WA","WEST VIRGINIA":"WV","WISCONSIN":"WI","WYOMING":"WY",
+    "PUERTO RICO":"PR","GUAM":"GU","AMERICAN SAMOA":"AS","NORTHERN MARIANA ISLANDS":"MP",
+    "U.S. VIRGIN ISLANDS":"VI","US VIRGIN ISLANDS":"VI","VIRGIN ISLANDS":"VI",
+    "WASHINGTON DC":"DC","WASHINGTON, DC":"DC","D.C.":"DC"
+  });
+  const US_STATE_CODE_SET = new Set(Object.values(US_STATE_CODES));
+  function normalizeUSState(value) {
+    const raw = clean(value);
+    if (!raw) return "";
+    let key = raw.toUpperCase().replace(/^US[-_ ]/, "").replace(/\s+/g, " ").trim();
+    if (US_STATE_CODES[key]) return US_STATE_CODES[key];
+    if (US_STATE_CODE_SET.has(key)) return key;
+    return raw;
+  }
+  const parseDate = value => /^\d{4}-\d{2}-\d{2}$/.test(clean(value)) ? Date.parse(`${value}T00:00:00Z`) : NaN;
+  const numericSupport = value => /^[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+(?:\.[0-9]+)?)*$/.test(clean(value));
+
+  function cloneSourceTree(root) {
+    let uid = 0, leafOrder = 0;
+    const walk = (node, path = "r") => {
+      const out = {
+        _uid: `n${uid++}`,
+        _sourcePath: path,
+        name: clean(node.name),
+        label: clean(node.label),
+        length: Number.isFinite(Number(node.length)) ? Number(node.length) : 0,
+        sample_id: clean(node.sample_id),
+        reference_id: clean(node.reference_id),
+        accession_version: clean(node.accession_version),
+      };
+      if (Array.isArray(node.children) && node.children.length) {
+        out.children = node.children.map((child, i) => walk(child, `${path}.${i}`));
+      } else {
+        out.children = [];
+        out._leafOrder = leafOrder++;
+      }
+      return out;
+    };
+    return walk(root);
+  }
+
+  function annotateTree(root) {
+    const visit = node => {
+      if (!node.children?.length) {
+        node._leafCount = 1;
+        node._minLeafOrder = node._leafOrder ?? Number.MAX_SAFE_INTEGER;
+        return node;
+      }
+      node.children.forEach(visit);
+      node._leafCount = node.children.reduce((s, c) => s + c._leafCount, 0);
+      node._minLeafOrder = Math.min(...node.children.map(c => c._minLeafOrder));
+      return node;
+    };
+    return visit(root);
+  }
+
+  function graphFromTree(root) {
+    const nodes = new Map(), adj = new Map();
+    const ensure = node => {
+      nodes.set(node._uid, node);
+      if (!adj.has(node._uid)) adj.set(node._uid, []);
+    };
+    const walk = node => {
+      ensure(node);
+      for (const child of node.children || []) {
+        ensure(child);
+        const length = Math.max(0, Number(child.length) || 0);
+        adj.get(node._uid).push({to: child._uid, length});
+        adj.get(child._uid).push({to: node._uid, length});
+        walk(child);
+      }
+    };
+    walk(root);
+    return {nodes, adj, sourceRootId: root._uid};
+  }
+
+  function cloneGraph(graph) {
+    return {
+      nodes: new Map([...graph.nodes].map(([id, n]) => [id, {...n, children: []}])),
+      adj: new Map([...graph.adj].map(([id, edges]) => [id, edges.map(e => ({...e}))])),
+      sourceRootId: graph.sourceRootId,
+    };
+  }
+
+  function replaceEdge(adj, a, b, rootId, lenA, lenB) {
+    adj.set(a, (adj.get(a) || []).filter(e => e.to !== b));
+    adj.set(b, (adj.get(b) || []).filter(e => e.to !== a));
+    adj.set(rootId, [{to:a,length:lenA},{to:b,length:lenB}]);
+    adj.get(a).push({to:rootId,length:lenA});
+    adj.get(b).push({to:rootId,length:lenB});
+  }
+
+  function rootedFromGraph(graph, rootId) {
+    const build = (id, parent = null, parentLength = 0) => {
+      const src = graph.nodes.get(id) || {_uid:id,name:"",label:"",sample_id:"",reference_id:"",accession_version:""};
+      const out = {...src, length: parentLength, children: []};
+      for (const edge of graph.adj.get(id) || []) {
+        if (edge.to === parent) continue;
+        out.children.push(build(edge.to, id, edge.length));
+      }
+      return out;
+    };
+    const root = build(rootId);
+    root.length = 0;
+    return annotateTree(root);
+  }
+
+  function farthestLeaf(graph, startId) {
+    let best = {id:startId, distance:-1};
+    const stack = [{id:startId,parent:null,distance:0}];
+    while (stack.length) {
+      const cur = stack.pop();
+      const node = graph.nodes.get(cur.id);
+      const degree = (graph.adj.get(cur.id) || []).length;
+      const isLeaf = node && (!node.children?.length) && degree <= 1;
+      if (isLeaf && cur.distance > best.distance) best = {id:cur.id,distance:cur.distance};
+      for (const edge of graph.adj.get(cur.id) || []) if (edge.to !== cur.parent) {
+        stack.push({id:edge.to,parent:cur.id,distance:cur.distance + edge.length});
+      }
+    }
+    return best;
+  }
+
+  function pathBetween(graph, startId, targetId) {
+    const stack = [{id:startId,parent:null}];
+    const parent = new Map([[startId, null]]), edgeLen = new Map();
+    while (stack.length) {
+      const cur = stack.pop();
+      if (cur.id === targetId) break;
+      for (const edge of graph.adj.get(cur.id) || []) {
+        if (parent.has(edge.to)) continue;
+        parent.set(edge.to, cur.id);
+        edgeLen.set(edge.to, edge.length);
+        stack.push({id:edge.to,parent:cur.id});
+      }
+    }
+    if (!parent.has(targetId)) return [];
+    const ids = [];
+    let id = targetId;
+    while (id != null) { ids.push(id); id = parent.get(id); }
+    ids.reverse();
+    const path = [];
+    for (let i=0;i<ids.length;i++) path.push({id:ids[i], lengthFromPrevious:i===0?0:edgeLen.get(ids[i])||0});
+    return path;
+  }
+
+  function midpointRoot(sourceRoot) {
+    const base = annotateTree(cloneSourceTree(sourceRoot));
+    const graph = graphFromTree(base);
+    const leaves = [...graph.nodes.values()].filter(n => !n.children?.length);
+    if (leaves.length < 2) return base;
+    const a = farthestLeaf(graph, leaves[0]._uid).id;
+    const b = farthestLeaf(graph, a).id;
+    const path = pathBetween(graph, a, b);
+    const total = path.reduce((s,p)=>s+p.lengthFromPrevious,0);
+    const half = total/2;
+    let walked = 0;
+    for (let i=1;i<path.length;i++) {
+      const len = path[i].lengthFromPrevious;
+      if (Math.abs(walked + len - half) < 1e-12) return rootedFromGraph(graph, path[i].id);
+      if (walked + len > half) {
+        const g = cloneGraph(graph);
+        const rootId = "midpoint-root";
+        g.nodes.set(rootId,{_uid:rootId,name:"",label:"",sample_id:"",reference_id:"",accession_version:"",children:[]});
+        g.adj.set(rootId,[]);
+        const distFromA = half - walked;
+        replaceEdge(g.adj, path[i-1].id, path[i].id, rootId, distFromA, len - distFromA);
+        return rootedFromGraph(g, rootId);
+      }
+      walked += len;
+    }
+    return rootedFromGraph(graph, graph.sourceRootId);
+  }
+
+  function outgroupRoot(sourceRoot, tipKey) {
+    const base = annotateTree(cloneSourceTree(sourceRoot));
+    const graph = graphFromTree(base);
+    const tip = [...graph.nodes.values()].find(n => leafKey(n) === tipKey);
+    if (!tip) return base;
+    const edges = graph.adj.get(tip._uid) || [];
+    if (edges.length !== 1) return base;
+    const edge = edges[0];
+    const g = cloneGraph(graph);
+    const rootId = "outgroup-root";
+    g.nodes.set(rootId,{_uid:rootId,name:"",label:"",sample_id:"",reference_id:"",accession_version:"",children:[]});
+    g.adj.set(rootId,[]);
+    replaceEdge(g.adj, tip._uid, edge.to, rootId, edge.length/2, edge.length/2);
+    return rootedFromGraph(g, rootId);
+  }
+
+  function leafKey(node) {
+    if (node.sample_id) return `s:${node.sample_id}`;
+    if (node.reference_id) return `r:${node.reference_id}`;
+    return `t:${node.name}`;
+  }
+
+  function allLeaves(root) {
+    const leaves=[];
+    (function walk(node){ if (!node.children?.length) leaves.push(node); else node.children.forEach(walk); })(root);
+    return leaves;
+  }
+
+  function leafInfo(node, data) {
+    if (node.sample_id) {
+      const s = data.sampleById.get(node.sample_id) || {};
+      return {
+        key: leafKey(node), source:"WINGS", id:node.sample_id, tip:node.name,
+        label:node.sample_id, host:clean(s.host), genotype:genotypeText(s.genotype),
+        country:clean(s.country), state:normalizeUSState(s.state), state_raw:clean(s.state), date:clean(s.collection_date),
+        isolate:clean(s.isolate), accession:"", sample_id:node.sample_id, reference_id:"",
+      };
+    }
+    if (node.reference_id) {
+      const r = data.referenceById.get(node.reference_id) || {};
+      const segmentRec = r.segments?.[data.segment] || {};
+      return {
+        key:leafKey(node), source:"Public reference", id:node.reference_id, tip:node.name,
+        label:clean(r.isolate || r.reference_id || node.reference_id), host:clean(r.host),
+        genotype:genotypeText(r.genotype) || genotypeText(r.genotype_call), country:clean(r.country), state:normalizeUSState(r.state), state_raw:clean(r.state),
+        date:clean(r.collection_date), isolate:clean(r.isolate),
+        accession:clean(segmentRec.accession_version || node.accession_version || r.accession_version),
+        sample_id:"", reference_id:node.reference_id,
+      };
+    }
+    return {key:leafKey(node),source:"Unannotated",id:node.name,tip:node.name,label:node.name,host:"",genotype:"",country:"",state:"",state_raw:"",date:"",isolate:"",accession:"",sample_id:"",reference_id:""};
+  }
+
+  function traitValue(info, trait) {
+    if (trait === "source") return info.source;
+    if (trait === "collection_date") return info.date;
+    return clean(info[trait]);
+  }
+
+  function filterTraitValue(info, trait) {
+    const value = traitValue(info, trait);
+    return value || FILTER_MISSING;
+  }
+
+  function matchesTraitFilter(info, trait, selectedValues) {
+    if (!trait || trait === "none" || !Array.isArray(selectedValues) || selectedValues.length === 0) return true;
+    return selectedValues.includes(filterTraitValue(info, trait));
+  }
+
+  function descendantHasFilterMatch(node, data, trait, selectedValues) {
+    if (!trait || trait === "none" || !Array.isArray(selectedValues) || selectedValues.length === 0) return true;
+    return allLeaves(node).some(leaf => matchesTraitFilter(leafInfo(leaf, data), trait, selectedValues));
+  }
+
+  function sortTree(root, mode, data) {
+    const metric = node => {
+      const leaves = allLeaves(node);
+      if (mode === "ladder-asc" || mode === "ladder-desc") return leaves.length;
+      if (mode === "date") {
+        const dates = leaves.map(l=>parseDate(leafInfo(l,data).date)).filter(Number.isFinite);
+        return dates.length ? Math.min(...dates) : Number.POSITIVE_INFINITY;
+      }
+      return Math.min(...leaves.map(l=>Number.isFinite(l._minLeafOrder)?l._minLeafOrder:(Number.isFinite(l._leafOrder)?l._leafOrder:Number.MAX_SAFE_INTEGER)));
+    };
+    const walk = node => {
+      node.children?.forEach(walk);
+      if (!node.children?.length) return;
+      node.children.sort((a,b)=> {
+        const av=metric(a), bv=metric(b);
+        if (mode === "ladder-desc") return bv-av;
+        return av-bv;
+      });
+    };
+    walk(root);
+    return root;
+  }
+
+  function categoricalColors(values) {
+    const unique = [...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    return new Map(unique.map((v,i)=>[v,COLORS[i%COLORS.length]]));
+  }
+
+  function dateColor(value, min, max) {
+    const n=parseDate(value);
+    if (!Number.isFinite(n) || !Number.isFinite(min) || !Number.isFinite(max)) return "#aeb7bb";
+    const t=max===min?0.5:(n-min)/(max-min);
+    const hue=215-(195*t);
+    return `hsl(${hue} 62% 43%)`;
+  }
+
+  function colorContext(root, data, trait) {
+    const leaves=allLeaves(root), infos=leaves.map(l=>leafInfo(l,data));
+    const values=infos.map(i=>traitValue(i,trait));
+    if (trait === "collection_date") {
+      const dates=values.map(parseDate).filter(Number.isFinite), min=Math.min(...dates), max=Math.max(...dates);
+      return {color:v=>dateColor(v,min,max), values:[...new Set(values.filter(Boolean))].sort(), continuous:true, min, max, missingCount:values.filter(v=>!v).length};
+    }
+    const map=categoricalColors(values);
+    return {color:v=>map.get(v)||"#aeb7bb", values:[...map.keys()], continuous:false, missingCount:values.filter(v=>!v).length};
+  }
+
+  function descendantConsensus(node, data, trait) {
+    const vals=[...new Set(allLeaves(node).map(l=>traitValue(leafInfo(l,data),trait)).filter(Boolean))];
+    return vals.length===1?vals[0]:"";
+  }
+
+  function leafLabel(info, mode) {
+    if (mode === "tip") return info.tip || info.id;
+    if (mode === "accession") return info.accession || info.id;
+    if (mode === "isolate") return info.isolate || info.id;
+    if (mode === "host") return info.host || info.id;
+    if (mode === "genotype") return info.genotype || info.id;
+    return info.id || info.tip;
+  }
+
+  function layoutRectangular(root, width, height) {
+    const leaves=allLeaves(root), top=30, bottom=35, left=35, right=190;
+    const yStep=leaves.length>1?(height-top-bottom)/(leaves.length-1):0;
+    leaves.forEach((leaf,i)=>leaf._ly=top+i*yStep);
+    let maxDist=0,maxDepth=0;
+    const setDist=(node,dist=0,depth=0)=>{node._dist=dist;node._depth=depth;maxDist=Math.max(maxDist,dist);maxDepth=Math.max(maxDepth,depth);node.children?.forEach(c=>setDist(c,dist+(Number(c.length)||0),depth+1));};
+    setDist(root);
+    const usable=Math.max(80,width-left-right);
+    const xFor=node=>left+usable*((maxDist>0?node._dist/maxDist:(maxDepth?node._depth/maxDepth:0)));
+    const position=node=>{node.children?.forEach(position);node._x=xFor(node);node._y=node.children?.length?node.children.reduce((s,c)=>s+c._y,0)/node.children.length:node._ly;};
+    position(root);
+    return {leaves,maxDist,left,right,top,bottom};
+  }
+
+  function circularMean(angles) {
+    if (!angles.length) return 0;
+    const x=angles.reduce((s,a)=>s+Math.cos(a),0), y=angles.reduce((s,a)=>s+Math.sin(a),0);
+    return Math.atan2(y,x);
+  }
+
+  function layoutRadial(root, width, height) {
+    const leaves=allLeaves(root), cx=width/2, cy=height/2, margin=120, radius=Math.max(50,Math.min(width,height)/2-margin);
+    let maxDist=0,maxDepth=0;
+    const setDist=(node,dist=0,depth=0)=>{node._dist=dist;node._depth=depth;maxDist=Math.max(maxDist,dist);maxDepth=Math.max(maxDepth,depth);node.children?.forEach(c=>setDist(c,dist+(Number(c.length)||0),depth+1));};
+    setDist(root);
+    leaves.forEach((leaf,i)=>leaf._angle=-Math.PI/2+(2*Math.PI*i/Math.max(1,leaves.length)));
+    const position=node=>{
+      node.children?.forEach(position);
+      if (node.children?.length) node._angle=circularMean(node.children.map(c=>c._angle));
+      const frac=maxDist>0?node._dist/maxDist:(maxDepth?node._depth/maxDepth:0);
+      node._r=radius*frac;node._x=cx+node._r*Math.cos(node._angle);node._y=cy+node._r*Math.sin(node._angle);
+    };
+    position(root);
+    return {leaves,maxDist,cx,cy,radius};
+  }
+
+  function treeToNewick(root) {
+    const quote = name => {
+      const text=clean(name);
+      if (!text) return "";
+      if (/^[A-Za-z0-9_.|:-]+$/.test(text)) return text;
+      return `'${text.replace(/'/g,"''")}'`;
+    };
+    const walk = (node,isRoot=false) => {
+      const body=node.children?.length?`(${node.children.map(c=>walk(c,false)).join(",")})${quote(node.label||node.name)}`:quote(node.name||node.sample_id||node.reference_id);
+      return isRoot?body:`${body}:${Math.max(0,Number(node.length)||0).toPrecision(8)}`;
+    };
+    return walk(root,true)+";";
+  }
+
+  function zoomViewBoxToPoint(fullWidth, fullHeight, x, y, currentViewBox=null, minimumZoom=3.2) {
+    const fw=Math.max(1,Number(fullWidth)||1), fh=Math.max(1,Number(fullHeight)||1);
+    const px=Math.max(0,Math.min(fw,Number(x)||0)), py=Math.max(0,Math.min(fh,Number(y)||0));
+    const current=currentViewBox&&Number(currentViewBox.w)>0&&Number(currentViewBox.h)>0?currentViewBox:{x:0,y:0,w:fw,h:fh};
+    const currentZoom=Math.max(fw/current.w,fh/current.h);
+    const zoom=Math.max(Number(minimumZoom)||3.2,currentZoom);
+    const w=fw/zoom,h=fh/zoom;
+    const maxX=Math.max(0,fw-w),maxY=Math.max(0,fh-h);
+    return {x:Math.max(0,Math.min(maxX,px-w/2)),y:Math.max(0,Math.min(maxY,py-h/2)),w,h};
+  }
+
+  function pointInPolygon(point, polygon) {
+    const x=Number(point?.x), y=Number(point?.y);
+    if (!Number.isFinite(x)||!Number.isFinite(y)||!Array.isArray(polygon)||polygon.length<3) return false;
+    let inside=false;
+    for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){
+      const xi=Number(polygon[i]?.x), yi=Number(polygon[i]?.y), xj=Number(polygon[j]?.x), yj=Number(polygon[j]?.y);
+      if(![xi,yi,xj,yj].every(Number.isFinite)) continue;
+      const intersect=((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/((yj-yi)||Number.EPSILON)+xi);
+      if(intersect) inside=!inside;
+    }
+    return inside;
+  }
+
+  function lassoPath(points) {
+    if(!Array.isArray(points)||points.length===0) return "";
+    return points.map((p,i)=>`${i?"L":"M"} ${Number(p.x)||0} ${Number(p.y)||0}`).join(" " ) + (points.length>=3?" Z":"");
+  }
+
+  function zoomViewBoxToPoints(fullWidth, fullHeight, points, padding=0.22) {
+    const fw=Math.max(1,Number(fullWidth)||1), fh=Math.max(1,Number(fullHeight)||1);
+    const cleanPoints=(Array.isArray(points)?points:[]).map(p=>({x:Number(p?.x),y:Number(p?.y)})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
+    if(!cleanPoints.length) return {x:0,y:0,w:fw,h:fh};
+    if(cleanPoints.length===1) return zoomViewBoxToPoint(fw,fh,cleanPoints[0].x,cleanPoints[0].y,null);
+    let minX=Math.min(...cleanPoints.map(p=>p.x)),maxX=Math.max(...cleanPoints.map(p=>p.x)),minY=Math.min(...cleanPoints.map(p=>p.y)),maxY=Math.max(...cleanPoints.map(p=>p.y));
+    const minSpanX=Math.max(20,fw*0.025),minSpanY=Math.max(20,fh*0.025);
+    let spanX=Math.max(minSpanX,maxX-minX),spanY=Math.max(minSpanY,maxY-minY);
+    spanX*=1+Math.max(0,Number(padding)||0)*2; spanY*=1+Math.max(0,Number(padding)||0)*2;
+    const aspect=fw/fh;
+    if(spanX/spanY>aspect) spanY=spanX/aspect; else spanX=spanY*aspect;
+    const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+    const w=Math.min(fw,spanX),h=Math.min(fh,spanY);
+    return {x:Math.max(0,Math.min(fw-w,cx-w/2)),y:Math.max(0,Math.min(fh-h,cy-h/2)),w,h};
+  }
+
+  function studioBootstrap(payload) {
+    "use strict";
+    const API = payload.api;
+    const data = payload.data;
+    const sampleById = new Map(data.samples.map(s=>[s.sample_id,s]));
+    const references = data.references || [];
+    const referenceById = new Map(references.map(r=>[r.reference_id,r]));
+    const state = {
+      segment: data.segment_order.includes(payload.initialSegment)?payload.initialSegment:(data.segment_order.includes("HA")?"HA":data.segment_order[0]),
+      layout:"rectangular", root:"source", outgroup:"", sort:"original", colorBy:"genotype", filterTrait:"none", filterValues:[], branchColor:"uniform", tipLabel:((data.trees[(data.segment_order.includes(payload.initialSegment)?payload.initialSegment:(data.segment_order.includes("HA")?"HA":data.segment_order[0]))]?.tip_count||0)>120?"focus":"id"), supports:((data.trees[(data.segment_order.includes(payload.initialSegment)?payload.initialSegment:(data.segment_order.includes("HA")?"HA":data.segment_order[0]))]?.tip_count||0)<=120), search:"", selectedSampleId:payload.selectedSampleId||null, selectedReferenceId:payload.selectedReferenceId||null,
+      viewBox:null, drag:null, lasso:null, lassoMode:false,
+      selectedKeys:new Set([payload.selectedSampleId?`s:${payload.selectedSampleId}`:payload.selectedReferenceId?`r:${payload.selectedReferenceId}`:null].filter(Boolean)),
+    };
+    const root=document.getElementById("studio");
+    root.innerHTML=`<div class="ts-shell"><header class="ts-head"><div><div class="ts-overline">WINGS · phylogenetic exploration</div><div class="ts-title">Tree Studio</div><div class="ts-sub">Interactive display of existing WINGS segment trees. Rerooting and sorting are display transformations; source trees are not modified.</div></div><div class="ts-badge">v${API.VERSION} · offline-capable</div></header><div class="ts-controls"></div><main class="ts-main"><section class="ts-canvas-card"><div class="ts-canvas-head"><strong class="ts-tree-title"></strong><span class="ts-status"></span></div><div class="ts-canvas-wrap"></div></section><aside class="ts-side"></aside></main></div>`;
+    const controls=root.querySelector(".ts-controls"), wrap=root.querySelector(".ts-canvas-wrap"), side=root.querySelector(".ts-side"), status=root.querySelector(".ts-status"), title=root.querySelector(".ts-tree-title");
+    const options=(arr,val)=>arr.map(([v,l])=>`<option value="${API.escAttr(v)}"${v===val?" selected":""}>${API.escHtml(l)}</option>`).join("");
+    controls.innerHTML=`
+      <label class="ts-control"><span>Segment</span><select data-c="segment">${options(data.segment_order.map(x=>[x,x]),state.segment)}</select></label>
+      <label class="ts-control"><span>Layout</span><select data-c="layout">${options([["rectangular","Rectangular"],["radial","Radial"],["unrooted","Unrooted display"]],state.layout)}</select></label>
+      <label class="ts-control"><span>Rooting</span><select data-c="root">${options([["source","As supplied"],["midpoint","Midpoint display root"],["outgroup","Outgroup display root"]],state.root)}</select></label>
+      <label class="ts-control"><span>Outgroup</span><select data-c="outgroup"></select></label>
+      <label class="ts-control"><span>Sort</span><select data-c="sort">${options([["original","Source order"],["ladder-asc","Ladderize ↑"],["ladder-desc","Ladderize ↓"],["date","Collection date"]],state.sort)}</select></label>
+      <label class="ts-control"><span>Tip color</span><select data-c="colorBy">${options([["genotype","Genotype"],["host","Host"],["country","Country"],["state","State"],["collection_date","Collection date"],["source","WINGS / public"]],state.colorBy)}</select></label>
+      <label class="ts-control"><span>Filter trait</span><select data-c="filterTrait">${options([["none","None"],["genotype","Genotype"],["host","Host"],["country","Country"],["state","State"],["source","WINGS / public"]],state.filterTrait)}</select></label>
+      <label class="ts-control"><span>Branches</span><select data-c="branchColor">${options([["uniform","Uniform"],["consensus","Descendant consensus"]],state.branchColor)}</select></label>
+      <label class="ts-control"><span>Tip labels</span><select data-c="tipLabel">${options([["focus","Selected / search only"],["id","Sample / reference ID"],["tip","Tree tip"],["accession","Accession"],["isolate","Isolate"],["host","Host"],["genotype","Genotype"]],state.tipLabel)}</select></label>
+      <label class="ts-control"><span>Support</span><select data-c="supports">${options([["yes","Show"],["no","Hide"]],state.supports?"yes":"no")}</select></label>
+      <label class="ts-control ts-search"><span>Search tips</span><input type="text" data-c="search" placeholder="sample, accession, host, genotype…"></label>
+      <span class="ts-spacer"></span><button class="ts-btn" data-a="lasso" aria-pressed="false" title="Drag a freehand loop around terminal taxa">Lasso select</button><button class="ts-btn" data-a="deselect" disabled>Deselect all</button><button class="ts-btn" data-a="zoom-selected" disabled>Zoom to selected</button><button class="ts-btn" data-a="fit">Fit</button><button class="ts-btn" data-a="svg">SVG</button><button class="ts-btn" data-a="png">PNG</button><button class="ts-btn" data-a="newick">Newick</button><button class="ts-btn" data-a="metadata">Metadata TSV</button>`;
+
+    const c=name=>controls.querySelector(`[data-c="${name}"]`);
+    function getTree(){ return data.trees[state.segment]?.root || null; }
+    function updateOutgroups(tree){
+      const select=c("outgroup"); const old=state.outgroup; select.innerHTML="";
+      if (!tree) return;
+      const localData={sampleById,referenceById,segment:state.segment};
+      const base=API.annotateTree(API.cloneSourceTree(tree));
+      const leaves=API.allLeaves(base);
+      for(const leaf of leaves){const info=API.leafInfo(leaf,localData);const opt=new Option(info.label||info.id,info.key);select.append(opt);}
+      if ([...select.options].some(o=>o.value===old)) select.value=old; else {select.value=select.options[0]?.value||"";state.outgroup=select.value;}
+    }
+    function displayedTree(){
+      const source=getTree(); if(!source) return null;
+      let tree;
+      if(state.layout==="unrooted" || state.root==="source") tree=API.annotateTree(API.cloneSourceTree(source));
+      else if(state.root==="midpoint") tree=API.midpointRoot(source);
+      else tree=API.outgroupRoot(source,state.outgroup);
+      return API.sortTree(tree,state.sort,{sampleById,referenceById,segment:state.segment});
+    }
+    function infoMatches(info){const q=state.search.trim().toLowerCase();if(!q)return true;return [info.id,info.tip,info.host,info.genotype,info.country,info.state,info.date,info.isolate,info.accession,info.source].some(v=>String(v||"").toLowerCase().includes(q));}
+    function selectedKey(){return state.selectedSampleId?`s:${state.selectedSampleId}`:state.selectedReferenceId?`r:${state.selectedReferenceId}`:"";}
+    function selectedKeys(){return state.selectedKeys instanceof Set?state.selectedKeys:new Set();}
+    function postSingleSelection(){window.opener?.postMessage({type:"WINGS_TREE_STUDIO_SELECT",session:payload.session,sampleId:state.selectedSampleId,referenceId:state.selectedReferenceId},"*");}
+    function clearSelection(sync=true){state.selectedKeys=new Set();state.selectedSampleId=null;state.selectedReferenceId=null;if(sync)window.opener?.postMessage({type:"WINGS_TREE_STUDIO_SELECT",session:payload.session,sampleId:null,referenceId:null,clear:true},"*");}
+    function makeSingleSelection(key,sync=true){state.selectedKeys=new Set(key?[key]:[]);state.selectedSampleId=key?.startsWith("s:")?key.slice(2):null;state.selectedReferenceId=key?.startsWith("r:")?key.slice(2):null;if(sync)postSingleSelection();}
+    function renderSide(tree,colorCtx){
+      const localData={sampleById,referenceById,segment:state.segment};
+      const leaves=API.allLeaves(tree);
+      const selectedSet=selectedKeys();
+      const selectedLeaves=leaves.filter(l=>selectedSet.has(API.leafKey(l)));
+      const selected=selectedLeaves.length===1?selectedLeaves[0]:leaves.find(l=>API.leafKey(l)===selectedKey());
+      const info=selected?API.leafInfo(selected,localData):null;
+      const rootText=state.layout==="unrooted"?"Unrooted equal-angle display; root is not interpreted.":state.root==="source"?"Source tree orientation as supplied; no biological root is inferred.":state.root==="midpoint"?"Display rerooted at the branch-length midpoint.":"Display rerooted on the selected outgroup branch.";
+      let html=`<h3>${info?API.escHtml(info.label||info.id):"Tree evidence"}</h3><div class="ts-note${state.root!=="source"||state.layout==="unrooted"?" ts-warning":""}">${API.escHtml(rootText)} Source tree bytes and WINGS analysis outputs are unchanged.</div>`;
+      if(selectedLeaves.length>1){
+        const infos=selectedLeaves.map(l=>API.leafInfo(l,localData));
+        const countBy=field=>{const m=new Map();for(const x of infos){const v=clean(x[field])||"Not recorded";m.set(v,(m.get(v)||0)+1);}return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));};
+        const top=(field,n=4)=>countBy(field).slice(0,n).map(([v,c])=>`${v} · ${c}`).join(", ");
+        html+=`<h4>Selected taxa · ${selectedLeaves.length}</h4><div class="ts-meta"><div class="ts-meta-row"><span>Sources</span><span>${API.escHtml(top("source"))}</span></div><div class="ts-meta-row"><span>Hosts</span><span>${API.escHtml(top("host"))}</span></div><div class="ts-meta-row"><span>Genotypes</span><span>${API.escHtml(top("genotype"))}</span></div></div><div class="ts-selection-list">${infos.slice(0,60).map(x=>`<span class="ts-pill">${API.escHtml(x.id||x.tip)}</span>`).join("")}${infos.length>60?`<span class="ts-pill">+ ${infos.length-60} more</span>`:""}</div><div class="ts-help">Multiple selection is local to Tree Studio. Use Deselect all to clear it; Shift-click adds/removes individual tips.</div>`;
+      } else if(info){
+        const rows=[["Source",info.source],["ID",info.id],["Host",info.host],["Genotype",info.genotype],["Collection",info.date],["Country",info.country],["State",info.state],["State source",info.state_raw && info.state_raw !== info.state ? info.state_raw : ""],["Isolate",info.isolate],["Accession",info.accession]].filter(x=>x[1]);
+        html+=`<h4>Selected tip</h4><div class="ts-meta">${rows.map(([k,v])=>`<div class="ts-meta-row"><span>${API.escHtml(k)}</span><span>${API.escHtml(v)}</span></div>`).join("")}</div>`;
+      } else html+=`<div class="ts-empty">Click a tip to inspect it, Shift-click to build a multi-selection, or turn on Lasso select and draw a loop around terminal taxa.</div>`;
+
+      if(state.filterTrait!=="none"){
+        const counts=new Map();
+        for(const leaf of leaves){
+          const value=API.filterTraitValue(API.leafInfo(leaf,localData),state.filterTrait);
+          counts.set(value,(counts.get(value)||0)+1);
+        }
+        const items=[...counts.entries()].sort((a,b)=>{
+          if(a[0]===FILTER_MISSING)return 1;if(b[0]===FILTER_MISSING)return -1;
+          return String(a[0]).localeCompare(String(b[0]));
+        });
+        const active=new Set(state.filterValues);
+        const matching=leaves.filter(l=>API.matchesTraitFilter(API.leafInfo(l,localData),state.filterTrait,state.filterValues)).length;
+        const traitLabel={genotype:"Genotype",host:"Host",country:"Country",state:"State",source:"WINGS / public"}[state.filterTrait]||state.filterTrait;
+        html+=`<h4>Trait filter · ${API.escHtml(traitLabel)}</h4><div class="ts-filter-summary">${active.size?`${matching} of ${leaves.length} tips match. Nonmatching tips and branches without matching descendants are shaded, not removed.`:"Choose one or more values. Multiple values use OR logic; the full topology stays visible."}</div><div class="ts-filter-values">`;
+        html+=items.map(([value,count])=>{const label=value===FILTER_MISSING?"Not recorded / not assigned":value;return `<button type="button" class="ts-filter-chip" data-filter-value="${API.escAttr(value)}" aria-pressed="${active.has(value)?"true":"false"}">${API.escHtml(label)} · ${count}</button>`;}).join("");
+        html+=`</div>${active.size?'<button type="button" class="ts-btn ts-filter-clear" data-filter-clear="1">Clear trait filter</button>':""}`;
+      }
+
+      html+=`<h4>Color legend</h4><div class="ts-legend">`;
+      if(colorCtx.continuous){
+        html+=`<div class="ts-legend-row"><span class="ts-swatch" style="background:${colorCtx.color(new Date(colorCtx.min).toISOString().slice(0,10))}"></span><span>${Number.isFinite(colorCtx.min)?new Date(colorCtx.min).toISOString().slice(0,10):"No dated tips"}</span></div><div class="ts-legend-row"><span class="ts-swatch" style="background:${colorCtx.color(new Date(colorCtx.max).toISOString().slice(0,10))}"></span><span>${Number.isFinite(colorCtx.max)?new Date(colorCtx.max).toISOString().slice(0,10):""}</span></div>`;
+      } else {
+        html+=colorCtx.values.slice(0,18).map(v=>`<div class="ts-legend-row"><span class="ts-swatch" style="background:${colorCtx.color(v)}"></span><span>${API.escHtml(v)}</span></div>`).join("");
+        if(colorCtx.values.length>18) html+=`<div class="ts-empty">+ ${colorCtx.values.length-18} additional categories</div>`;
+      }
+      if(colorCtx.missingCount) html+=`<div class="ts-legend-row"><span class="ts-swatch" style="background:#aeb7bb"></span><span>Not recorded / not assigned (${colorCtx.missingCount})</span></div>`;
+      html+=`</div><h4>Display semantics</h4><div class="ts-footer-note">Trait filtering is a display operation: nonmatching observations are shaded rather than deleted, and a branch remains emphasized when at least one descendant tip matches the active filter. Multiple selected trait values use OR logic. Branch coloring by “descendant consensus” is a visual summary: a branch is colored only when all descendant annotated tips share the selected categorical trait. It is not ancestral-state reconstruction. Numeric internal labels are displayed as recorded; rerooting does not recompute support. Collection dates are metadata and are not used to time-calibrate the tree.</div>`;
+      side.innerHTML=html;
+      side.querySelectorAll("[data-filter-value]").forEach(button=>button.addEventListener("click",()=>{
+        const value=button.dataset.filterValue;
+        const set=new Set(state.filterValues);
+        if(set.has(value))set.delete(value);else set.add(value);
+        state.filterValues=[...set];
+        render();
+      }));
+      side.querySelector("[data-filter-clear]")?.addEventListener("click",()=>{state.filterValues=[];render();});
+    }
+    function render(){
+      const source=getTree();
+      updateOutgroups(source);
+      c("root").disabled=state.layout==="unrooted"; c("outgroup").disabled=state.layout==="unrooted"||state.root!=="outgroup";
+      if(!source){wrap.innerHTML='<div class="ts-no-tree">No tree available for this segment.</div>';side.innerHTML="";title.textContent=`${state.segment} · unavailable`;status.textContent="";return;}
+      const tree=displayedTree(), localData={sampleById,referenceById,segment:state.segment};
+      const leaves=API.allLeaves(tree), colorCtx=API.colorContext(tree,localData,state.colorBy);
+      const width=1500, height=Math.max(650,state.layout==="rectangular"?Math.min(1800,80+leaves.length*17):900);
+      const layout=state.layout==="rectangular"?API.layoutRectangular(tree,width,height):API.layoutRadial(tree,width,height);
+      const searchActive=Boolean(state.search.trim());
+      const filterActive=state.filterTrait!=="none"&&state.filterValues.length>0;
+      const passesFilter=info=>API.matchesTraitFilter(info,state.filterTrait,state.filterValues);
+      const selectedSet=selectedKeys();
+      const selected=selectedKey();
+      const zoomFactor=state.viewBox?width/state.viewBox.w:1;
+      const declutterLabels=leaves.length>120&&state.tipLabel!=="focus"&&zoomFactor<2.8;
+      const parts=[];
+      const branchColor=node=>{
+        if(state.branchColor!=="consensus"||state.colorBy==="collection_date")return NEUTRAL;
+        const v=API.descendantConsensus(node,localData,state.colorBy); return v?colorCtx.color(v):NEUTRAL;
+      };
+      const walkBranches=node=>{
+        for(const child of node.children||[]){
+          const descendantInfos=API.allLeaves(child).map(l=>API.leafInfo(l,localData));
+          const branchHasMatch=descendantInfos.some(info=>(!searchActive||infoMatches(info))&&(!filterActive||passesFilter(info)));
+          const dim=(searchActive||filterActive)&&!branchHasMatch;
+          const stroke=branchColor(child);
+          if(state.layout==="rectangular"){
+            parts.push(`<path class="ts-branch${dim?" ts-dim":""}" stroke="${stroke}" d="M ${node._x} ${node._y} L ${node._x} ${child._y} L ${child._x} ${child._y}"/>`);
+          } else parts.push(`<line class="ts-branch${dim?" ts-dim":""}" stroke="${stroke}" x1="${node._x}" y1="${node._y}" x2="${child._x}" y2="${child._y}"/>`);
+          if(state.supports&&API.numericSupport(child.label)) parts.push(`<text class="ts-support" x="${(node._x+child._x)/2+3}" y="${(node._y+child._y)/2-3}">${API.escHtml(child.label)}</text>`);
+          walkBranches(child);
+        }
+      };
+      walkBranches(tree);
+      if(state.layout!=="unrooted") parts.push(`<circle class="ts-root" cx="${tree._x}" cy="${tree._y}" r="4"><title>Displayed root</title></circle>`);
+      for(const leaf of leaves){
+        const info=API.leafInfo(leaf,localData), value=API.traitValue(info,state.colorBy), color=colorCtx.color(value), hit=infoMatches(info), filterMatch=passesFilter(info), isSel=selectedSet.has(info.key), isPrimary=info.key===selected;
+        const dim=(searchActive&&!hit)||(filterActive&&!filterMatch);
+        const klass=`ts-tip${isPrimary?" ts-selected":""}${isSel&&!isPrimary?" ts-multi-selected":""}${searchActive&&hit?" ts-search-hit":""}${filterActive&&filterMatch?" ts-filter-hit":""}${dim?" ts-dim":""}`;
+        let tx=leaf._x+9,ty=leaf._y+4,anchor="start";
+        if(state.layout!=="rectangular"){
+          const left=Math.cos(leaf._angle)<0; tx=leaf._x+(left?-8:8);ty=leaf._y+3;anchor=left?"end":"start";
+        }
+        const requestedLabel=state.tipLabel==="focus"?info.id:API.leafLabel(info,state.tipLabel);
+        const showLabel=state.tipLabel==="focus"?(isSel||(searchActive&&hit)):(declutterLabels?(isSel||(searchActive&&hit)):true);
+        const shownLabel=showLabel?requestedLabel:"";parts.push(`<g class="${klass}" tabindex="0" role="button" data-key="${API.escAttr(info.key)}"><circle cx="${leaf._x}" cy="${leaf._y}" r="4.2" fill="${color}"/><text x="${tx}" y="${ty}" text-anchor="${anchor}">${API.escHtml(shownLabel)}</text><title>${API.escHtml([info.id,info.host,info.genotype,info.date,info.accession].filter(Boolean).join(" · "))}</title></g>`);
+      }
+      if(state.layout==="rectangular"&&layout.maxDist>0){const x0=40,x1=160,y=height-13;const val=layout.maxDist*((x1-x0)/(width-225));parts.push(`<line class="ts-scale" x1="${x0}" y1="${y}" x2="${x1}" y2="${y}"/><text class="ts-scale-label" x="${(x0+x1)/2}" y="${y-5}" text-anchor="middle">${val.toPrecision(2)} substitutions/site</text>`);}
+      const view=state.viewBox||{x:0,y:0,w:width,h:height};
+      wrap.classList.toggle("ts-lasso-active",state.lassoMode);
+      wrap.innerHTML=`<svg id="tree-svg" data-full-width="${width}" data-full-height="${height}" viewBox="${view.x} ${view.y} ${view.w} ${view.h}" aria-label="Interactive ${API.escAttr(state.segment)} phylogenetic tree" xmlns="http://www.w3.org/2000/svg">${parts.join("")}<path class="ts-lasso-path" d="" hidden/></svg>`;
+      const svg=wrap.querySelector("svg");
+      const zoomSelectedButton=controls.querySelector('[data-a="zoom-selected"]'), deselectButton=controls.querySelector('[data-a="deselect"]'), lassoButton=controls.querySelector('[data-a="lasso"]');
+      const visibleSelected=svg.querySelectorAll(".ts-tip.ts-selected,.ts-tip.ts-multi-selected").length;
+      if(zoomSelectedButton) zoomSelectedButton.disabled=visibleSelected===0;
+      if(deselectButton) deselectButton.disabled=selectedKeys().size===0;
+      if(lassoButton) lassoButton.setAttribute("aria-pressed",String(state.lassoMode));
+      svg.querySelectorAll(".ts-tip").forEach(g=>{const choose=(event=null)=>{const key=g.dataset.key;if(event?.shiftKey){const set=new Set(selectedKeys());if(set.has(key))set.delete(key);else set.add(key);state.selectedKeys=set;state.selectedSampleId=null;state.selectedReferenceId=null;render();return;}makeSingleSelection(key,true);render();};g.addEventListener("click",choose);g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();choose(e);}});});
+      svg.addEventListener("wheel",e=>{e.preventDefault();const vb=svg.viewBox.baseVal, rect=svg.getBoundingClientRect(), mx=vb.x+(e.clientX-rect.left)/rect.width*vb.width,my=vb.y+(e.clientY-rect.top)/rect.height*vb.height,f=API.wheelZoomFactor(e.deltaY,e.deltaMode),nw=vb.width*f,nh=vb.height*f;state.viewBox={x:mx-(mx-vb.x)*f,y:my-(my-vb.y)*f,w:nw,h:nh};render();},{passive:false});
+      const svgPoint=e=>{const vb=svg.viewBox.baseVal,rect=svg.getBoundingClientRect();return {x:vb.x+(e.clientX-rect.left)/rect.width*vb.width,y:vb.y+(e.clientY-rect.top)/rect.height*vb.height};};
+      svg.addEventListener("pointerdown",e=>{
+        if(state.lassoMode){
+          e.preventDefault();svg.setPointerCapture(e.pointerId);const p=svgPoint(e);state.lasso={pointerId:e.pointerId,points:[p],additive:Boolean(e.shiftKey)};const path=svg.querySelector(".ts-lasso-path");if(path){path.hidden=false;path.setAttribute("d",API.lassoPath(state.lasso.points));}return;
+        }
+        // Tip clicks are selection actions, not pan gestures. Capturing the
+        // pointer on the SVG here would retarget pointerup/click away from the
+        // tip group in some browsers, making visible tip nodes appear inert.
+        if(e.target.closest?.(".ts-tip")) return;
+        svg.setPointerCapture(e.pointerId);
+        const vb=svg.viewBox.baseVal;
+        state.drag={x:e.clientX,y:e.clientY,vx:vb.x,vy:vb.y,vw:vb.width,vh:vb.height};
+      });
+      svg.addEventListener("pointermove",e=>{
+        if(state.lasso&&e.pointerId===state.lasso.pointerId){const p=svgPoint(e),prev=state.lasso.points[state.lasso.points.length-1];if(!prev||Math.hypot(p.x-prev.x,p.y-prev.y)>2){state.lasso.points.push(p);const path=svg.querySelector(".ts-lasso-path");if(path)path.setAttribute("d",API.lassoPath(state.lasso.points));}return;}
+        if(!state.drag)return;const rect=svg.getBoundingClientRect(),dx=(e.clientX-state.drag.x)/rect.width*state.drag.vw,dy=(e.clientY-state.drag.y)/rect.height*state.drag.vh;state.viewBox={x:state.drag.vx-dx,y:state.drag.vy-dy,w:state.drag.vw,h:state.drag.vh};svg.setAttribute("viewBox",`${state.viewBox.x} ${state.viewBox.y} ${state.viewBox.w} ${state.viewBox.h}`);
+      });
+      const finishPointer=(e,cancelled=false)=>{
+        if(state.lasso&&(!e||e.pointerId===state.lasso.pointerId)){const polygon=state.lasso.points,additive=state.lasso.additive;state.lasso=null;if(cancelled||polygon.length<3){render();return;}const keys=[];svg.querySelectorAll(".ts-tip").forEach(g=>{const circle=g.querySelector("circle"),p={x:Number(circle?.getAttribute("cx")),y:Number(circle?.getAttribute("cy"))};if(API.pointInPolygon(p,polygon))keys.push(g.dataset.key);});const set=additive?new Set(selectedKeys()):new Set();keys.forEach(k=>set.add(k));state.selectedKeys=set;state.selectedSampleId=null;state.selectedReferenceId=null;render();return;}state.drag=null;
+      };
+      svg.addEventListener("pointerup",e=>finishPointer(e,false));svg.addEventListener("pointercancel",e=>finishPointer(e,true));
+      title.textContent=`${state.segment} · ${leaves.length} tips`;
+      const filterCount=filterActive?leaves.filter(l=>passesFilter(API.leafInfo(l,localData))).length:null;
+      status.textContent=`${state.layout}${state.layout!=="unrooted"?` · ${state.root==="source"?"as supplied":state.root+" display root"}`:" · root not interpreted"} · ${state.sort}${filterActive?` · filter ${filterCount}/${leaves.length}`:""}${selectedKeys().size?` · selected ${selectedKeys().size}`:""}${state.lassoMode?" · lasso mode":""}${declutterLabels?" · labels decluttered—zoom in to reveal":""}`;
+      renderSide(tree,colorCtx);
+    }
+    controls.addEventListener("change",e=>{const el=e.target,name=el.dataset.c;if(!name)return;state[name]=name==="supports"?el.value==="yes":el.value;if(name==="filterTrait")state.filterValues=[];if(name==="segment"){state.viewBox=null;state.outgroup="";}if(name==="layout"||name==="root"||name==="sort")state.viewBox=null;render();});
+    c("search").addEventListener("input",e=>{state.search=e.target.value;render();});
+    controls.addEventListener("click",e=>{const a=e.target.dataset.a;if(!a)return;const tree=displayedTree();if(a==="lasso"){state.lassoMode=!state.lassoMode;state.drag=null;state.lasso=null;render();return;}if(a==="deselect"){clearSelection(true);render();return;}if(a==="fit"){state.viewBox=null;render();return;}if(a==="zoom-selected"){const svg=wrap.querySelector("svg"),tips=[...svg?.querySelectorAll(".ts-tip.ts-selected circle,.ts-tip.ts-multi-selected circle")||[]];if(!svg||!tips.length)return;const fw=Number(svg.dataset.fullWidth)||1500,fh=Number(svg.dataset.fullHeight)||900,points=tips.map(t=>({x:Number(t.getAttribute("cx")),y:Number(t.getAttribute("cy"))}));state.viewBox=points.length===1?API.zoomViewBoxToPoint(fw,fh,points[0].x,points[0].y,state.viewBox):API.zoomViewBoxToPoints(fw,fh,points);render();return;}if(!tree)return;const svg=wrap.querySelector("svg");if(a==="svg")API.downloadText(`${state.segment}_TreeStudio.svg`,new XMLSerializer().serializeToString(svg),"image/svg+xml");if(a==="newick")API.downloadText(`${state.segment}_TreeStudio.newick`,API.treeToNewick(tree),"text/plain");if(a==="metadata"){const localData={sampleById,referenceById,segment:state.segment};const rows=API.allLeaves(tree).map(l=>API.leafInfo(l,localData));const fields=["source","id","tip","host","genotype","collection_date","country","state","state_source","isolate","accession"];const tsv=[fields.join("\t"),...rows.map(r=>fields.map(f=>String(f==="collection_date"?r.date:f==="state_source"?r.state_raw:r[f]||"").replace(/[\t\r\n]/g," ")).join("\t"))].join("\n")+"\n";API.downloadText(`${state.segment}_TreeStudio_metadata.tsv`,tsv,"text/tab-separated-values");}if(a==="png"&&svg){const text=new XMLSerializer().serializeToString(svg), blob=new Blob([text],{type:"image/svg+xml"}),url=URL.createObjectURL(blob),img=new Image();img.onload=()=>{const canvas=document.createElement("canvas");canvas.width=2400;canvas.height=Math.max(1000,Math.round(2400*svg.viewBox.baseVal.height/svg.viewBox.baseVal.width));const ctx=canvas.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);URL.revokeObjectURL(url);canvas.toBlob(b=>{const u=URL.createObjectURL(b),x=document.createElement("a");x.href=u;x.download=`${state.segment}_TreeStudio.png`;x.click();setTimeout(()=>URL.revokeObjectURL(u),1000);});};img.src=url;}});
+    window.addEventListener("message",e=>{const m=e.data||{};if(m.type!=="WINGS_TREE_STUDIO_SYNC"||m.session!==payload.session)return;state.selectedSampleId=m.sampleId||null;state.selectedReferenceId=m.referenceId||null;state.selectedKeys=new Set([state.selectedSampleId?`s:${state.selectedSampleId}`:state.selectedReferenceId?`r:${state.selectedReferenceId}`:null].filter(Boolean));render();});
+    updateOutgroups(getTree()); render();
+  }
+
+  function safeJson(value) { return JSON.stringify(value).replace(/</g,"\\u003c").replace(/>/g,"\\u003e").replace(/&/g,"\\u0026"); }
+  function wheelZoomFactor(deltaY, deltaMode=0) {
+    // Trackpads can emit many tiny wheel events while traditional mouse wheels
+    // emit much larger deltas. Normalize to an approximate pixel delta, cap a
+    // single event, and use an exponential scale so tiny gestures stay gentle.
+    const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? 240 : 1;
+    const pixels = Math.max(-60, Math.min(60, Number(deltaY || 0) * unit));
+    return Math.exp(pixels * 0.002);
+  }
+
+  function downloadText(name,text,type="text/plain") { const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000); }
+
+  function apiForPopup() {
+    return {VERSION, escHtml:String(escHtml), escAttr:String(escAttr)};
+  }
+
+  function bootstrapSource() {
+    const names = [cloneSourceTree,annotateTree,graphFromTree,cloneGraph,replaceEdge,rootedFromGraph,farthestLeaf,pathBetween,midpointRoot,outgroupRoot,leafKey,allLeaves,leafInfo,traitValue,filterTraitValue,matchesTraitFilter,descendantHasFilterMatch,sortTree,categoricalColors,dateColor,colorContext,descendantConsensus,leafLabel,layoutRectangular,circularMean,layoutRadial,treeToNewick,numericSupport,parseDate,clean,scalarText,genotypeText,normalizeUSState,escHtml,escAttr,downloadText,wheelZoomFactor,zoomViewBoxToPoint,pointInPolygon,lassoPath,zoomViewBoxToPoints];
+    return names.map(fn=>`const ${fn.name}=${fn.toString()};`).join("\n") + `\nconst SEGMENTS=${JSON.stringify(SEGMENTS)},COLORS=${JSON.stringify(COLORS)},NEUTRAL=${JSON.stringify(NEUTRAL)},LIGHT=${JSON.stringify(LIGHT)},GOLD=${JSON.stringify(GOLD)},FILTER_MISSING=${JSON.stringify(FILTER_MISSING)},US_STATE_CODES=${JSON.stringify(US_STATE_CODES)},US_STATE_CODE_SET=new Set(Object.values(US_STATE_CODES));\nconst API={VERSION:${JSON.stringify(VERSION)},cloneSourceTree,annotateTree,graphFromTree,cloneGraph,replaceEdge,rootedFromGraph,farthestLeaf,pathBetween,midpointRoot,outgroupRoot,leafKey,allLeaves,leafInfo,traitValue,filterTraitValue,matchesTraitFilter,descendantHasFilterMatch,sortTree,categoricalColors,dateColor,colorContext,descendantConsensus,leafLabel,layoutRectangular,circularMean,layoutRadial,treeToNewick,numericSupport,parseDate,clean,normalizeUSState,escHtml,escAttr,downloadText,wheelZoomFactor,zoomViewBoxToPoint,pointInPolygon,lassoPath,zoomViewBoxToPoints};`;
+  }
+
+  function openStudio(explorer, opts={}) {
+    if (!explorer?.payload) throw new Error("WINGS Explorer instance is required.");
+    const key=`tree-studio-${++sessionCounter}`;
+    const references=Array.isArray(explorer.referenceContext?.references)?explorer.referenceContext.references:[];
+    const payload={
+      session:key,
+      initialSegment:opts.segment||explorer.segment||"HA",
+      selectedSampleId:explorer.selectedSampleId||null,
+      selectedReferenceId:explorer.selectedReferenceId||null,
+      data:{trees:explorer.payload.trees||{},samples:explorer.samples||[],references,segment_order:(explorer.payload.segment_order||SEGMENTS).filter(s=>explorer.payload.trees?.[s])},
+    };
+    const popup=window.open("","_blank","popup=yes,width=1500,height=950,resizable=yes,scrollbars=yes");
+    if(!popup) throw new Error("Tree Studio pop-out was blocked by the browser.");
+    sessions.set(key,{explorer,popup});
+    const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WINGS Tree Studio</title><style>${POPUP_CSS}</style></head><body><div id="studio"></div><script>${bootstrapSource()}\nconst payload=${safeJson(payload)};payload.api=API;(${studioBootstrap.toString()})(payload);<\/script></body></html>`;
+    popup.document.open(); popup.document.write(html); popup.document.close();
+    popup.addEventListener?.("beforeunload",()=>sessions.delete(key));
+    return popup;
+  }
+
+  function mountExplorer(explorer) {
+    if (!explorer?.root) throw new Error("Explorer instance is required.");
+    if (explorer.treeStudio) return explorer.treeStudio;
+    const genomeView=explorer.explorerTabs?.panels?.genome || explorer.root.querySelector("#wse-view-genome") || explorer.root.querySelector(".wse-genome-panel");
+    if (!genomeView) throw new Error("Genome view not found. Install Explorer tabs or retain the genome panel.");
+    const toolbar=document.createElement("div");toolbar.className="wse-tree-studio-launch";
+    const copy=document.createElement("div");copy.innerHTML='<strong>Tree Studio</strong><span>Pop out any segment for dynamic phylogenetic exploration.</span>';
+    const button=document.createElement("button");button.type="button";button.className="wse-tree-studio-open";button.textContent="Open Tree Studio ↗";
+    toolbar.append(copy,button);genomeView.prepend(toolbar);
+    button.addEventListener("click",()=>{try{openStudio(explorer,{segment:explorer.segment||"HA"});}catch(err){alert(err.message||String(err));}});
+    const previous=explorer.updateSelection.bind(explorer);
+    explorer.updateSelection=function(...args){const result=previous(...args);for(const [session,entry] of sessions){if(entry.explorer!==explorer||entry.popup.closed)continue;entry.popup.postMessage({type:"WINGS_TREE_STUDIO_SYNC",session,sampleId:explorer.selectedSampleId||null,referenceId:explorer.selectedReferenceId||null},"*");}return result;};
+    const api={VERSION,open:(opts={})=>openStudio(explorer,opts),button};
+    explorer.treeStudio=api;return api;
+  }
+
+  window.addEventListener?.("message", event => {
+    const m=event.data||{};
+    if(m.type!=="WINGS_TREE_STUDIO_SELECT"||!sessions.has(m.session))return;
+    const entry=sessions.get(m.session), e=entry.explorer;
+    if(m.clear){e.selectedSampleId=null;e.selectedReferenceId=null;}
+    else if(m.sampleId&&e.sampleById?.has(m.sampleId)){e.selectedSampleId=m.sampleId;e.selectedReferenceId=null;}
+    else if(m.referenceId&&e.referenceById?.has(m.referenceId)){e.selectedReferenceId=m.referenceId;e.selectedSampleId=null;}
+    else return;
+    e.hoverSampleId=null;e.updateSelection();
+  });
+
+  globalThis.WINGS_TREE_STUDIO={VERSION,open:openStudio,mountExplorer,_test:{cloneSourceTree,annotateTree,graphFromTree,midpointRoot,outgroupRoot,leafKey,allLeaves,sortTree,treeToNewick,layoutRectangular,layoutRadial,leafInfo,colorContext,descendantConsensus,genotypeText,normalizeUSState,filterTraitValue,matchesTraitFilter,descendantHasFilterMatch,wheelZoomFactor,zoomViewBoxToPoint,pointInPolygon,lassoPath,zoomViewBoxToPoints}};
+})();
+/* WINGS_TREE_STUDIO_JS_END */
+/* WINGS_EXPLORER_TABS_JS_BEGIN */
+(() => {
+  "use strict";
+
+  const VERSION = "0.1.2";
+
+  const make = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  const TAB_ORDER = ["overview", "genome", "ecology", "outbreak"];
+  const TAB_LABELS = {
+    overview: "Overview",
+    genome: "Genome",
+    ecology: "Ecology",
+    outbreak: "Outbreak context",
+  };
+
+  function mount(explorer) {
+    if (!explorer || !explorer.root) throw new Error("Explorer instance is required.");
+    if (explorer.explorerTabs) return explorer.explorerTabs;
+
+    const root = explorer.root;
+    const shell = root.querySelector(".wse-shell");
+    if (!shell) throw new Error("WINGS Explorer shell not found.");
+
+    const timeline = shell.querySelector(".wse-timeline-panel");
+    const mainGrid = shell.querySelector(".wse-main-grid");
+    const braid = shell.querySelector(".wbc-embedded");
+    const genome = shell.querySelector(".wse-genome-panel");
+    const genomeFooter = shell.querySelector(".wse-footer-note");
+    const ecology = shell.querySelector(".wse-ecology-panel");
+    const outbreak = shell.querySelector(".wse-outbreak-panel");
+
+    if (!timeline || !mainGrid || !genome || !ecology) {
+      throw new Error("Expected Explorer panels were not found; upstream layout may have changed.");
+    }
+
+    shell.classList.add("wse-tabs-mounted");
+
+    const app = make("section", "wse-app-shell");
+    app.setAttribute("aria-label", "WINGS Explorer views");
+
+    const toolbar = make("div", "wse-app-toolbar");
+    const sampleLabel = make("label", "wse-app-control");
+    sampleLabel.append(make("span", "wse-app-control-label", "Sample"));
+    const sampleSelect = make("select", "wse-app-sample");
+    sampleSelect.setAttribute("aria-label", "Selected WINGS sample");
+    sampleSelect.append(new Option("Select a sample…", ""));
+    for (const sample of explorer.samples || []) {
+      sampleSelect.append(new Option(sample.sample_id, sample.sample_id));
+    }
+    sampleLabel.append(sampleSelect);
+
+    const hostLabel = make("label", "wse-app-control");
+    hostLabel.append(make("span", "wse-app-control-label", "Host"));
+    const hostSelect = make("select", "wse-app-host");
+    hostSelect.setAttribute("aria-label", "Host filter");
+    hostSelect.append(new Option("All hosts", "ALL"));
+    for (const host of explorer.hosts || []) hostSelect.append(new Option(host, host));
+    hostLabel.append(hostSelect);
+
+    const clearButton = make("button", "wse-app-clear", "Clear selection");
+    clearButton.type = "button";
+
+    const context = make("div", "wse-app-context", "No sample selected");
+    context.setAttribute("aria-live", "polite");
+
+    toolbar.append(sampleLabel, hostLabel, clearButton, context);
+
+    const nav = make("div", "wse-app-tabs");
+    nav.setAttribute("role", "tablist");
+    nav.setAttribute("aria-label", "Surveillance Explorer views");
+
+    const views = make("div", "wse-app-views");
+    const panels = {};
+    const buttons = {};
+
+    TAB_ORDER.forEach((name, index) => {
+      const button = make("button", "wse-app-tab", TAB_LABELS[name]);
+      button.type = "button";
+      button.id = `wse-tab-${name}`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", `wse-view-${name}`);
+      button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+      button.tabIndex = index === 0 ? 0 : -1;
+      button.dataset.tab = name;
+      nav.append(button);
+      buttons[name] = button;
+
+      const panel = make("section", "wse-app-view");
+      panel.id = `wse-view-${name}`;
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", button.id);
+      panel.hidden = index !== 0;
+      views.append(panel);
+      panels[name] = panel;
+    });
+
+    panels.overview.append(timeline, mainGrid);
+
+    const shared = make("div", "wse-app-shared");
+    shared.hidden = true;
+    if (braid) shared.append(braid);
+
+    const ecologyActions = make("div", "wse-ecology-clock-actions");
+    const loadPhenology = make("button", "wse-ecology-clock-action", explorer.payload?.ecological_clock ? "Override phenology" : "Load phenology");
+    loadPhenology.type = "button";
+    const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
+    exportEvidence.type = "button";
+    ecologyActions.append(loadPhenology, exportEvidence);
+    shared.prepend(ecologyActions);
+
+    const treeDetails = make("details", "wse-genome-details");
+    const treeSummary = make("summary", "wse-genome-details-summary", "Individual segment trees and QC evidence");
+    treeDetails.append(treeSummary, genome);
+    panels.genome.append(treeDetails);
+    if (genomeFooter) panels.genome.append(genomeFooter);
+
+    panels.ecology.append(ecology);
+
+    if (outbreak) {
+      panels.outbreak.append(outbreak);
+    } else {
+      panels.outbreak.append(make("p", "wse-app-empty", "No outbreak-context panel is available for this run."));
+    }
+
+    app.append(toolbar, nav, shared, views);
+    shell.append(app);
+
+    loadPhenology.addEventListener("click", () => {
+      braid?.querySelector(".wbc-import-phenology")?.click();
+    });
+    exportEvidence.addEventListener("click", () => {
+      braid?.querySelector(".wbc-export")?.click();
+    });
+
+    const duplicateSample = genome.querySelector(".wse-sample-select")?.closest("label");
+    if (duplicateSample) duplicateSample.classList.add("wse-duplicate-sample-control");
+
+    let active = "overview";
+
+    // Tree Studio is mounted immediately after Explorer Tabs. Hoist its launcher
+    // into the shared Genome/Ecology region so it remains visible above the
+    // Genome Braid instead of falling below the long shared component.
+    const placeTreeStudio = () => {
+      const launch = root.querySelector(".wse-tree-studio-launch");
+      if (!launch) return;
+      if (launch.parentElement !== shared) shared.prepend(launch);
+      launch.hidden = active !== "genome";
+    };
+
+    const activate = (name, focus = false) => {
+      if (!TAB_ORDER.includes(name)) return;
+      active = name;
+      for (const key of TAB_ORDER) {
+        const selected = key === name;
+        buttons[key].setAttribute("aria-selected", String(selected));
+        buttons[key].tabIndex = selected ? 0 : -1;
+        panels[key].hidden = !selected;
+      }
+      if (focus) buttons[name].focus();
+      if (name === "overview") {
+        requestAnimationFrame(() => {
+          explorer.renderMap?.();
+          explorer.updateEmphasis?.();
+        });
+      }
+      const showShared = Boolean(braid) && (name === "genome" || name === "ecology");
+      shared.hidden = !showShared;
+      if (braid) braid.dataset.wseLens = showShared ? name : "";
+      placeTreeStudio();
+      if (showShared) {
+        requestAnimationFrame(() => explorer.braidClock?.refresh?.());
+      }
+    };
+
+    for (const [name, button] of Object.entries(buttons)) {
+      button.addEventListener("click", () => activate(name));
+      button.addEventListener("keydown", (event) => {
+        const index = TAB_ORDER.indexOf(name);
+        let next = null;
+        if (event.key === "ArrowRight") next = TAB_ORDER[(index + 1) % TAB_ORDER.length];
+        if (event.key === "ArrowLeft") next = TAB_ORDER[(index - 1 + TAB_ORDER.length) % TAB_ORDER.length];
+        if (event.key === "Home") next = TAB_ORDER[0];
+        if (event.key === "End") next = TAB_ORDER[TAB_ORDER.length - 1];
+        if (next) {
+          event.preventDefault();
+          activate(next, true);
+        }
+      });
+    }
+
+    sampleSelect.addEventListener("change", () => {
+      explorer.selectedReferenceId = null;
+      explorer.selectedSampleId = explorer.sampleById?.has(sampleSelect.value) ? sampleSelect.value : null;
+      explorer.hoverSampleId = null;
+      explorer.updateSelection();
+    });
+
+    hostSelect.addEventListener("change", () => {
+      explorer.hostFilter = hostSelect.value || "ALL";
+      explorer.renderTimeline?.();
+      explorer.renderMap?.();
+      explorer.renderLegend?.();
+      explorer.renderTrees?.();
+      explorer.updateSelection();
+    });
+
+    clearButton.addEventListener("click", () => {
+      explorer.selectedSampleId = null;
+      explorer.selectedReferenceId = null;
+      explorer.hoverSampleId = null;
+      explorer.updateSelection();
+    });
+
+    const sync = () => {
+      sampleSelect.value = explorer.selectedSampleId || "";
+      hostSelect.value = explorer.hostFilter || "ALL";
+      clearButton.disabled = !explorer.selectedSampleId && !explorer.selectedReferenceId;
+      const sample = explorer.selectedSampleId ? explorer.sampleById?.get(explorer.selectedSampleId) : null;
+      if (sample) {
+        const parts = [sample.sample_id, sample.host, sample.collection_date, sample.genotype?.call].filter(Boolean);
+        context.textContent = parts.join(" · ");
+      } else if (explorer.selectedReferenceId) {
+        context.textContent = `Public reference: ${explorer.selectedReferenceId}`;
+      } else {
+        context.textContent = "No sample selected";
+      }
+    };
+
+    const previousUpdateSelection = explorer.updateSelection.bind(explorer);
+    explorer.updateSelection = function(...args) {
+      const result = previousUpdateSelection(...args);
+      sync();
+      return result;
+    };
+
+    root.addEventListener("click", (event) => {
+      const recordsAction = event.target.closest?.('[data-state-action="records"]');
+      if (recordsAction) setTimeout(() => activate("outbreak"), 0);
+    }, true);
+
+    treeDetails.addEventListener("toggle", () => {
+      if (treeDetails.open) requestAnimationFrame(() => explorer.renderTrees?.());
+    });
+
+    sync();
+    activate("overview");
+    // Tree Studio mounts after this function returns; catch that insertion once.
+    setTimeout(placeTreeStudio, 0);
+
+    const api = { VERSION, activate, get active() { return active; }, buttons, panels };
+    explorer.explorerTabs = api;
+    return api;
+  }
+
+  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount };
+})();
+/* WINGS_EXPLORER_TABS_JS_END */
 /* WINGS_BRAID_CLOCK_JS_BEGIN */
-/* WINGS Genome Braid + Ecological Clock v0.1.0. Offline, dependency-free. */
+/* WINGS Genome Braid + Ecological Clock v0.2.3. Offline, dependency-free. */
 (function (root, factory) {
   'use strict';
   const api = factory();
@@ -7,7 +999,7 @@
   root.WINGS_BRAID_CLOCK = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.4';
   const SEGMENTS = ['PB2', 'PB1', 'PA', 'HA', 'NP', 'NA', 'MP', 'NS'];
   const DAY = 86400000;
   const COLORS = ['#8c1d40', '#007f84', '#80601d', '#496ea0', '#7b5a8f', '#417b62', '#b05730'];
@@ -196,21 +1188,50 @@
     if (peaks.some((b,i)=>i>0 && b.s !== peaks[i-1].e+1)) return {status:'AMBIGUOUS_PEAK'};
     return {status:'AVAILABLE', start:peaks[0].s, end:peaks.at(-1).e, label:'Peak supplied bin', basis:'Maximum of supplied nonmissing bins; interval is temporal resolution, not a confidence interval.', method:'maximum_bin'};
   }
+  function shiftDayYear(day, delta) {
+    const d=new Date(Math.round(day)*DAY), y=d.getUTCFullYear()+delta, m=d.getUTCMonth(), dom=d.getUTCDate();
+    let shifted=Date.UTC(y,m,dom)/DAY;
+    const chk=new Date(Math.round(shifted)*DAY);
+    if(chk.getUTCMonth()!==m) shifted=Date.UTC(y,m+1,0)/DAY; // Feb 29 -> Feb 28 in non-leap years.
+    return shifted;
+  }
+  function nearestAnnualAnchor(date, anchor, baselineKind) {
+    if (baselineKind !== 'reference_season' || anchor.status !== 'AVAILABLE') return anchor;
+    const target=mid(date);
+    const candidates=[-1,0,1].map(delta=>({...anchor,start:shiftDayYear(anchor.start,delta),end:shiftDayYear(anchor.end,delta),year_shift:delta}));
+    return candidates.reduce((best,candidate)=>Math.abs(mid(candidate)-target)<Math.abs(mid(best)-target)?candidate:best,candidates[0]);
+  }
+  function phenologyStatusForSample(sample, phenology) {
+    const sid=keyText(sample.sample_id || sample.sample);
+    if (!sid || !Array.isArray(phenology?.sample_status)) return null;
+    return phenology.sample_status.find(r=>keyText(r.sample_id)===sid) || null;
+  }
   function clockRecord(sample, phenology) {
     const date=dateInterval(sample.collection_date);
     if (!date) return {status:'NO_COLLECTION_DATE'};
     if (!phenology) return {status:'NO_PHENOLOGY'};
-    const exact=phenology.profiles.filter(p => keyText(p.scope.host) === keyText(sample.host) && normalizeCountry(p.scope.country) === normalizeCountry(sample.country) && keyText(p.scope.state) === keyText(sample.state) && date.start >= p.start && date.end <= p.end);
-    if (!exact.length) return {status:'NO_MATCHING_PROFILE', date};
+    const sid=keyText(sample.sample_id || sample.sample);
+    const direct=phenology.profiles.filter(p => text(p.sample_id) && keyText(p.sample_id)===sid && date.start >= p.start && date.end <= p.end);
+    if (direct.length > 1) return {status:'AMBIGUOUS_PROFILE', date};
+    let exact=direct;
+    if (!exact.length) {
+      exact=phenology.profiles.filter(p => !text(p.sample_id) && keyText(p.scope.host) === keyText(sample.host) && normalizeCountry(p.scope.country) === normalizeCountry(sample.country) && keyText(p.scope.state) === keyText(sample.state) && date.start >= p.start && date.end <= p.end);
+    }
+    if (!exact.length) {
+      const supplied=phenologyStatusForSample(sample,phenology);
+      return supplied ? {status:supplied.status||'NO_MATCHING_PROFILE', reason:supplied.reason||'', date, supplied} : {status:'NO_MATCHING_PROFILE', date};
+    }
     if (exact.length !== 1) return {status:'AMBIGUOUS_PROFILE', date};
-    const profile=exact[0], anchor=profile.anchor;
+    const profile=exact[0], anchor=nearestAnnualAnchor(date,profile.anchor,profile.baseline_kind);
     if (anchor.status !== 'AVAILABLE') return {status:anchor.status, date, profile};
     const lower=date.start-anchor.end, upper=date.end-anchor.start;
     return {status:'AVAILABLE', date, profile, anchor, lower, upper, midpoint:(lower+upper)/2};
   }
   function lagText(record) {
     if (record.status !== 'AVAILABLE') return record.status.toLowerCase().replace(/_/g,' ');
-    return record.lower === record.upper ? `${signed(record.lower)} days` : `${signed(record.lower)} to ${signed(record.upper)} days`;
+    if (record.upper < 0) { const near=Math.abs(record.upper), far=Math.abs(record.lower); return near===far ? `${near} days before expected peak` : `${near}–${far} days before expected peak`; }
+    if (record.lower > 0) { const near=Math.abs(record.lower), far=Math.abs(record.upper); return near===far ? `${near} days after expected peak` : `${near}–${far} days after expected peak`; }
+    return 'Overlaps expected peak interval';
   }
   function svg(name, attrs, contents) {
     const n=document.createElementNS('http://www.w3.org/2000/svg',name);
@@ -228,7 +1249,7 @@
   class Dashboard {
     constructor(root, payload, options={}) {
       this.root=root; this.options=options; this.payload=payload; this.m=model(payload);
-      this.selected=null; this.selectedReference=null; this.host='ALL'; this.includeReferences=false; this.mode='calendar'; this.k=3;
+      this.selected=null; this.selectedReference=null; this.host='ALL'; this.includeReferences=false; this.mode='calendar'; this.clockView='selected'; this.k=3;
       this.phenology=payload.ecological_clock ? validatePhenology(payload.ecological_clock) : null;
       this.cache=new Map(); this.notice='';
       this.build(); this.refresh();
@@ -239,11 +1260,11 @@
       this.root.innerHTML=`
         <header class="wbc-masthead"><div><span class="wbc-overline">WINGS / OBSERVATORY</span><h2>Eight segments. One ecological story.</h2><p>Follow the same record through the genome. Read its collection date against the bird's seasonal clock.</p></div><span class="wbc-release">RESEARCH PREVIEW <b>v${VERSION}</b></span></header>
         <div class="wbc-banner" role="status"></div>
-        <div class="wbc-tools"><label>Focus sample<select class="wbc-sample" aria-label="Braid focus sample"></select></label><label>Host<select class="wbc-host" aria-label="Braid host filter"></select></label><button type="button" class="wbc-clear">Clear focus</button><div class="wbc-file-tools"><label class="wbc-file-button" tabindex="0">Load phenology<input class="wbc-import-phenology" type="file" accept=".json,application/json"></label><button type="button" class="wbc-export">Export evidence</button></div></div>
+        <div class="wbc-tools"><label>Focus sample<select class="wbc-sample" aria-label="Braid focus sample"></select></label><label>Host<select class="wbc-host" aria-label="Braid host filter"></select></label><button type="button" class="wbc-clear">Clear focus</button><div class="wbc-file-tools"><label class="wbc-file-button" tabindex="0">Load / override phenology<input class="wbc-import-phenology" type="file" accept=".json,application/json"></label><button type="button" class="wbc-export">Export evidence</button></div></div>
         <div class="wbc-stats"></div>
         <div class="wbc-workbench"><div class="wbc-card wbc-braid-card"><div class="wbc-card-title"><div><span class="wbc-kicker">01 / GENOME BRAID</span><h3>One identity, eight views</h3></div><label class="wbc-checkbox"><input type="checkbox" class="wbc-references"> Show public links</label></div><div class="wbc-braid-scroll"><div class="wbc-braid"></div></div><div class="wbc-braid-caption"></div><details class="wbc-method"><summary>What the braid does and does not mean</summary><p>Vertical position follows tip order in each supplied tree, restricted to displayed identities. Rotating a tree can change crossings without changing its relationships. Crossings are not a reassortment statistic or a route of transmission. Lines only join adjacent lanes with one unambiguous tip; gaps remain gaps.</p><p>Public records are joined only by supplied reference_id. A metadata-derived linkage remains a candidate, not verified common-specimen identity. Public groups do not enter the sample-neighborhood metric.</p></details></div>
         <div class="wbc-card wbc-focus"><span class="wbc-kicker">EVIDENCE / SELECT A RECORD</span><div class="wbc-evidence" aria-live="polite"></div></div></div>
-        <section class="wbc-card wbc-clock-card"><div class="wbc-card-title"><div><span class="wbc-kicker">02 / ECOLOGICAL CLOCK</span><h3>Same observation. A different time axis.</h3></div><div class="wbc-switch" role="group" aria-label="Clock time axis"><button type="button" data-wbc-mode="calendar" aria-pressed="true">Calendar</button><button type="button" data-wbc-mode="ecological" aria-pressed="false">Ecological time</button></div></div><p class="wbc-clock-subtitle"></p><div class="wbc-clock-scroll"><div class="wbc-clock"></div></div><div class="wbc-clock-caption"></div><details class="wbc-method"><summary>Phenology matching, precision, and provenance</summary><p>The clock uses an exact supplied host, country, state, and season match. No species is inferred from a host code. Missing or ambiguous profiles remain unavailable. Collection date is not infection date. Expected seasonal profiles are labeled separately from year-specific estimates.</p><p>Offset interval = [collection start - anchor latest, collection end - anchor earliest]. An interval from a weekly peak bin describes temporal resolution, not a statistical confidence interval. Empty bins are not zero; curves are never extended through missing observations.</p><div class="wbc-provenance"></div></details></section>
+        <section class="wbc-card wbc-clock-card"><div class="wbc-card-title"><div><span class="wbc-kicker">02 / ECOLOGICAL CLOCK</span><h3>Same observation. A different time axis.</h3></div><div><div class="wbc-switch" role="group" aria-label="Clock time axis"><button type="button" data-wbc-mode="calendar" aria-pressed="true">Calendar</button><button type="button" data-wbc-mode="ecological" aria-pressed="false">Ecological time</button></div><div class="wbc-switch" role="group" aria-label="Clock records" style="margin-top:.45rem"><button type="button" data-wbc-clock-view="selected" aria-pressed="true">Selected sample</button><button type="button" data-wbc-clock-view="compare" aria-pressed="false">Compare samples</button></div></div></div><p class="wbc-clock-subtitle"></p><div class="wbc-clock-scroll"><div class="wbc-clock"></div></div><div class="wbc-clock-caption"></div><details class="wbc-method"><summary>Phenology matching, precision, and provenance</summary><p>The clock uses an exact supplied host, country, state, and season match. No species is inferred from a host code. Missing or ambiguous profiles remain unavailable. Collection date is not infection date. Expected seasonal profiles are labeled separately from year-specific estimates.</p><p>Offset interval = [collection start - anchor latest, collection end - anchor earliest]. An interval from a weekly peak bin describes temporal resolution, not a statistical confidence interval. Empty bins are not zero; curves are never extended through missing observations.</p><div class="wbc-provenance"></div></details></section>
         <details class="wbc-card wbc-audit"><summary>Inspect the evidence table</summary><div class="wbc-evidence-table"></div></details>
         <footer class="wbc-footer">Exploratory description, not a risk score. No transmission, reassortment, infection timing, or causal climate effect is inferred. Files stay in this browser; no data are uploaded.</footer>`;
       const q=s=>this.root.querySelector(s);
@@ -254,6 +1275,7 @@
       q('.wbc-clear').addEventListener('click',()=>this.choose(null,false));
       q('.wbc-references').addEventListener('change',e=>{this.includeReferences=e.target.checked;this.refresh();});
       this.root.querySelectorAll('[data-wbc-mode]').forEach(b=>b.addEventListener('click',()=>{this.mode=b.dataset.wbcMode;this.renderClock();}));
+      this.root.querySelectorAll('[data-wbc-clock-view]').forEach(b=>b.addEventListener('click',()=>{this.clockView=b.dataset.wbcClockView;this.renderClock();}));
       q('.wbc-import-phenology').addEventListener('change',async e=>{
         const f=e.target.files[0]; if (!f) return;
         try {if(f.size>20000000) throw new Error('Phenology file exceeds the 20 MB preview limit.');this.phenology=validatePhenology(JSON.parse(await f.text()));this.notice=`Loaded ${f.name} locally. This import is session-only in an embedded Explorer.`;this.refresh();}
@@ -289,7 +1311,7 @@
       this.root.querySelector('.wbc-host').value=this.host;
       const mapped=this.m.samples.filter(e=>clockRecord(e.raw,this.phenology).status==='AVAILABLE').length;
       const pairInfo=this.selected ? this.profile(this.selected):null;
-      this.root.querySelector('.wbc-stats').innerHTML=[['LOCAL SAMPLES',this.m.samples.length,'Identities, not deduplicated specimens'],['SEGMENT TREES',`${Object.keys(this.m.bySegment).length} / 8`,'Supplied tree geometry'],['PHENOLOGY MATCHES',`${mapped} / ${this.m.samples.length}`,'Exact host / place / season'],['SHARED-NEIGHBOR OVERLAP',pairInfo?.mean!==null&&pairInfo ? pct(pairInfo.mean):'Select a sample',pairInfo ? `${pairInfo.available} / 28 available comparisons`:'Descriptive; local sample cohort only']].map(([a,b,c])=>`<div><span>${esc(a)}</span><strong>${esc(b)}</strong><small>${esc(c)}</small></div>`).join('');
+      this.root.querySelector('.wbc-stats').innerHTML=[['LOCAL SAMPLES',this.m.samples.length,'Identities, not deduplicated specimens'],['SEGMENT TREES',`${Object.keys(this.m.bySegment).length} / 8`,'Supplied tree geometry'],['PHENOLOGY MATCHES',`${mapped} / ${this.m.samples.length}`,'Point or regional seasonal profile'],['SHARED-NEIGHBOR OVERLAP',pairInfo?.mean!==null&&pairInfo ? pct(pairInfo.mean):'Select a sample',pairInfo ? `${pairInfo.available} / 28 available comparisons`:'Descriptive; local sample cohort only']].map(([a,b,c])=>`<div><span>${esc(a)}</span><strong>${esc(b)}</strong><small>${esc(c)}</small></div>`).join('');
       this.renderBraid();this.renderEvidence();this.renderClock();this.renderTable();
     }
     renderBraid() {
@@ -347,36 +1369,60 @@
     }
     renderClock() {
       this.root.querySelectorAll('[data-wbc-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.wbcMode===this.mode)));
+      this.root.querySelectorAll('[data-wbc-clock-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.wbcClockView===this.clockView)));
       const target=this.root.querySelector('.wbc-clock');target.replaceChildren();
-      const visible=this.visible(),records=visible.map(e=>({entity:e,c:clockRecord(e.raw,this.phenology)}));
-      if(this.selected&&!visible.some(e=>e.key===this.selected)){const e=this.m.entities.get(this.selected);if(e)records.push({entity:e,c:clockRecord(e.raw,this.phenology)});}
+      const subtitle=this.root.querySelector('.wbc-clock-subtitle'),caption=this.root.querySelector('.wbc-clock-caption');
+      const visible=this.visible(),allRecords=visible.map(e=>({entity:e,c:clockRecord(e.raw,this.phenology)}));
+      if(this.selected&&!visible.some(e=>e.key===this.selected)){const e=this.m.entities.get(this.selected);if(e)allRecords.push({entity:e,c:clockRecord(e.raw,this.phenology)});}
+      let records=allRecords;
+      if(this.clockView==='selected'){
+        if(!this.selected||this.selectedReference){
+          subtitle.textContent='Select a WINGS sample to place its collection date on the host seasonal curve.';
+          target.innerHTML='<div class="wbc-no-data"><h4>Select a sample</h4><p>The default clock shows one WINGS sample at a time. Use Compare samples when you want to inspect multiple profiles together.</p></div>';
+          caption.textContent='No sample is currently selected. Nothing is inferred from the cohort until you choose Compare samples.';
+          this.renderProvenance([]);return;
+        }
+        const selectedEntity=this.m.entities.get(this.selected);
+        records=selectedEntity?[{entity:selectedEntity,c:clockRecord(selectedEntity.raw,this.phenology)}]:[];
+      }
       const available=records.filter(r=>r.c.status==='AVAILABLE');
       const profiles=[...new Map(available.map(r=>[r.c.profile.profile_id,r.c.profile])).values()];
-      const subtitle=this.root.querySelector('.wbc-clock-subtitle'),caption=this.root.querySelector('.wbc-clock-caption');
       if(!profiles.length){
-        subtitle.textContent=this.mode==='calendar'?'Collection dates remain visible without a seasonal anchor.':'Ecological time is unavailable until a matching phenology profile is supplied.';
-        if(this.mode==='calendar')this.renderCalendarOnly(target,records);
-        else target.innerHTML='<div class="wbc-no-data"><h4>No defensible seasonal anchor yet</h4><p>Load a documented host-and-region phenology JSON. Existing eBird window aggregates, weather values, and aggregate radar counts are not silently converted into species arrival dates.</p></div>';
-        caption.textContent=`${records.length} sample records; 0 assigned an ecological offset. Missing information is not zero.`;
+        const r=records[0];
+        const detail=r?.c?.reason||lagText(r?.c||{status:'NO_MATCHING_PROFILE'});
+        subtitle.textContent=this.mode==='calendar'?(this.clockView==='selected'&&r?`${r.entity.id} · ${r.entity.raw.collection_date||'date unavailable'} · phenology unavailable (${detail}).`:'Collection dates remain visible without a seasonal anchor.'):'Ecological time is unavailable until a matching phenology profile is supplied.';
+        if(this.mode==='calendar'&&records.length)this.renderCalendarOnly(target,records);
+        else target.innerHTML='<div class="wbc-no-data"><h4>No defensible seasonal anchor yet</h4><p>A matching Status & Trends profile is required. Missing geography or model coverage remains explicitly unavailable rather than being converted into a synthetic point estimate.</p></div>';
+        caption.textContent=`${records.length} sample record${records.length===1?'':'s'}; 0 assigned an ecological offset. Missing information is not zero.`;
         this.renderProvenance([]);return;
       }
-      subtitle.textContent=this.mode==='calendar'?'Collection dates and supplied seasonal profiles on the calendar.':'Each profile is centered on its own seasonal anchor. Sample intervals retain collection-date and anchor precision.';
-      let shown=profiles.slice(0,8);
+      const spatialText=p=>p.spatial?.method==='POINT'?'point-specific 27-km cell':p.spatial?.method==='REGIONAL_STATE_MEAN'?'state regional mean':'supplied spatial profile';
+      const versionText=p=>text(p.status_version_year)||(text(p.provenance?.source).match(/(?:Version\s*)?(\d{4})/)||[])[1]||'version not recorded';
+      if(this.clockView==='selected'){
+        const r=available[0],p=r.profile||r.c.profile;
+        subtitle.textContent=`${r.entity.id} · collection ${r.entity.raw.collection_date} · Status week ${p.collection?.status_week??'not available'} · ${spatialText(p)}.`;
+      } else {
+        subtitle.textContent=this.mode==='calendar'?'Compare collection dates against expected seasonal profiles.':'Compare samples after centering each profile on its own expected seasonal anchor.';
+      }
+      let shown=this.clockView==='selected'?profiles.slice(0,1):profiles.slice(0,8);
       const focus=records.find(r=>r.entity.key===this.selected)?.c.profile;
-      if(focus&&!shown.includes(focus)){shown=shown.slice(0,7).concat(focus);}
-      const W=1240,left=225,right=40,rowH=106,top=36,H=top+shown.length*rowH+48;
+      if(this.clockView==='compare'&&focus&&!shown.includes(focus)){shown=shown.slice(0,7).concat(focus);}
+      const W=1340,left=310,right=40,rowH=106,top=36,H=top+shown.length*rowH+48;
       const ranges=shown.flatMap(p=>this.mode==='calendar'?[p.start,p.end]:[p.start-mid(p.anchor),p.end-mid(p.anchor)]);
       let low=Math.min(...ranges),high=Math.max(...ranges);if(high===low)high++;
       const x=n=>left+(n-low)/(high-low)*(W-left-right);
-      const el=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'group','aria-label':`Ecological Clock, ${this.mode} axis`});
+      const el=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'group','aria-label':`Ecological Clock, ${this.mode} axis, ${this.clockView} view`});
       for(let i=0;i<=5;i++){const v=low+(high-low)*i/5;const label=this.mode==='calendar'?isoDay(v):`${signed(Math.round(v))} d`;el.append(svg('line',{x1:x(v),x2:x(v),y1:top-10,y2:H-35,stroke:'#e4e8eb'}),svg('text',{x:x(v),y:H-12,'text-anchor':'middle',class:'wbc-tick'},label));}
       shown.forEach((p,i)=>{
         const y=top+i*rowH,base=y+66;
         const anchorMid=mid(p.anchor),off=this.mode==='calendar'?0:anchorMid;
         const peakX=x(p.anchor.start-off),peakEnd=x(p.anchor.end-off);
         el.append(svg('rect',{x:peakX,y:y-7,width:Math.max(2,peakEnd-peakX),height:80,fill:'#efddb1',opacity:.55}));
-        el.append(svg('text',{x:14,y:y+14,class:'wbc-row-title'},p.scope.host),svg('text',{x:14,y:y+33,class:'wbc-small'},`${p.scope.state} / ${p.baseline_kind==='reference_season'?'expected season':'year-specific'}`));
-        el.append(svg('text',{x:14,y:y+51,class:'wbc-small'},`${p.season_start.slice(0,4)} / ${p.measure}`));
+        const common=text(p.species?.common_name)||p.scope.host;
+        const place=text(p.spatial?.state_name)||p.scope.state;
+        const basis=p.spatial?.method==='POINT'?`${place} · point-specific expected season`:p.spatial?.method==='REGIONAL_STATE_MEAN'?`${place} · state regional mean`:`${place} · expected season`;
+        el.append(svg('text',{x:14,y:y+14,class:'wbc-row-title'},common),svg('text',{x:14,y:y+33,class:'wbc-small'},`${p.scope.host} · ${basis}`));
+        el.append(svg('text',{x:14,y:y+51,class:'wbc-small'},`eBird S&T ${versionText(p)} · median weekly relative abundance`));
         const max=Math.max(1e-10,...p.bins.filter(b=>b.value!==null).map(b=>b.value));
         for(const b of p.bins){if(b.value===null)continue;const height=b.value/max*45;const rect=svg('rect',{x:x(b.s-off),y:base-height,width:Math.max(1,x(b.e+1-off)-x(b.s-off)-1),height,fill:'#70b0b2',opacity:.48});rect.append(svg('title',{},`${b.start} to ${b.end}: ${b.value} ${p.unit}`));el.append(rect);}
         el.append(svg('line',{x1:left,x2:W-right,y1:base,y2:base,stroke:'#a9b4bd'}));
@@ -387,12 +1433,17 @@
           const mark=svg('g',{'data-wbc-clock-sample':r.entity.id,class:active?'wbc-clock-active':''});
           mark.append(svg('line',{x1:x(s),x2:x(e),y1:yy,y2:yy,stroke:this.color(r.entity),'stroke-width':3}));
           mark.append(svg('circle',{cx:x((s+e)/2),cy:yy,r:active?7:4.5,fill:this.color(r.entity),stroke:active?'#f4c652':'#fff','stroke-width':active?3:1}));
-          buttonNode(mark,`${r.entity.id}: ${r.entity.raw.collection_date}; ${lagText(c)} relative to ${c.anchor.label}`,()=>this.choose(r.entity.key));el.append(mark);
+          buttonNode(mark,`${r.entity.id}: ${r.entity.raw.collection_date}; Status week ${p.collection?.status_week??'not available'}; ${spatialText(p)}; ${lagText(c)} relative to ${c.anchor.label}`,()=>this.choose(r.entity.key));el.append(mark);
         });
       });
       if(this.mode==='ecological'&&low<=0&&high>=0)el.append(svg('line',{x1:x(0),x2:x(0),y1:15,y2:H-35,stroke:'#8f691e','stroke-dasharray':'4 5'}),svg('text',{x:x(0),y:12,'text-anchor':'middle',class:'wbc-anchor-label'},'Seasonal anchor'));
       target.append(el);
-      caption.textContent=`${available.length} / ${records.length} visible sample records have an exact profile match. ${records.length-available.length} remain unavailable in ecological time. ${profiles.length>8?'Showing at most 8 profile rows plus selected focus. ':''}Bars are scaled within each profile; heights are not comparable abundance between hosts. Gold bands show anchor intervals, not infection windows.`;
+      if(this.clockView==='selected'){
+        const p=shown[0];
+        caption.textContent=`Selected-sample view. ${spatialText(p)}. Bars are scaled within this profile. Gold band is the WINGS-derived expected relative-abundance peak interval, not an infection window or confidence interval.`;
+      } else {
+        caption.textContent=`${available.length} / ${records.length} visible sample records have an exact profile match. ${records.length-available.length} remain unavailable in ecological time. ${profiles.length>8?'Showing at most 8 profile rows plus selected focus. ':''}Bars are scaled within each profile; heights are not comparable abundance between hosts. Gold bands show anchor intervals, not infection windows.`;
+      }
       this.renderProvenance(shown);
     }
     renderCalendarOnly(target,records) {
@@ -1965,6 +3016,12 @@
       // WINGS_BRAID_CLOCK_HOOK_BEGIN
       try {
         globalThis.WINGS_BRAID_CLOCK.mountExplorer(explorer);
+        // WINGS_EXPLORER_TABS_HOOK_BEGIN
+        globalThis.WINGS_EXPLORER_TABS.mount(explorer);
+        // WINGS_EXPLORER_TABS_HOOK_END
+        // WINGS_TREE_STUDIO_HOOK_BEGIN
+        globalThis.WINGS_TREE_STUDIO.mountExplorer(explorer);
+        // WINGS_TREE_STUDIO_HOOK_END
       } catch (error) {
         const notice = document.createElement("p");
         notice.className = "wbc-preview-error";

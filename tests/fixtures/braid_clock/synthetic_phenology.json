@@ -1,0 +1,249 @@
+{
+  "schema_version": "wings.phenology.v1",
+  "synthetic": true,
+  "profiles": [
+    {
+      "profile_id": "synthetic-season-1",
+      "scope": {
+        "host": "Wetland guild A",
+        "state": "Example region",
+        "country": "Example country"
+      },
+      "season_start": "2025-09-01",
+      "season_end": "2025-11-23",
+      "baseline_kind": "reference_season",
+      "measure": "Synthetic seasonal index",
+      "unit": "illustrative units",
+      "bins": [
+        {
+          "start": "2025-09-01",
+          "end": "2025-09-07",
+          "value": 1
+        },
+        {
+          "start": "2025-09-08",
+          "end": "2025-09-14",
+          "value": 2
+        },
+        {
+          "start": "2025-09-15",
+          "end": "2025-09-21",
+          "value": 4
+        },
+        {
+          "start": "2025-09-22",
+          "end": "2025-09-28",
+          "value": 7
+        },
+        {
+          "start": "2025-09-29",
+          "end": "2025-10-05",
+          "value": 12
+        },
+        {
+          "start": "2025-10-06",
+          "end": "2025-10-12",
+          "value": 18
+        },
+        {
+          "start": "2025-10-13",
+          "end": "2025-10-19",
+          "value": 25
+        },
+        {
+          "start": "2025-10-20",
+          "end": "2025-10-26",
+          "value": 20
+        },
+        {
+          "start": "2025-10-27",
+          "end": "2025-11-02",
+          "value": 12
+        },
+        {
+          "start": "2025-11-03",
+          "end": "2025-11-09",
+          "value": 6
+        },
+        {
+          "start": "2025-11-10",
+          "end": "2025-11-16",
+          "value": 3
+        },
+        {
+          "start": "2025-11-17",
+          "end": "2025-11-23",
+          "value": 1
+        }
+      ],
+      "provenance": {
+        "source": "WINGS synthetic demonstration",
+        "citation": "Synthetic values for interface testing. Not eBird, BirdCast, ERA5, or observed biology.",
+        "retrieved_on": "2026-09-30",
+        "method": "Hand-built seasonal bins, with one intentional data gap."
+      }
+    },
+    {
+      "profile_id": "synthetic-season-2",
+      "scope": {
+        "host": "Coastal guild B",
+        "state": "Example region",
+        "country": "Example country"
+      },
+      "season_start": "2025-09-08",
+      "season_end": "2025-11-30",
+      "baseline_kind": "reference_season",
+      "measure": "Synthetic seasonal index",
+      "unit": "illustrative units",
+      "bins": [
+        {
+          "start": "2025-09-08",
+          "end": "2025-09-14",
+          "value": 2
+        },
+        {
+          "start": "2025-09-15",
+          "end": "2025-09-21",
+          "value": 3
+        },
+        {
+          "start": "2025-09-22",
+          "end": "2025-09-28",
+          "value": null
+        },
+        {
+          "start": "2025-09-29",
+          "end": "2025-10-05",
+          "value": 9
+        },
+        {
+          "start": "2025-10-06",
+          "end": "2025-10-12",
+          "value": 15
+        },
+        {
+          "start": "2025-10-13",
+          "end": "2025-10-19",
+          "value": 24
+        },
+        {
+          "start": "2025-10-20",
+          "end": "2025-10-26",
+          "value": 20
+        },
+        {
+          "start": "2025-10-27",
+          "end": "2025-11-02",
+          "value": 13
+        },
+        {
+          "start": "2025-11-03",
+          "end": "2025-11-09",
+          "value": 7
+        },
+        {
+          "start": "2025-11-10",
+          "end": "2025-11-16",
+          "value": 4
+        },
+        {
+          "start": "2025-11-17",
+          "end": "2025-11-23",
+          "value": 2
+        },
+        {
+          "start": "2025-11-24",
+          "end": "2025-11-30",
+          "value": 1
+        }
+      ],
+      "provenance": {
+        "source": "WINGS synthetic demonstration",
+        "citation": "Synthetic values for interface testing. Not eBird, BirdCast, ERA5, or observed biology.",
+        "retrieved_on": "2026-09-30",
+        "method": "Hand-built seasonal bins, with one intentional data gap."
+      }
+    },
+    {
+      "profile_id": "synthetic-season-3",
+      "scope": {
+        "host": "Resident guild C",
+        "state": "Example region",
+        "country": "Example country"
+      },
+      "season_start": "2025-09-15",
+      "season_end": "2025-12-07",
+      "baseline_kind": "reference_season",
+      "measure": "Synthetic seasonal index",
+      "unit": "illustrative units",
+      "bins": [
+        {
+          "start": "2025-09-15",
+          "end": "2025-09-21",
+          "value": 4
+        },
+        {
+          "start": "2025-09-22",
+          "end": "2025-09-28",
+          "value": 5
+        },
+        {
+          "start": "2025-09-29",
+          "end": "2025-10-05",
+          "value": 6
+        },
+        {
+          "start": "2025-10-06",
+          "end": "2025-10-12",
+          "value": 8
+        },
+        {
+          "start": "2025-10-13",
+          "end": "2025-10-19",
+          "value": 11
+        },
+        {
+          "start": "2025-10-20",
+          "end": "2025-10-26",
+          "value": 15
+        },
+        {
+          "start": "2025-10-27",
+          "end": "2025-11-02",
+          "value": 19
+        },
+        {
+          "start": "2025-11-03",
+          "end": "2025-11-09",
+          "value": 25
+        },
+        {
+          "start": "2025-11-10",
+          "end": "2025-11-16",
+          "value": 20
+        },
+        {
+          "start": "2025-11-17",
+          "end": "2025-11-23",
+          "value": 12
+        },
+        {
+          "start": "2025-11-24",
+          "end": "2025-11-30",
+          "value": 8
+        },
+        {
+          "start": "2025-12-01",
+          "end": "2025-12-07",
+          "value": 5
+        }
+      ],
+      "provenance": {
+        "source": "WINGS synthetic demonstration",
+        "citation": "Synthetic values for interface testing. Not eBird, BirdCast, ERA5, or observed biology.",
+        "retrieved_on": "2026-09-30",
+        "method": "Hand-built seasonal bins, with one intentional data gap."
+      }
+    }
+  ]
+}
