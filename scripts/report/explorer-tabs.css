@@ -216,3 +216,136 @@
 /* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_BEGIN */
 .wse-coverage{display:grid;gap:1rem;color:#263b43}.wse-coverage-head{display:flex;justify-content:space-between;align-items:start}.wse-coverage-head h3{margin:.1rem 0 0;font-size:1.45rem}.wse-coverage-kicker{font-size:.68rem;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:#007c83}.wse-coverage-note,.wse-coverage-caution,.wse-signal-interpretation{margin:0;color:#5f7178;line-height:1.5}.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}.wse-coverage-card{display:grid;gap:.2rem;padding:.85rem;border:1px solid #d7e0e1;border-radius:.6rem;background:#fbfdfd}.wse-coverage-card span{font-size:.7rem;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:#61747b}.wse-coverage-card strong{font-size:1.55rem;color:#263b43}.wse-coverage-card small{color:#6a7b81;line-height:1.35}.wse-coverage-section{display:grid;gap:.75rem;padding:1rem;border:1px solid #d8e0e1;border-radius:.7rem;background:#fff}.wse-coverage-section h4{margin:0;color:#30464e}.wse-coverage-empty{margin:0;padding:.8rem;background:#f5f8f8;border:1px dashed #bfd0d0;border-radius:.5rem;color:#5f7178}.wse-coverage-table{width:100%;border-collapse:collapse;font-size:.78rem}.wse-coverage-table th,.wse-coverage-table td{padding:.55rem;border-bottom:1px solid #e2e8e8;text-align:left}.wse-coverage-table th{background:#f5f8f8;color:#4c6068}.wse-signal-interpretation{font-weight:700;color:#30464e}@media(max-width:900px){.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{grid-template-columns:1fr}.wse-coverage-section{overflow-x:auto}}
 /* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_END */
+
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_BEGIN */
+/* WINGS Genomic-Ecological Concordance report module. */
+.wgec-panel { color: #263b43; }
+.wgec-head { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; margin-bottom:.85rem; }
+.wgec-kicker { color:#8c1d40; font-size:.68rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
+.wgec-title { margin:.15rem 0 .25rem; font-size:1.25rem; }
+.wgec-intro { margin:0; max-width:880px; color:#52656d; line-height:1.45; }
+.wgec-badge { white-space:nowrap; border:1px solid #d8c58a; border-radius:999px; padding:.3rem .55rem; background:#fff9e6; color:#66520a; font-size:.72rem; font-weight:800; }
+.wgec-empty { padding:1rem; border:1px solid #d8e0e1; border-radius:.65rem; background:#fafcfc; color:#52656d; }
+.wgec-empty p { margin:.35rem 0 0; }
+.wgec-metrics { display:grid; grid-template-columns:repeat(5,minmax(120px,1fr)); gap:.55rem; margin:.8rem 0; }
+.wgec-metric { padding:.65rem .7rem; border:1px solid #d8e0e1; border-radius:.55rem; background:#f7faf9; min-width:0; }
+.wgec-metric-label { display:block; color:#65777e; font-size:.65rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.wgec-metric-value { display:block; margin:.12rem 0; font-size:1.2rem; }
+.wgec-metric small { display:block; color:#6a777d; line-height:1.25; }
+.wgec-ladder { display:flex; gap:.5rem; align-items:stretch; margin:.85rem 0; overflow-x:auto; }
+.wgec-tier { flex:1 0 165px; display:grid; gap:.18rem; padding:.65rem .7rem; border:1px solid #d8e0e1; border-radius:.55rem; background:white; }
+.wgec-tier-code { color:#8c1d40; font-size:.68rem; font-weight:900; }
+.wgec-tier small { color:#65777e; }
+.wgec-arrow { align-self:center; color:#839096; font-weight:900; }
+.wgec-family-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:.55rem; margin:.85rem 0; }
+.wgec-family-item { padding:.6rem .7rem; border-left:3px solid #8c1d40; background:#faf7f8; }
+.wgec-family-item strong, .wgec-family-item span { display:block; }
+.wgec-family-item span { margin-top:.18rem; color:#617178; font-size:.78rem; }
+.wgec-table-wrap { overflow-x:auto; border:1px solid #d8e0e1; border-radius:.6rem; }
+.wgec-table { width:100%; border-collapse:collapse; min-width:900px; font-size:.78rem; }
+.wgec-table th, .wgec-table td { padding:.62rem .7rem; border-bottom:1px solid #e5eaeb; text-align:left; vertical-align:top; }
+.wgec-table thead th { background:#f4f7f7; color:#40555d; font-size:.68rem; letter-spacing:.04em; text-transform:uppercase; }
+.wgec-table tbody tr:last-child th, .wgec-table tbody tr:last-child td { border-bottom:0; }
+.wgec-segment { color:#263b43; font-size:.86rem; }
+.wgec-result-cell > * { display:block; }
+.wgec-delta { font-size:.86rem; }
+.wgec-statline { margin-top:.15rem; color:#425860; }
+.wgec-n, .wgec-diagnostic { margin-top:.18rem; color:#6a777d; font-size:.71rem; line-height:1.3; }
+.wgec-status { color:#5d6870; }
+.wgec-method { margin-top:.85rem; border:1px solid #d8e0e1; border-radius:.55rem; background:#fafcfc; }
+.wgec-method > summary { cursor:pointer; padding:.65rem .75rem; font-weight:800; }
+.wgec-method-body { padding:0 .75rem .75rem; color:#52656d; line-height:1.45; }
+.wgec-method-body p { margin:.45rem 0; }
+.wgec-guardrail { padding:.55rem .65rem; border-left:3px solid #ffc627; background:#fffaf0; color:#4f5c61; }
+.wgec-outputs { overflow-wrap:anywhere; font-size:.73rem; }
+@media (max-width:980px) {
+  .wgec-metrics { grid-template-columns:repeat(2,minmax(130px,1fr)); }
+  .wgec-family-summary { grid-template-columns:1fr; }
+}
+@media (max-width:600px) {
+  .wgec-head { display:block; }
+  .wgec-badge { display:inline-block; margin-top:.5rem; }
+  .wgec-metrics { grid-template-columns:1fr; }
+}
+
+/* v0.3.1: interpretation-first summary. */
+.wgec-plain-summary {
+  margin:.8rem 0 .95rem;
+  padding:.8rem .9rem;
+  border:1px solid #d8e0e1;
+  border-left:4px solid #8c1d40;
+  border-radius:.55rem;
+  background:#fbf8f9;
+}
+.wgec-plain-summary h4 { margin:0 0 .42rem; font-size:.95rem; color:#263b43; }
+.wgec-plain-summary p { margin:.36rem 0; color:#40555d; line-height:1.48; }
+.wgec-plain-summary strong { color:#263b43; }
+.wgec-summary-caveat {
+  margin-top:.58rem !important;
+  padding-top:.5rem;
+  border-top:1px solid #eadfe3;
+  color:#66767c !important;
+  font-size:.76rem;
+}
+.wgec-technical { margin-top:.28rem; font-size:.68rem; color:#748187; }
+.wgec-technical summary { cursor:pointer; font-weight:700; }
+.wgec-technical span { display:block; margin-top:.18rem; line-height:1.35; }
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_END */
+
+/* WINGS_COMPACT_CONCORDANCE_SUMMARY_BEGIN */
+.wgec-plain-summary {
+  margin:.85rem 0 1rem;
+  padding:.85rem 1rem .7rem;
+}
+
+.wgec-plain-summary .wgec-summary-title {
+  margin:0 0 .6rem;
+  color:#8c1d40;
+  font-size:1.18rem;
+  font-weight:850;
+  letter-spacing:-.015em;
+}
+
+.wgec-summary-row {
+  display:grid;
+  grid-template-columns:9rem minmax(0,1fr);
+  gap:.8rem;
+  padding:.48rem 0;
+  border-top:1px solid #eadfe3;
+  line-height:1.35;
+}
+
+.wgec-summary-label {
+  color:#263b43;
+  font-weight:800;
+}
+
+.wgec-summary-text {
+  color:#40555d;
+}
+
+.wgec-summary-caveat {
+  margin:.5rem 0 0 !important;
+  padding-top:.48rem;
+  color:#66767c !important;
+  font-size:.72rem;
+  line-height:1.35 !important;
+}
+
+@media (max-width:600px) {
+  .wgec-summary-row {
+    grid-template-columns:1fr;
+    gap:.08rem;
+  }
+}
+/* WINGS_COMPACT_CONCORDANCE_SUMMARY_END */
+
+.wgec-takeaway {
+  margin:.05rem 0 .7rem !important;
+  padding:0 0 .65rem;
+  border-bottom:1px solid #eadfe3;
+  color:#263b43 !important;
+  font-size:.95rem;
+  font-weight:600;
+  line-height:1.45 !important;
+}

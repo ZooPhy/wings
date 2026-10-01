@@ -11,7 +11,7 @@ const api = context.WINGS_EXPLORER_TABS;
 
 test('exports the four stable application views', () => {
   assert.equal(api.VERSION, '0.2.0');
-  assert.deepEqual(Array.from(api.TAB_ORDER), ['overview', 'genome', 'ecology', 'coverage', 'outbreak']);
+  assert.deepEqual(Array.from(api.TAB_ORDER), ['overview', 'genome', 'ecology', 'coverage', 'concordance', 'outbreak']);
 });
 
 test('mount rejects a missing Explorer instance', () => {

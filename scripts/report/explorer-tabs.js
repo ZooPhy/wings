@@ -10,12 +10,13 @@
     return node;
   };
 
-  const TAB_ORDER = ["overview", "genome", "ecology", "coverage", "outbreak"];
+  const TAB_ORDER = ["overview", "genome", "ecology", "coverage", "concordance", "outbreak"];
   const TAB_LABELS = {
     overview: "Overview",
     genome: "Genome",
     ecology: "Ecology",
     coverage: "Sampling & Detections",
+    concordance: "Concordance",
     outbreak: "Outbreak context",
   };
 
@@ -280,6 +281,17 @@
     if (genomeFooter) panels.genome.append(genomeFooter);
 
     panels.ecology.append(ecology);
+
+
+    if (panels.concordance) {
+
+      const module = globalThis.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE;
+
+      if (module?.mount) module.mount(explorer, panels.concordance);
+
+      else panels.concordance.append(make("p", "wse-app-empty", "Genomic–Ecological Concordance is unavailable for this report."));
+
+    }
     panels.coverage.append(renderCoveragePanel(explorer));
 
     if (outbreak) {
@@ -365,12 +377,15 @@
     });
 
     hostSelect.addEventListener("change", () => {
-      explorer.hostFilter = hostSelect.value || "ALL";
-      explorer.renderTimeline?.();
-      explorer.renderMap?.();
-      explorer.renderLegend?.();
-      explorer.renderTrees?.();
-      explorer.updateSelection();
+      const host = hostSelect.value || "ALL";
+
+      if (typeof explorer.setHostFilter === "function") {
+        explorer.setHostFilter(host);
+      } else {
+        explorer.hostFilter = host;
+        explorer.updateSelection();
+      }
+
       panels.coverage.replaceChildren(renderCoveragePanel(explorer));
     });
 
@@ -381,8 +396,28 @@
       explorer.updateSelection();
     });
 
+    const syncSampleOptions = () => {
+      const host = explorer.hostFilter || "ALL";
+      const selected = explorer.selectedSampleId || "";
+
+      const samples = (explorer.samples || []).filter(
+        sample => host === "ALL" || sample.host === host
+      );
+
+      sampleSelect.innerHTML = "";
+      sampleSelect.append(new Option("Select a sample…", ""));
+
+      for (const sample of samples) {
+        sampleSelect.append(new Option(sample.sample_id, sample.sample_id));
+      }
+
+      sampleSelect.value = samples.some(
+        sample => sample.sample_id === selected
+      ) ? selected : "";
+    };
+
     const sync = () => {
-      sampleSelect.value = explorer.selectedSampleId || "";
+      syncSampleOptions();
       hostSelect.value = explorer.hostFilter || "ALL";
       clearButton.disabled = !explorer.selectedSampleId && !explorer.selectedReferenceId;
       const sample = explorer.selectedSampleId ? explorer.sampleById?.get(explorer.selectedSampleId) : null;

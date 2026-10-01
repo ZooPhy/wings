@@ -1,3 +1,470 @@
+/* WINGS_EXPLORER_TABS_JS_BEGIN */
+(() => {
+  "use strict";
+
+  const VERSION = "0.2.0";
+
+  const make = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  const TAB_ORDER = ["overview", "genome", "ecology", "coverage", "concordance", "outbreak"];
+  const TAB_LABELS = {
+    overview: "Overview",
+    genome: "Genome",
+    ecology: "Ecology",
+    coverage: "Sampling & Detections",
+    concordance: "Concordance",
+    outbreak: "Outbreak context",
+  };
+
+
+  function coverageNumber(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string" && value.trim() === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function coverageFmt(value) {
+    const n = coverageNumber(value);
+    return n === null ? "Unavailable" : n.toLocaleString("en-US");
+  }
+
+  function coveragePct(numerator, denominator) {
+    const n = coverageNumber(numerator), d = coverageNumber(denominator);
+    return n === null || d === null || d <= 0 ? null : 100 * n / d;
+  }
+
+  function coverageChange(current, prior) {
+    const c = coverageNumber(current), p = coverageNumber(prior);
+    if (c === null || p === null || p === 0) return null;
+    return 100 * (c - p) / p;
+  }
+
+  function aggregateCoverageRecords(records, hostFilter="ALL") {
+    const rows = (records || []).filter(row => hostFilter === "ALL" || String(row.host || "") === hostFilter);
+    const fields = ["sampled", "tested", "positive", "sequenced"];
+    const total = field => {
+      const vals = rows.map(row => coverageNumber(row[field])).filter(v => v !== null);
+      return vals.length ? vals.reduce((a,b)=>a+b,0) : null;
+    };
+    const groups = new Map();
+    for (const row of rows) {
+      const key = `${row.period_start}|${row.period_end}`;
+      if (!groups.has(key)) groups.set(key, {period_start:row.period_start,period_end:row.period_end,rows:[]});
+      groups.get(key).rows.push(row);
+    }
+    const periods = [...groups.values()].sort((a,b)=>a.period_start.localeCompare(b.period_start)).map(group => ({
+      period_start:group.period_start,
+      period_end:group.period_end,
+      ...Object.fromEntries(fields.map(field => {
+        const vals = group.rows.map(row=>coverageNumber(row[field])).filter(v=>v!==null);
+        return [field, vals.length ? vals.reduce((a,b)=>a+b,0) : null];
+      })),
+    }));
+    return {visibleRows:rows.length, rows, totals:Object.fromEntries(fields.map(field=>[field,total(field)])), periods};
+  }
+
+  function coverageComparison(periods) {
+    const eligible = (periods || []).filter(p => coverageNumber(p.tested) !== null && coverageNumber(p.positive) !== null);
+    if (eligible.length < 2) return null;
+    const prior = eligible[eligible.length-2], recent = eligible[eligible.length-1];
+    return {
+      prior, recent,
+      tested_change_pct: coverageChange(recent.tested, prior.tested),
+      positive_change_pct: coverageChange(recent.positive, prior.positive),
+      prior_positivity_pct: coveragePct(prior.positive, prior.tested),
+      recent_positivity_pct: coveragePct(recent.positive, recent.tested),
+    };
+  }
+
+  function renderCoveragePanel(explorer) {
+    const ctx = explorer.payload?.coverage_context || {status:"NOT_CONFIGURED",records:[],genomic_summary:{}};
+    const wrap = make("div", "wse-coverage");
+    const title = make("div", "wse-coverage-head");
+    const heading = make("div");
+    heading.append(make("div", "wse-coverage-kicker", "Surveillance lens"), make("h3", "", "Sampling & Detections"));
+    title.append(heading);
+    wrap.append(title);
+
+    const host = explorer.hostFilter || "ALL";
+    const agg = aggregateCoverageRecords(ctx.records || [], host);
+    const genomic = ctx.genomic_summary || {};
+
+    if (ctx.status !== "READY") {
+      const note = make("p", "wse-coverage-note");
+      note.textContent = "Sampling denominator unavailable. WINGS can still show genomic recovery for records in this run, but it will not calculate positivity or normalize detections by testing effort.";
+      wrap.append(note);
+    }
+
+    const cards = make("div", "wse-coverage-cards");
+    const card = (label, value, sub) => {
+      const node = make("div", "wse-coverage-card");
+      node.append(make("span", "", label), make("strong", "", value), make("small", "", sub));
+      return node;
+    };
+    cards.append(
+      card("Sampled", coverageFmt(agg.totals.sampled), "external surveillance denominator"),
+      card("Tested", coverageFmt(agg.totals.tested), "external surveillance denominator"),
+      card("Positive", coverageFmt(agg.totals.positive), "program-reported detections"),
+      card("Sequenced", coverageFmt(agg.totals.sequenced), "program-defined sequencing count")
+    );
+    wrap.append(cards);
+
+    const funnel = make("section", "wse-coverage-section");
+    funnel.append(make("h4", "", "WINGS genomic coverage"));
+    const funnelGrid = make("div", "wse-coverage-funnel");
+    funnelGrid.append(
+      card("WINGS records", coverageFmt(genomic.wings_records), "records entering this run"),
+      card("≥1 QC segment", coverageFmt(genomic.at_least_one_qc_segment), "at least one QC-passing segment"),
+      card("Complete genomes", coverageFmt(genomic.complete_8_segment_genomes), "8 / 8 QC-passing segments"),
+      card("Subtype resolved", coverageFmt(genomic.subtype_resolved), "HA/NA subtype available")
+    );
+    funnel.append(funnelGrid);
+    const caution = make("p", "wse-coverage-caution", "External surveillance totals and WINGS genomic records are shown side by side, not assumed to be one continuous denominator chain.");
+    funnel.append(caution);
+    wrap.append(funnel);
+
+    const diag = make("section", "wse-coverage-section");
+    diag.append(make("h4", "", "Signal-or-Sampling diagnostic"));
+    const comp = coverageComparison(agg.periods);
+    if (!comp) {
+      diag.append(make("p", "wse-coverage-empty", "At least two periods with both tested and positive counts are required for a denominator-aware comparison."));
+    } else {
+      const pctText = value => value === null ? "not estimable" : `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+      const posPrior = comp.prior_positivity_pct, posRecent = comp.recent_positivity_pct;
+      const summary = make("div", "wse-signal-summary");
+      summary.append(
+        card("Testing effort", pctText(comp.tested_change_pct), `${comp.prior.period_start} → ${comp.recent.period_start}`),
+        card("Positive detections", pctText(comp.positive_change_pct), "change in source-record count"),
+        card("Positivity", posPrior === null || posRecent === null ? "Unavailable" : `${posPrior.toFixed(1)}% → ${posRecent.toFixed(1)}%`, "positive / tested")
+      );
+      diag.append(summary);
+      const sentence = make("p", "wse-signal-interpretation");
+      if (comp.tested_change_pct !== null && comp.positive_change_pct !== null) {
+        const delta = comp.positive_change_pct - comp.tested_change_pct;
+        sentence.textContent = Math.abs(delta) < 5
+          ? "Detection counts changed at approximately the same rate as testing effort in the two most recent comparable periods."
+          : delta > 0
+            ? "Positive detections changed faster than testing effort in the two most recent comparable periods."
+            : "Testing effort changed faster than positive detections in the two most recent comparable periods.";
+      } else {
+        sentence.textContent = "Counts are shown, but relative change cannot be estimated because a prior value is zero or unavailable.";
+      }
+      diag.append(sentence, make("p", "wse-coverage-caution", "Descriptive comparison only. It does not establish prevalence, transmission, or whether the difference is biological rather than a change in surveillance design or population mix."));
+    }
+    wrap.append(diag);
+
+    if (ctx.status === "READY") {
+      const tableSection = make("section", "wse-coverage-section");
+      tableSection.append(make("h4", "", "Effort by period"));
+      const table = document.createElement("table");
+      table.className = "wse-coverage-table";
+      table.innerHTML = `<thead><tr><th>Period</th><th>Sampled</th><th>Tested</th><th>Positive</th><th>Sequenced</th><th>Positivity</th></tr></thead><tbody></tbody>`;
+      const body = table.querySelector("tbody");
+      for (const row of agg.periods) {
+        const tr = document.createElement("tr");
+        const positivity = coveragePct(row.positive, row.tested);
+        [ `${row.period_start} – ${row.period_end}`, coverageFmt(row.sampled), coverageFmt(row.tested), coverageFmt(row.positive), coverageFmt(row.sequenced), positivity === null ? "Unavailable" : `${positivity.toFixed(1)}%` ].forEach(value => {
+          const td = document.createElement("td"); td.textContent = value; tr.append(td);
+        });
+        body.append(tr);
+      }
+      tableSection.append(table);
+      wrap.append(tableSection);
+    }
+    return wrap;
+  }
+
+  function mount(explorer) {
+    if (!explorer || !explorer.root) throw new Error("Explorer instance is required.");
+    if (explorer.explorerTabs) return explorer.explorerTabs;
+
+    const root = explorer.root;
+    const shell = root.querySelector(".wse-shell");
+    if (!shell) throw new Error("WINGS Explorer shell not found.");
+
+    const timeline = shell.querySelector(".wse-timeline-panel");
+    const mainGrid = shell.querySelector(".wse-main-grid");
+    const braid = shell.querySelector(".wbc-embedded");
+    const genome = shell.querySelector(".wse-genome-panel");
+    const genomeFooter = shell.querySelector(".wse-footer-note");
+    const ecology = shell.querySelector(".wse-ecology-panel");
+    const outbreak = shell.querySelector(".wse-outbreak-panel");
+
+    if (!timeline || !mainGrid || !genome || !ecology) {
+      throw new Error("Expected Explorer panels were not found; upstream layout may have changed.");
+    }
+
+    shell.classList.add("wse-tabs-mounted");
+
+    const app = make("section", "wse-app-shell");
+    app.setAttribute("aria-label", "WINGS Explorer views");
+
+    const toolbar = make("div", "wse-app-toolbar");
+    const sampleLabel = make("label", "wse-app-control");
+    sampleLabel.append(make("span", "wse-app-control-label", "Sample"));
+    const sampleSelect = make("select", "wse-app-sample");
+    sampleSelect.setAttribute("aria-label", "Selected WINGS sample");
+    sampleSelect.append(new Option("Select a sample…", ""));
+    for (const sample of explorer.samples || []) {
+      sampleSelect.append(new Option(sample.sample_id, sample.sample_id));
+    }
+    sampleLabel.append(sampleSelect);
+
+    const hostLabel = make("label", "wse-app-control");
+    hostLabel.append(make("span", "wse-app-control-label", "Host"));
+    const hostSelect = make("select", "wse-app-host");
+    hostSelect.setAttribute("aria-label", "Host filter");
+    hostSelect.append(new Option("All hosts", "ALL"));
+    for (const host of explorer.hosts || []) hostSelect.append(new Option(host, host));
+    hostLabel.append(hostSelect);
+
+    const clearButton = make("button", "wse-app-clear", "Clear selection");
+    clearButton.type = "button";
+
+    const context = make("div", "wse-app-context", "No sample selected");
+    context.setAttribute("aria-live", "polite");
+
+    toolbar.append(sampleLabel, hostLabel, clearButton, context);
+
+    const nav = make("div", "wse-app-tabs");
+    nav.setAttribute("role", "tablist");
+    nav.setAttribute("aria-label", "Surveillance Explorer views");
+
+    const views = make("div", "wse-app-views");
+    const panels = {};
+    const buttons = {};
+
+    TAB_ORDER.forEach((name, index) => {
+      const button = make("button", "wse-app-tab", TAB_LABELS[name]);
+      button.type = "button";
+      button.id = `wse-tab-${name}`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", `wse-view-${name}`);
+      button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+      button.tabIndex = index === 0 ? 0 : -1;
+      button.dataset.tab = name;
+      nav.append(button);
+      buttons[name] = button;
+
+      const panel = make("section", "wse-app-view");
+      panel.id = `wse-view-${name}`;
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", button.id);
+      panel.hidden = index !== 0;
+      views.append(panel);
+      panels[name] = panel;
+    });
+
+    panels.overview.append(timeline, mainGrid);
+
+    const shared = make("div", "wse-app-shared");
+    shared.hidden = true;
+    if (braid) shared.append(braid);
+
+    const ecologyActions = make("div", "wse-ecology-clock-actions");
+    const loadPhenology = make("button", "wse-ecology-clock-action", explorer.payload?.ecological_clock ? "Override phenology" : "Load phenology");
+    loadPhenology.type = "button";
+    const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
+    exportEvidence.type = "button";
+    ecologyActions.append(loadPhenology, exportEvidence);
+    shared.prepend(ecologyActions);
+
+    const treeDetails = make("details", "wse-genome-details");
+    const treeSummary = make("summary", "wse-genome-details-summary", "Individual segment trees and QC evidence");
+    treeDetails.append(treeSummary, genome);
+    panels.genome.append(treeDetails);
+    if (genomeFooter) panels.genome.append(genomeFooter);
+
+    panels.ecology.append(ecology);
+
+
+    if (panels.concordance) {
+
+      const module = globalThis.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE;
+
+      if (module?.mount) module.mount(explorer, panels.concordance);
+
+      else panels.concordance.append(make("p", "wse-app-empty", "Genomic–Ecological Concordance is unavailable for this report."));
+
+    }
+    panels.coverage.append(renderCoveragePanel(explorer));
+
+    if (outbreak) {
+      panels.outbreak.append(outbreak);
+    } else {
+      panels.outbreak.append(make("p", "wse-app-empty", "No outbreak-context panel is available for this run."));
+    }
+
+    app.append(toolbar, nav, shared, views);
+    shell.append(app);
+
+    loadPhenology.addEventListener("click", () => {
+      braid?.querySelector(".wbc-import-phenology")?.click();
+    });
+    exportEvidence.addEventListener("click", () => {
+      braid?.querySelector(".wbc-export")?.click();
+    });
+
+    const duplicateSample = genome.querySelector(".wse-sample-select")?.closest("label");
+    if (duplicateSample) duplicateSample.classList.add("wse-duplicate-sample-control");
+
+    let active = "overview";
+
+    // Tree Studio is mounted immediately after Explorer Tabs. Hoist its launcher
+    // into the shared Genome/Ecology region so it remains visible above the
+    // Genome Braid instead of falling below the long shared component.
+    const placeTreeStudio = () => {
+      const launch = root.querySelector(".wse-tree-studio-launch");
+      if (!launch) return;
+      if (launch.parentElement !== shared) shared.prepend(launch);
+      launch.hidden = active !== "genome";
+    };
+
+    const activate = (name, focus = false) => {
+      if (!TAB_ORDER.includes(name)) return;
+      active = name;
+      for (const key of TAB_ORDER) {
+        const selected = key === name;
+        buttons[key].setAttribute("aria-selected", String(selected));
+        buttons[key].tabIndex = selected ? 0 : -1;
+        panels[key].hidden = !selected;
+      }
+      if (focus) buttons[name].focus();
+      if (name === "overview") {
+        requestAnimationFrame(() => {
+          explorer.renderMap?.();
+          explorer.updateEmphasis?.();
+        });
+      }
+      const showShared = Boolean(braid) && (name === "genome" || name === "ecology");
+      shared.hidden = !showShared;
+      if (braid) braid.dataset.wseLens = showShared ? name : "";
+      placeTreeStudio();
+      if (name === "coverage") {
+        panels.coverage.replaceChildren(renderCoveragePanel(explorer));
+      }
+      if (showShared) {
+        requestAnimationFrame(() => explorer.braidClock?.refresh?.());
+      }
+    };
+
+    for (const [name, button] of Object.entries(buttons)) {
+      button.addEventListener("click", () => activate(name));
+      button.addEventListener("keydown", (event) => {
+        const index = TAB_ORDER.indexOf(name);
+        let next = null;
+        if (event.key === "ArrowRight") next = TAB_ORDER[(index + 1) % TAB_ORDER.length];
+        if (event.key === "ArrowLeft") next = TAB_ORDER[(index - 1 + TAB_ORDER.length) % TAB_ORDER.length];
+        if (event.key === "Home") next = TAB_ORDER[0];
+        if (event.key === "End") next = TAB_ORDER[TAB_ORDER.length - 1];
+        if (next) {
+          event.preventDefault();
+          activate(next, true);
+        }
+      });
+    }
+
+    sampleSelect.addEventListener("change", () => {
+      explorer.selectedReferenceId = null;
+      explorer.selectedSampleId = explorer.sampleById?.has(sampleSelect.value) ? sampleSelect.value : null;
+      explorer.hoverSampleId = null;
+      explorer.updateSelection();
+    });
+
+    hostSelect.addEventListener("change", () => {
+      const host = hostSelect.value || "ALL";
+
+      if (typeof explorer.setHostFilter === "function") {
+        explorer.setHostFilter(host);
+      } else {
+        explorer.hostFilter = host;
+        explorer.updateSelection();
+      }
+
+      panels.coverage.replaceChildren(renderCoveragePanel(explorer));
+    });
+
+    clearButton.addEventListener("click", () => {
+      explorer.selectedSampleId = null;
+      explorer.selectedReferenceId = null;
+      explorer.hoverSampleId = null;
+      explorer.updateSelection();
+    });
+
+    const syncSampleOptions = () => {
+      const host = explorer.hostFilter || "ALL";
+      const selected = explorer.selectedSampleId || "";
+
+      const samples = (explorer.samples || []).filter(
+        sample => host === "ALL" || sample.host === host
+      );
+
+      sampleSelect.innerHTML = "";
+      sampleSelect.append(new Option("Select a sample…", ""));
+
+      for (const sample of samples) {
+        sampleSelect.append(new Option(sample.sample_id, sample.sample_id));
+      }
+
+      sampleSelect.value = samples.some(
+        sample => sample.sample_id === selected
+      ) ? selected : "";
+    };
+
+    const sync = () => {
+      syncSampleOptions();
+      hostSelect.value = explorer.hostFilter || "ALL";
+      clearButton.disabled = !explorer.selectedSampleId && !explorer.selectedReferenceId;
+      const sample = explorer.selectedSampleId ? explorer.sampleById?.get(explorer.selectedSampleId) : null;
+      if (sample) {
+        const parts = [sample.sample_id, sample.host, sample.collection_date, sample.genotype?.call].filter(Boolean);
+        context.textContent = parts.join(" · ");
+      } else if (explorer.selectedReferenceId) {
+        context.textContent = `Public reference: ${explorer.selectedReferenceId}`;
+      } else {
+        context.textContent = "No sample selected";
+      }
+    };
+
+    const previousUpdateSelection = explorer.updateSelection.bind(explorer);
+    explorer.updateSelection = function(...args) {
+      const result = previousUpdateSelection(...args);
+      sync();
+      return result;
+    };
+
+    root.addEventListener("click", (event) => {
+      const recordsAction = event.target.closest?.('[data-state-action="records"]');
+      if (recordsAction) setTimeout(() => activate("outbreak"), 0);
+    }, true);
+
+    treeDetails.addEventListener("toggle", () => {
+      if (treeDetails.open) requestAnimationFrame(() => {
+        explorer.renderTrees?.();
+        explorer.updateEmphasis?.();
+        explorer.revealSelectedTips?.();
+      });
+    });
+
+    sync();
+    activate("overview");
+    // Tree Studio mounts after this function returns; catch that insertion once.
+    setTimeout(placeTreeStudio, 0);
+
+    const api = { VERSION, activate, get active() { return active; }, buttons, panels };
+    explorer.explorerTabs = api;
+    return api;
+  }
+
+  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison} };
+})();
+/* WINGS_EXPLORER_TABS_JS_END */
 /* WINGS_TREE_STUDIO_JS_BEGIN */
 (() => {
   "use strict";
@@ -727,11 +1194,17 @@
   globalThis.WINGS_TREE_STUDIO={VERSION,open:openStudio,mountExplorer,_test:{cloneSourceTree,annotateTree,graphFromTree,midpointRoot,outgroupRoot,leafKey,allLeaves,sortTree,treeToNewick,layoutRectangular,layoutRadial,leafInfo,colorContext,descendantConsensus,genotypeText,normalizeUSState,filterTraitValue,matchesTraitFilter,descendantHasFilterMatch,wheelZoomFactor,zoomViewBoxToPoint,pointInPolygon,lassoPath,zoomViewBoxToPoints}};
 })();
 /* WINGS_TREE_STUDIO_JS_END */
-/* WINGS_EXPLORER_TABS_JS_BEGIN */
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_UI_BEGIN */
 (() => {
   "use strict";
 
-  const VERSION = "0.2.0";
+  const VERSION = "0.3.1";
+  const SEGMENTS = ["HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS"];
+  const FAMILIES = [
+    ["host_vs_baseline", "Host effect"],
+    ["ecology_vs_host", "Seasonal ecology effect"],
+    ["environment_vs_ecology", "Weather effect"],
+  ];
 
   const make = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -740,425 +1213,356 @@
     return node;
   };
 
-  const TAB_ORDER = ["overview", "genome", "ecology", "coverage", "outbreak"];
-  const TAB_LABELS = {
-    overview: "Overview",
-    genome: "Genome",
-    ecology: "Ecology",
-    coverage: "Sampling & Detections",
-    outbreak: "Outbreak context",
+  const finite = value => typeof value === "number" && Number.isFinite(value);
+  const signed = value => finite(value) ? `${value >= 0 ? "+" : ""}${value.toFixed(3)}` : "—";
+  const qfmt = value => {
+    if (!finite(value)) return "—";
+    if (value < 0.001) return "<0.001";
+    if (value < 0.01) return value.toFixed(4);
+    return value.toFixed(3);
   };
 
-
-  function coverageNumber(value) {
-    if (value === null || value === undefined) return null;
-    if (typeof value === "string" && value.trim() === "") return null;
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
+  function friendlyStatus(model) {
+    const code = model?.display_status || model?.status || "NOT_ESTIMABLE";
+    return ({
+      READY: "Ready",
+      INSUFFICIENT_UNIQUE_SAMPLES: "Too few unique samples",
+      INSUFFICIENT_INDEPENDENT_VARIATION: "Not independently estimable",
+      INSUFFICIENT_PREDICTOR_VARIATION: "Insufficient predictor variation",
+      INSUFFICIENT_COMPLETE_PAIRS: "Too few complete pairs",
+      CONSTANT_GENETIC_DISTANCE: "No genetic-distance variation",
+      NOT_ESTIMABLE: "Not estimable",
+    })[code] || (String(code).includes("RANK_DEFICIENT") ? "Not independently estimable" : "Not estimable");
   }
 
-  function coverageFmt(value) {
-    const n = coverageNumber(value);
-    return n === null ? "Unavailable" : n.toLocaleString("en-US");
-  }
-
-  function coveragePct(numerator, denominator) {
-    const n = coverageNumber(numerator), d = coverageNumber(denominator);
-    return n === null || d === null || d <= 0 ? null : 100 * n / d;
-  }
-
-  function coverageChange(current, prior) {
-    const c = coverageNumber(current), p = coverageNumber(prior);
-    if (c === null || p === null || p === 0) return null;
-    return 100 * (c - p) / p;
-  }
-
-  function aggregateCoverageRecords(records, hostFilter="ALL") {
-    const rows = (records || []).filter(row => hostFilter === "ALL" || String(row.host || "") === hostFilter);
-    const fields = ["sampled", "tested", "positive", "sequenced"];
-    const total = field => {
-      const vals = rows.map(row => coverageNumber(row[field])).filter(v => v !== null);
-      return vals.length ? vals.reduce((a,b)=>a+b,0) : null;
-    };
-    const groups = new Map();
-    for (const row of rows) {
-      const key = `${row.period_start}|${row.period_end}`;
-      if (!groups.has(key)) groups.set(key, {period_start:row.period_start,period_end:row.period_end,rows:[]});
-      groups.get(key).rows.push(row);
+  function plainDiagnostic(model, comparison) {
+    const code = model?.display_status || model?.status || "";
+    if (code === "INSUFFICIENT_UNIQUE_SAMPLES" || String(code).includes("INSUFFICIENT_SAMPLES")) {
+      return `${model.n_samples || 0} unique samples are available; at least ${model.minimum_unique_samples || 8} are required.`;
     }
-    const periods = [...groups.values()].sort((a,b)=>a.period_start.localeCompare(b.period_start)).map(group => ({
-      period_start:group.period_start,
-      period_end:group.period_end,
-      ...Object.fromEntries(fields.map(field => {
-        const vals = group.rows.map(row=>coverageNumber(row[field])).filter(v=>v!==null);
-        return [field, vals.length ? vals.reduce((a,b)=>a+b,0) : null];
-      })),
-    }));
-    return {visibleRows:rows.length, rows, totals:Object.fromEntries(fields.map(field=>[field,total(field)])), periods};
-  }
-
-  function coverageComparison(periods) {
-    const eligible = (periods || []).filter(p => coverageNumber(p.tested) !== null && coverageNumber(p.positive) !== null);
-    if (eligible.length < 2) return null;
-    const prior = eligible[eligible.length-2], recent = eligible[eligible.length-1];
-    return {
-      prior, recent,
-      tested_change_pct: coverageChange(recent.tested, prior.tested),
-      positive_change_pct: coverageChange(recent.positive, prior.positive),
-      prior_positivity_pct: coveragePct(prior.positive, prior.tested),
-      recent_positivity_pct: coveragePct(recent.positive, recent.tested),
-    };
-  }
-
-  function renderCoveragePanel(explorer) {
-    const ctx = explorer.payload?.coverage_context || {status:"NOT_CONFIGURED",records:[],genomic_summary:{}};
-    const wrap = make("div", "wse-coverage");
-    const title = make("div", "wse-coverage-head");
-    const heading = make("div");
-    heading.append(make("div", "wse-coverage-kicker", "Surveillance lens"), make("h3", "", "Sampling & Detections"));
-    title.append(heading);
-    wrap.append(title);
-
-    const host = explorer.hostFilter || "ALL";
-    const agg = aggregateCoverageRecords(ctx.records || [], host);
-    const genomic = ctx.genomic_summary || {};
-
-    if (ctx.status !== "READY") {
-      const note = make("p", "wse-coverage-note");
-      note.textContent = "Sampling denominator unavailable. WINGS can still show genomic recovery for records in this run, but it will not calculate positivity or normalize detections by testing effort.";
-      wrap.append(note);
+    if (code === "INSUFFICIENT_INDEPENDENT_VARIATION" || String(code).includes("RANK_DEFICIENT")) {
+      if (comparison === "environment_vs_ecology") {
+        return "Environmental distance does not provide independent variation beyond the existing time, geography, host, and seasonal-ecology predictors in this dataset.";
+      }
+      return "The added predictor does not provide independent variation beyond the predictors already in the model.";
     }
+    if (code === "INSUFFICIENT_PREDICTOR_VARIATION") {
+      return "The added predictor does not vary enough across the available samples for this comparison.";
+    }
+    if (code === "INSUFFICIENT_COMPLETE_PAIRS") {
+      return "Too few sample pairs have complete data for all predictors in this comparison.";
+    }
+    if (code === "CONSTANT_GENETIC_DISTANCE") {
+      return "The available pairwise genetic distances do not vary enough to fit this comparison.";
+    }
+    return model?.diagnostic || "This comparison is not estimable for the available data.";
+  }
 
-    const cards = make("div", "wse-coverage-cards");
-    const card = (label, value, sub) => {
-      const node = make("div", "wse-coverage-card");
-      node.append(make("span", "", label), make("strong", "", value), make("small", "", sub));
-      return node;
-    };
-    cards.append(
-      card("Sampled", coverageFmt(agg.totals.sampled), "external surveillance denominator"),
-      card("Tested", coverageFmt(agg.totals.tested), "external surveillance denominator"),
-      card("Positive", coverageFmt(agg.totals.positive), "program-reported detections"),
-      card("Sequenced", coverageFmt(agg.totals.sequenced), "program-defined sequencing count")
-    );
-    wrap.append(cards);
+  function modelCell(model, comparison) {
+    const td = make("td", "wgec-result-cell");
+    if (!model) {
+      td.append(make("strong", "wgec-status", "Not available"));
+      return td;
+    }
+    if ((model.display_status || model.status) === "READY") {
+      td.append(make("strong", "wgec-delta", `ΔR² ${signed(model.delta_r2)}`));
+      const line = make("span", "wgec-statline", `q ${qfmt(model.fdr_q)} · p ${qfmt(model.permutation_p)}`);
+      const n = make("span", "wgec-n", `${model.n_samples} samples · ${model.n_pairs} pairs`);
+      td.append(line, n);
+      return td;
+    }
+    td.append(make("strong", "wgec-status", friendlyStatus(model)));
+    td.append(make("span", "wgec-diagnostic", plainDiagnostic(model, comparison)));
+    td.append(make("span", "wgec-n", `${model.n_samples || 0} samples · ${model.n_pairs || 0} pairs`));
+    if (model.diagnostic) {
+      const details = make("details", "wgec-technical");
+      details.append(make("summary", "", "Technical detail"), make("span", "", model.diagnostic));
+      td.append(details);
+    }
+    return td;
+  }
 
-    const funnel = make("section", "wse-coverage-section");
-    funnel.append(make("h4", "", "WINGS genomic coverage"));
-    const funnelGrid = make("div", "wse-coverage-funnel");
-    funnelGrid.append(
-      card("WINGS records", coverageFmt(genomic.wings_records), "records entering this run"),
-      card("≥1 QC segment", coverageFmt(genomic.at_least_one_qc_segment), "at least one QC-passing segment"),
-      card("Complete genomes", coverageFmt(genomic.complete_8_segment_genomes), "8 / 8 QC-passing segments"),
-      card("Subtype resolved", coverageFmt(genomic.subtype_resolved), "HA/NA subtype available")
-    );
-    funnel.append(funnelGrid);
-    const caution = make("p", "wse-coverage-caution", "External surveillance totals and WINGS genomic records are shown side by side, not assumed to be one continuous denominator chain.");
-    funnel.append(caution);
-    wrap.append(funnel);
+  function comparisonSummary(models, comparison) {
+    const rows = models.filter(row => row.comparison === comparison);
+    const ready = rows.filter(row => (row.display_status || row.status) === "READY");
+    const below = ready.filter(row => finite(row.fdr_q) && row.fdr_q < 0.05);
+    return {ready: ready.length, below: below.length, total: rows.length};
+  }
 
-    const diag = make("section", "wse-coverage-section");
-    diag.append(make("h4", "", "Signal-or-Sampling diagnostic"));
-    const comp = coverageComparison(agg.periods);
-    if (!comp) {
-      diag.append(make("p", "wse-coverage-empty", "At least two periods with both tested and positive counts are required for a denominator-aware comparison."));
+  function significantSegments(models, comparison) {
+    return SEGMENTS.filter(segment => models.some(row => row.segment === segment && row.comparison === comparison &&
+      (row.display_status || row.status) === "READY" && finite(row.fdr_q) && row.fdr_q < 0.05));
+  }
+
+  function joinSegments(items) {
+    if (!items.length) return "none";
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+  }
+
+  function plainLanguageTakeaway(host, ecology, environment) {
+    const clauses = [];
+
+    if (host.ready) {
+      if (host.below === host.ready) {
+        clauses.push("host identity was associated with genomic differences across all analyzable segments");
+      } else if (host.below > 0) {
+        clauses.push("host identity was associated with genomic differences in some analyzable segments");
+      } else {
+        clauses.push("host identity did not add information beyond time and geography");
+      }
     } else {
-      const pctText = value => value === null ? "not estimable" : `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
-      const posPrior = comp.prior_positivity_pct, posRecent = comp.recent_positivity_pct;
-      const summary = make("div", "wse-signal-summary");
-      summary.append(
-        card("Testing effort", pctText(comp.tested_change_pct), `${comp.prior.period_start} → ${comp.recent.period_start}`),
-        card("Positive detections", pctText(comp.positive_change_pct), "change in source-record count"),
-        card("Positivity", posPrior === null || posRecent === null ? "Unavailable" : `${posPrior.toFixed(1)}% → ${posRecent.toFixed(1)}%`, "positive / tested")
+      clauses.push("the contribution of host identity could not be evaluated");
+    }
+
+    if (ecology.ready) {
+      if (ecology.below === ecology.ready) {
+        clauses.push("seasonal ecology added information across all analyzable segments");
+      } else if (ecology.below > 0) {
+        clauses.push("seasonal ecology added information for some segments");
+      } else {
+        clauses.push("seasonal ecology did not add information beyond host identity");
+      }
+    } else {
+      clauses.push("the contribution of seasonal ecology could not be evaluated");
+    }
+
+    if (environment.ready) {
+      if (environment.below === environment.ready) {
+        clauses.push("local weather added information across all analyzable segments");
+      } else if (environment.below > 0) {
+        clauses.push("local weather added information for some segments");
+      } else {
+        clauses.push("local weather did not add information beyond the other factors");
+      }
+    } else {
+      clauses.push("the available data were insufficient to isolate an independent weather signal");
+    }
+
+    if (clauses.length === 1) {
+      return `Overall, ${clauses[0]}.`;
+    }
+
+    if (clauses.length === 2) {
+      return `Overall, ${clauses[0]}, and ${clauses[1]}.`;
+    }
+
+    return `Overall, ${clauses[0]}, ${clauses[1]}, and ${clauses[2]}.`;
+  }
+
+  function summaryBox(data, models) {
+    const host = comparisonSummary(models, "host_vs_baseline");
+    const ecology = comparisonSummary(models, "ecology_vs_host");
+    const environment = comparisonSummary(models, "environment_vs_ecology");
+    const hostSegments = significantSegments(models, "host_vs_baseline");
+    const ecologySegments = significantSegments(models, "ecology_vs_host");
+    const readiness = data.readiness || {};
+
+    const box = make("section", "wgec-plain-summary");
+    box.append(make("h4", "wgec-summary-title", "What this run suggests"));
+    box.append(
+      make(
+        "p",
+        "wgec-takeaway",
+        plainLanguageTakeaway(host, ecology, environment)
+      )
+    );
+
+    const finding = (label, text) => {
+      const row = make("div", "wgec-summary-row");
+      row.append(
+        make("strong", "wgec-summary-label", label),
+        make("span", "wgec-summary-text", text)
       );
-      diag.append(summary);
-      const sentence = make("p", "wse-signal-interpretation");
-      if (comp.tested_change_pct !== null && comp.positive_change_pct !== null) {
-        const delta = comp.positive_change_pct - comp.tested_change_pct;
-        sentence.textContent = Math.abs(delta) < 5
-          ? "Detection counts changed at approximately the same rate as testing effort in the two most recent comparable periods."
-          : delta > 0
-            ? "Positive detections changed faster than testing effort in the two most recent comparable periods."
-            : "Testing effort changed faster than positive detections in the two most recent comparable periods.";
+      box.append(row);
+    };
+
+    if (host.ready) {
+      if (host.below) {
+        const segments = host.below === host.ready || !hostSegments.length
+          ? ""
+          : ` (${joinSegments(hostSegments)})`;
+        finding(
+          "Host identity",
+          `Added explanatory value in ${host.below}/${host.ready} analyzable segments beyond time + geography${segments}.`
+        );
       } else {
-        sentence.textContent = "Counts are shown, but relative change cannot be estimated because a prior value is zero or unavailable.";
+        finding(
+          "Host identity",
+          `No additional explanatory value in ${host.ready} analyzable segments beyond time + geography.`
+        );
       }
-      diag.append(sentence, make("p", "wse-coverage-caution", "Descriptive comparison only. It does not establish prevalence, transmission, or whether the difference is biological rather than a change in surveillance design or population mix."));
-    }
-    wrap.append(diag);
-
-    if (ctx.status === "READY") {
-      const tableSection = make("section", "wse-coverage-section");
-      tableSection.append(make("h4", "", "Effort by period"));
-      const table = document.createElement("table");
-      table.className = "wse-coverage-table";
-      table.innerHTML = `<thead><tr><th>Period</th><th>Sampled</th><th>Tested</th><th>Positive</th><th>Sequenced</th><th>Positivity</th></tr></thead><tbody></tbody>`;
-      const body = table.querySelector("tbody");
-      for (const row of agg.periods) {
-        const tr = document.createElement("tr");
-        const positivity = coveragePct(row.positive, row.tested);
-        [ `${row.period_start} – ${row.period_end}`, coverageFmt(row.sampled), coverageFmt(row.tested), coverageFmt(row.positive), coverageFmt(row.sequenced), positivity === null ? "Unavailable" : `${positivity.toFixed(1)}%` ].forEach(value => {
-          const td = document.createElement("td"); td.textContent = value; tr.append(td);
-        });
-        body.append(tr);
-      }
-      tableSection.append(table);
-      wrap.append(tableSection);
-    }
-    return wrap;
-  }
-
-  function mount(explorer) {
-    if (!explorer || !explorer.root) throw new Error("Explorer instance is required.");
-    if (explorer.explorerTabs) return explorer.explorerTabs;
-
-    const root = explorer.root;
-    const shell = root.querySelector(".wse-shell");
-    if (!shell) throw new Error("WINGS Explorer shell not found.");
-
-    const timeline = shell.querySelector(".wse-timeline-panel");
-    const mainGrid = shell.querySelector(".wse-main-grid");
-    const braid = shell.querySelector(".wbc-embedded");
-    const genome = shell.querySelector(".wse-genome-panel");
-    const genomeFooter = shell.querySelector(".wse-footer-note");
-    const ecology = shell.querySelector(".wse-ecology-panel");
-    const outbreak = shell.querySelector(".wse-outbreak-panel");
-
-    if (!timeline || !mainGrid || !genome || !ecology) {
-      throw new Error("Expected Explorer panels were not found; upstream layout may have changed.");
-    }
-
-    shell.classList.add("wse-tabs-mounted");
-
-    const app = make("section", "wse-app-shell");
-    app.setAttribute("aria-label", "WINGS Explorer views");
-
-    const toolbar = make("div", "wse-app-toolbar");
-    const sampleLabel = make("label", "wse-app-control");
-    sampleLabel.append(make("span", "wse-app-control-label", "Sample"));
-    const sampleSelect = make("select", "wse-app-sample");
-    sampleSelect.setAttribute("aria-label", "Selected WINGS sample");
-    sampleSelect.append(new Option("Select a sample…", ""));
-    for (const sample of explorer.samples || []) {
-      sampleSelect.append(new Option(sample.sample_id, sample.sample_id));
-    }
-    sampleLabel.append(sampleSelect);
-
-    const hostLabel = make("label", "wse-app-control");
-    hostLabel.append(make("span", "wse-app-control-label", "Host"));
-    const hostSelect = make("select", "wse-app-host");
-    hostSelect.setAttribute("aria-label", "Host filter");
-    hostSelect.append(new Option("All hosts", "ALL"));
-    for (const host of explorer.hosts || []) hostSelect.append(new Option(host, host));
-    hostLabel.append(hostSelect);
-
-    const clearButton = make("button", "wse-app-clear", "Clear selection");
-    clearButton.type = "button";
-
-    const context = make("div", "wse-app-context", "No sample selected");
-    context.setAttribute("aria-live", "polite");
-
-    toolbar.append(sampleLabel, hostLabel, clearButton, context);
-
-    const nav = make("div", "wse-app-tabs");
-    nav.setAttribute("role", "tablist");
-    nav.setAttribute("aria-label", "Surveillance Explorer views");
-
-    const views = make("div", "wse-app-views");
-    const panels = {};
-    const buttons = {};
-
-    TAB_ORDER.forEach((name, index) => {
-      const button = make("button", "wse-app-tab", TAB_LABELS[name]);
-      button.type = "button";
-      button.id = `wse-tab-${name}`;
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-controls", `wse-view-${name}`);
-      button.setAttribute("aria-selected", index === 0 ? "true" : "false");
-      button.tabIndex = index === 0 ? 0 : -1;
-      button.dataset.tab = name;
-      nav.append(button);
-      buttons[name] = button;
-
-      const panel = make("section", "wse-app-view");
-      panel.id = `wse-view-${name}`;
-      panel.setAttribute("role", "tabpanel");
-      panel.setAttribute("aria-labelledby", button.id);
-      panel.hidden = index !== 0;
-      views.append(panel);
-      panels[name] = panel;
-    });
-
-    panels.overview.append(timeline, mainGrid);
-
-    const shared = make("div", "wse-app-shared");
-    shared.hidden = true;
-    if (braid) shared.append(braid);
-
-    const ecologyActions = make("div", "wse-ecology-clock-actions");
-    const loadPhenology = make("button", "wse-ecology-clock-action", explorer.payload?.ecological_clock ? "Override phenology" : "Load phenology");
-    loadPhenology.type = "button";
-    const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
-    exportEvidence.type = "button";
-    ecologyActions.append(loadPhenology, exportEvidence);
-    shared.prepend(ecologyActions);
-
-    const treeDetails = make("details", "wse-genome-details");
-    const treeSummary = make("summary", "wse-genome-details-summary", "Individual segment trees and QC evidence");
-    treeDetails.append(treeSummary, genome);
-    panels.genome.append(treeDetails);
-    if (genomeFooter) panels.genome.append(genomeFooter);
-
-    panels.ecology.append(ecology);
-    panels.coverage.append(renderCoveragePanel(explorer));
-
-    if (outbreak) {
-      panels.outbreak.append(outbreak);
     } else {
-      panels.outbreak.append(make("p", "wse-app-empty", "No outbreak-context panel is available for this run."));
+      finding("Host identity", "Not estimable in this run.");
     }
 
-    app.append(toolbar, nav, shared, views);
-    shell.append(app);
-
-    loadPhenology.addEventListener("click", () => {
-      braid?.querySelector(".wbc-import-phenology")?.click();
-    });
-    exportEvidence.addEventListener("click", () => {
-      braid?.querySelector(".wbc-export")?.click();
-    });
-
-    const duplicateSample = genome.querySelector(".wse-sample-select")?.closest("label");
-    if (duplicateSample) duplicateSample.classList.add("wse-duplicate-sample-control");
-
-    let active = "overview";
-
-    // Tree Studio is mounted immediately after Explorer Tabs. Hoist its launcher
-    // into the shared Genome/Ecology region so it remains visible above the
-    // Genome Braid instead of falling below the long shared component.
-    const placeTreeStudio = () => {
-      const launch = root.querySelector(".wse-tree-studio-launch");
-      if (!launch) return;
-      if (launch.parentElement !== shared) shared.prepend(launch);
-      launch.hidden = active !== "genome";
-    };
-
-    const activate = (name, focus = false) => {
-      if (!TAB_ORDER.includes(name)) return;
-      active = name;
-      for (const key of TAB_ORDER) {
-        const selected = key === name;
-        buttons[key].setAttribute("aria-selected", String(selected));
-        buttons[key].tabIndex = selected ? 0 : -1;
-        panels[key].hidden = !selected;
-      }
-      if (focus) buttons[name].focus();
-      if (name === "overview") {
-        requestAnimationFrame(() => {
-          explorer.renderMap?.();
-          explorer.updateEmphasis?.();
-        });
-      }
-      const showShared = Boolean(braid) && (name === "genome" || name === "ecology");
-      shared.hidden = !showShared;
-      if (braid) braid.dataset.wseLens = showShared ? name : "";
-      placeTreeStudio();
-      if (name === "coverage") {
-        panels.coverage.replaceChildren(renderCoveragePanel(explorer));
-      }
-      if (showShared) {
-        requestAnimationFrame(() => explorer.braidClock?.refresh?.());
-      }
-    };
-
-    for (const [name, button] of Object.entries(buttons)) {
-      button.addEventListener("click", () => activate(name));
-      button.addEventListener("keydown", (event) => {
-        const index = TAB_ORDER.indexOf(name);
-        let next = null;
-        if (event.key === "ArrowRight") next = TAB_ORDER[(index + 1) % TAB_ORDER.length];
-        if (event.key === "ArrowLeft") next = TAB_ORDER[(index - 1 + TAB_ORDER.length) % TAB_ORDER.length];
-        if (event.key === "Home") next = TAB_ORDER[0];
-        if (event.key === "End") next = TAB_ORDER[TAB_ORDER.length - 1];
-        if (next) {
-          event.preventDefault();
-          activate(next, true);
-        }
-      });
-    }
-
-    sampleSelect.addEventListener("change", () => {
-      explorer.selectedReferenceId = null;
-      explorer.selectedSampleId = explorer.sampleById?.has(sampleSelect.value) ? sampleSelect.value : null;
-      explorer.hoverSampleId = null;
-      explorer.updateSelection();
-    });
-
-    hostSelect.addEventListener("change", () => {
-      explorer.hostFilter = hostSelect.value || "ALL";
-      explorer.renderTimeline?.();
-      explorer.renderMap?.();
-      explorer.renderLegend?.();
-      explorer.renderTrees?.();
-      explorer.updateSelection();
-      panels.coverage.replaceChildren(renderCoveragePanel(explorer));
-    });
-
-    clearButton.addEventListener("click", () => {
-      explorer.selectedSampleId = null;
-      explorer.selectedReferenceId = null;
-      explorer.hoverSampleId = null;
-      explorer.updateSelection();
-    });
-
-    const sync = () => {
-      sampleSelect.value = explorer.selectedSampleId || "";
-      hostSelect.value = explorer.hostFilter || "ALL";
-      clearButton.disabled = !explorer.selectedSampleId && !explorer.selectedReferenceId;
-      const sample = explorer.selectedSampleId ? explorer.sampleById?.get(explorer.selectedSampleId) : null;
-      if (sample) {
-        const parts = [sample.sample_id, sample.host, sample.collection_date, sample.genotype?.call].filter(Boolean);
-        context.textContent = parts.join(" · ");
-      } else if (explorer.selectedReferenceId) {
-        context.textContent = `Public reference: ${explorer.selectedReferenceId}`;
+    if (ecology.ready) {
+      if (ecology.below) {
+        const segments = ecologySegments.length
+          ? ` (${joinSegments(ecologySegments)})`
+          : "";
+        finding(
+          "Seasonal ecology",
+          `Added explanatory value in ${ecology.below}/${ecology.ready} analyzable segments beyond host${segments}.`
+        );
       } else {
-        context.textContent = "No sample selected";
+        finding(
+          "Seasonal ecology",
+          `No additional explanatory value in ${ecology.ready} analyzable segments after host was included.`
+        );
       }
-    };
+    } else {
+      finding("Seasonal ecology", "Not estimable in this run.");
+    }
 
-    const previousUpdateSelection = explorer.updateSelection.bind(explorer);
-    explorer.updateSelection = function(...args) {
-      const result = previousUpdateSelection(...args);
-      sync();
-      return result;
-    };
+    if (environment.ready) {
+      const weatherSegments = significantSegments(models, "environment_vs_ecology");
+      if (environment.below) {
+        const segments = weatherSegments.length
+          ? ` (${joinSegments(weatherSegments)})`
+          : "";
+        finding(
+          "Local weather",
+          `Added explanatory value in ${environment.below}/${environment.ready} analyzable segments beyond seasonal ecology${segments}.`
+        );
+      } else {
+        finding(
+          "Local weather",
+          `No additional explanatory value in ${environment.ready} analyzable segments after seasonal ecology was included.`
+        );
+      }
+    } else {
+      const weatherSamples = readiness.samples_with_complete_environment_vector;
+      const contexts = readiness.distinct_weather_contexts
+        ?? readiness.distinct_environment_profiles;
 
-    root.addEventListener("click", (event) => {
-      const recordsAction = event.target.closest?.('[data-state-action="records"]');
-      if (recordsAction) setTimeout(() => activate("outbreak"), 0);
-    }, true);
+      const detail = weatherSamples != null && contexts != null
+        ? ` (${weatherSamples} samples; ${contexts} distinct weather settings).`
+        : ".";
 
-    treeDetails.addEventListener("toggle", () => {
-      if (treeDetails.open) requestAnimationFrame(() => {
-        explorer.renderTrees?.();
-        explorer.updateEmphasis?.();
-        explorer.revealSelectedTips?.();
-      });
-    });
+      finding(
+        "Local weather",
+        `Not independently estimable in this run${detail}`
+      );
+    }
 
-    sync();
-    activate("overview");
-    // Tree Studio mounts after this function returns; catch that insertion once.
-    setTimeout(placeTreeStudio, 0);
+    box.append(
+      make(
+        "p",
+        "wgec-summary-caveat",
+        "Exploratory associations only; not evidence of transmission, infection source, reassortment, or causation."
+      )
+    );
 
-    const api = { VERSION, activate, get active() { return active; }, buttons, panels };
-    explorer.explorerTabs = api;
-    return api;
+    return box;
   }
 
-  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison} };
+  function render(explorer, panel) {
+    panel.innerHTML = "";
+    panel.classList.add("wgec-panel");
+    const data = explorer?.payload?.genomic_ecological_concordance;
+
+    const head = make("header", "wgec-head");
+    const titleWrap = make("div");
+    titleWrap.append(
+      make("div", "wgec-kicker", "Research module"),
+      make("h3", "wgec-title", "Genomic–Ecological Concordance"),
+      make("p", "wgec-intro", "Tests whether host, seasonal ecology, and local weather explain genomic distance beyond time and geography.")
+    );
+    head.append(titleWrap, make("span", "wgec-badge", "Exploratory"));
+    panel.append(head);
+
+    if (!data || !Array.isArray(data.models)) {
+      const empty = make("div", "wgec-empty");
+      empty.append(
+        make("strong", "", "Concordance analysis is not available for this run."),
+        make("p", "", "WINGS will populate this module automatically when segment phylogenies and the required ecological inputs are available.")
+      );
+      panel.append(empty);
+      return;
+    }
+
+    const models = data.models;
+    panel.append(summaryBox(data, models));
+
+    const readiness = data.readiness || {};
+    const metrics = make("div", "wgec-metrics");
+    const metric = (label, value, note) => {
+      const card = make("div", "wgec-metric");
+      card.append(make("span", "wgec-metric-label", label), make("strong", "wgec-metric-value", String(value)));
+      if (note) card.append(make("small", "", note));
+      return card;
+    };
+    metrics.append(
+      metric("WINGS samples", readiness.total_samples ?? "—", "total in this run"),
+      metric("Seasonal ecology data", readiness.samples_with_phenology ?? "—", "samples with eBird seasonal profiles"),
+      metric("Samples with weather data", readiness.samples_with_complete_environment_vector ?? "—", "temperature, precipitation, and wind from ERA5"),
+      metric("Distinct weather settings", readiness.distinct_weather_contexts ?? readiness.distinct_environment_profiles ?? "—", "unique location-and-time weather profiles"),
+      metric("Minimum samples", readiness.minimum_unique_samples ?? "—", "required for analysis")
+    );
+    panel.append(metrics);
+
+
+
+    const wrap = make("div", "wgec-table-wrap");
+    const table = make("table", "wgec-table");
+    const thead = make("thead");
+    const hr = make("tr");
+    ["Segment", "Host vs baseline", "Seasonal ecology vs host", "Environment vs ecology"].forEach(text => hr.append(make("th", "", text)));
+    thead.append(hr);
+    const tbody = make("tbody");
+    for (const segment of SEGMENTS) {
+      const row = make("tr");
+      row.append(make("th", "wgec-segment", segment));
+      for (const [family] of FAMILIES) {
+        row.append(modelCell(models.find(item => item.segment === segment && item.comparison === family), family));
+      }
+      tbody.append(row);
+    }
+    table.append(thead, tbody);
+    wrap.append(table);
+    panel.append(wrap);
+
+    const method = make("details", "wgec-method");
+    const summary = make("summary", "", "Methods and interpretation guardrails");
+    const body = make("div", "wgec-method-body");
+
+    const modelList = make("ul");
+    [
+      ["M0", "Spatiotemporal", "time + geography"],
+      ["M1", "Host", "+ same host"],
+      ["M2", "Seasonal ecology", "+ eBird annual-profile distance"],
+      ["M3", "Environment", "+ standardized ERA5 weather distance"],
+    ].forEach(([code, name, predictors]) => {
+      modelList.append(make("li", "", `${code} — ${name}: ${predictors}`));
+    });
+
+    body.append(
+      make("p", "", "Modeling approach: nested ordinary least-squares linear regression models relate segment-specific genomic distance to time, geography, host identity, seasonal ecology, and weather. Each model adds predictors to the previous model, and added explanatory value is measured by the increase in R² (ΔR²)."),
+      make("p", "", "Models compared:"),
+      modelList,
+      make("p", "", "Outcome: segment-specific pairwise patristic distance among unambiguous WINGS sample tips."),
+      make("p", "", `Seasonal ecology: ${data.seasonal_profile_metric || "eBird seasonal-profile distance."}`),
+      make("p", "", `Weather: ${data.environmental_distance?.method || "standardized ERA5 environmental distance using temperature, precipitation, and wind."}`),
+      make("p", "", `Inference: Because pairwise observations share samples, conventional OLS p-values are not used. Statistical evidence is assessed using ${data.permutation_test?.method || "sample-label permutation."} ${data.permutation_test?.multiple_testing || ""}`),
+      make("p", "wgec-guardrail", "Pair rows share biological samples and are not independent observations. Unique-sample counts are therefore shown for every comparison. Concordance is not evidence of direct transmission, infection source, reassortment, or causality.")
+    );
+    const outputs = make("p", "wgec-outputs", `Detailed outputs: ${(data.detailed_outputs || []).join(" · ")}`);
+    body.append(outputs);
+    method.append(summary, body);
+    panel.append(method);
+  }
+
+  function mount(explorer, panel) {
+    if (!panel) throw new Error("Concordance tab panel is required.");
+    render(explorer, panel);
+    return {VERSION, refresh: () => render(explorer, panel)};
+  }
+
+  globalThis.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE = {VERSION, mount};
 })();
-/* WINGS_EXPLORER_TABS_JS_END */
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_UI_END */
 /* WINGS_BRAID_CLOCK_JS_BEGIN */
 /* WINGS Genome Braid + Ecological Clock v0.2.3. Offline, dependency-free. */
 (function (root, factory) {
@@ -1750,6 +2154,8 @@
       this.outbreakStart = "";
       this.outbreakEnd = "";
       this.outbreakPage = 0;
+      this.outbreakSelectedStart = "";
+      this.outbreakSelectedEnd = "";
       this.render();
     }
 
@@ -1986,7 +2392,22 @@
     }
 
     setHostFilter(host) {
-      this.hostFilter = host;
+      this.hostFilter = host || "ALL";
+
+      const selected = this.sampleById.get(this.selectedSampleId);
+
+      if (
+        selected &&
+        this.hostFilter !== "ALL" &&
+        selected.host !== this.hostFilter
+      ) {
+        this.selectedSampleId = null;
+        this.selectedReferenceId = null;
+        this.hoverSampleId = null;
+        this.outbreakSelectedStart = "";
+        this.outbreakSelectedEnd = "";
+      }
+
       this.renderTimeline();
       this.renderEbird();
       this.renderEcology();
@@ -2682,6 +3103,8 @@
       this.outbreakNode.addEventListener("change", event => {
         const key = event.target.dataset.outbreakControl;
         if (!key) return;
+        this.outbreakSelectedStart = "";
+        this.outbreakSelectedEnd = "";
         if (key === "scope") { this.outbreakScope = event.target.value; this.mapStateCardDismissed = false; }
         if (key === "basis") this.outbreakBasis = event.target.value;
         if (key === "days") this.outbreakDays = Number(event.target.value);
@@ -2695,6 +3118,15 @@
         this.renderOutbreak();
       });
       this.outbreakNode.addEventListener("click", event => {
+        const clearPeriod = event.target.closest("[data-outbreak-clear-period]");
+        if (clearPeriod) {
+          this.outbreakSelectedStart = "";
+          this.outbreakSelectedEnd = "";
+          this.outbreakPage = 0;
+          this.renderOutbreak();
+          return;
+        }
+
         const button = event.target.closest("[data-outbreak-page]");
         if (!button) return;
         this.outbreakPage += Number(button.dataset.outbreakPage);
@@ -2708,16 +3140,57 @@
       const context = this.outbreakContext;
       this.outbreakNode.hidden = context?.status !== "READY";
       if (this.outbreakNode.hidden) return;
-      if (this.outbreakLastSampleId !== this.selectedSampleId) { this.mapStateCardDismissed = false; this.outbreakPage = 0; if (this.outbreakLastSampleId !== undefined) this.outbreakScope = "sample"; this.outbreakLastSampleId = this.selectedSampleId; }
+      if (this.outbreakLastSampleId !== this.selectedSampleId) {
+        this.mapStateCardDismissed = false;
+        this.outbreakPage = 0;
+        this.outbreakSelectedStart = "";
+        this.outbreakSelectedEnd = "";
+        if (this.outbreakLastSampleId !== undefined) this.outbreakScope = "sample";
+        this.outbreakLastSampleId = this.selectedSampleId;
+      }
       this.syncOutbreakDates();
       const view = this.outbreakView();
       const focusedControl = document.activeElement?.dataset?.outbreakControl;
       const recordsOpen = forceRecordsOpen || Boolean(this.outbreakNode.querySelector(".wse-outbreak-records")?.open);
-      const pages = Math.max(1, Math.ceil(view.rows.length / 25));
+      const advancedOpen = Boolean(this.outbreakNode.querySelector(".wse-outbreak-advanced")?.open);
+      const aboutOpen = Boolean(this.outbreakNode.querySelector(".wse-outbreak-about")?.open);
+      const selectedPeriodActive = Boolean(
+        this.outbreakSelectedStart && this.outbreakSelectedEnd
+      );
+
+      const resultRows = selectedPeriodActive
+        ? view.rows.filter(row => {
+            const date = row[this.outbreakBasis];
+            return date &&
+              date >= this.outbreakSelectedStart &&
+              date <= this.outbreakSelectedEnd;
+          })
+        : view.rows;
+
+      const pages = Math.max(1, Math.ceil(resultRows.length / 25));
       this.outbreakPage = Math.max(0, Math.min(this.outbreakPage, pages - 1));
-      const rows = view.rows.slice(this.outbreakPage * 25, (this.outbreakPage + 1) * 25);
+      const rows = resultRows.slice(
+        this.outbreakPage * 25,
+        (this.outbreakPage + 1) * 25
+      );
       const option = (value, label, active) => `<option value="${esc(value)}"${value === active ? " selected" : ""}>${esc(label)}</option>`;
       const basisLabel = this.outbreakBasis === "collection_date" ? "collection date" : "detection date";
+
+      const prettyOutbreakDate = value => {
+        const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return value || "";
+        const [, year, month, day] = match;
+        return new Intl.DateTimeFormat("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "UTC",
+        }).format(new Date(Date.UTC(
+          Number(year),
+          Number(month) - 1,
+          Number(day)
+        )));
+      };
       const sample = this.sampleById.get(this.selectedSampleId);
       const sampleDate = this.outbreakEpoch(sample?.collection_date);
       const markerVisible = view.validWindow && sampleDate !== null && sampleDate >= view.start && sampleDate <= view.end;
@@ -2735,27 +3208,98 @@
       }
       const missingSampleDate = this.outbreakFollow && sample && sampleDate === null;
       const range = context.date_ranges[this.outbreakBasis] || {};
+
+      let outbreakTakeaway;
+
+      if (!view.validWindow) {
+        outbreakTakeaway = "Choose a valid date range to view APHIS wild-bird records.";
+      } else if (view.blocked && sample) {
+        outbreakTakeaway = `Sample ${sample.sample_id} does not have a usable U.S. state match. Choose a state or All U.S. states to browse APHIS records.`;
+      } else if (selectedPeriodActive) {
+        const geography = view.code
+          ? ` in ${esc(context.states[view.code] || view.code)}`
+          : " nationwide";
+
+        const period = this.outbreakSelectedStart === this.outbreakSelectedEnd
+          ? ` on ${prettyOutbreakDate(this.outbreakSelectedStart)}`
+          : ` from ${prettyOutbreakDate(this.outbreakSelectedStart)} through ${prettyOutbreakDate(this.outbreakSelectedEnd)}`;
+
+        outbreakTakeaway = `<strong>${formatNumber(resultRows.length)} APHIS wild-bird records</strong>${geography}${period}.`;
+      } else if (
+        sample &&
+        this.outbreakScope === "sample" &&
+        sampleState &&
+        sampleDate !== null &&
+        this.outbreakFollow
+      ) {
+        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS wild-bird records</strong> in ${esc(context.states[sampleState] || sampleState)} within ±${this.outbreakDays} days of ${esc(sample.sample_id)}'s collection date (${prettyOutbreakDate(sample.collection_date)}).`;
+      } else if (view.code) {
+        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS wild-bird records</strong> in ${esc(context.states[view.code] || view.code)} from ${prettyOutbreakDate(this.outbreakStart)} through ${prettyOutbreakDate(this.outbreakEnd)}.`;
+      } else {
+        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS wild-bird records</strong> nationwide from ${prettyOutbreakDate(this.outbreakStart)} through ${prettyOutbreakDate(this.outbreakEnd)}.${sample ? "" : " Select a WINGS sample to focus on its state and collection date."}`;
+      }
+
       this.outbreakNode.innerHTML = `
         <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Outbreak context</span><h3>APHIS wild-bird detections</h3></div><a href="${esc(context.source_url)}" target="_blank" rel="noopener noreferrer">Open APHIS source table ↗</a></div>
         <div class="wse-outbreak-body">
-          <p class="wse-outbreak-caution">Date and place overlap provide context only; they do not imply epidemiological linkage. Counts are source records, not unique outbreaks, incidence, or prevalence.</p>
-          <div class="wse-outbreak-controls">
-            <label>Timeline / records <select data-outbreak-control="scope">${option("sample", "Follow selected sample (state)", this.outbreakScope)}${option("all", "All U.S. states", this.outbreakScope)}${Object.entries(context.states).sort((a,b) => a[1].localeCompare(b[1])).map(([code, name]) => option(code, name, this.outbreakScope)).join("")}</select></label>
-            <label>Date basis <select data-outbreak-control="basis">${option("collection_date", "Collection date", this.outbreakBasis)}${option("detected_date", "Date detected", this.outbreakBasis)}</select></label>
-            <label><input type="checkbox" data-outbreak-control="lock"${this.outbreakFollow ? "" : " checked"}> Lock date window</label>
-            <label>Window ± <select data-outbreak-control="days"${this.outbreakFollow ? "" : " disabled"}>${[7,30,90,365].map(days => option(String(days), `${days} days`, String(this.outbreakDays))).join("")}</select></label>
-            <label>From <input type="date" data-outbreak-control="start" value="${esc(this.outbreakStart)}"></label>
-            <label>Through <input type="date" data-outbreak-control="end" value="${esc(this.outbreakEnd)}"></label>
+          <p class="wse-outbreak-caution"><strong>Context only:</strong> date and place overlap do not imply epidemiological linkage. Counts are APHIS source records, not unique outbreaks or prevalence.</p>
+
+          <p class="wse-outbreak-takeaway" aria-live="polite">${outbreakTakeaway}</p>
+
+          <div class="wse-outbreak-primary-controls">
+            <label>Geography
+              <select data-outbreak-control="scope">
+                ${option("sample", "Follow selected sample (state)", this.outbreakScope)}
+                ${option("all", "All U.S. states", this.outbreakScope)}
+                ${Object.entries(context.states).sort((a,b) => a[1].localeCompare(b[1])).map(([code, name]) => option(code, name, this.outbreakScope)).join("")}
+              </select>
+            </label>
+            <label>Window ±
+              <select data-outbreak-control="days"${this.outbreakFollow ? "" : " disabled"}>
+                ${[7,30,90,365].map(days => option(String(days), `${days} days`, String(this.outbreakDays))).join("")}
+              </select>
+            </label>
           </div>
-          <p class="wse-outbreak-scope">${esc(view.scopeLabel)} ${missingSampleDate ? "Sample collection date unavailable; displaying the snapshot's full date range." : this.outbreakFollow && !sample ? "No selected sample; displaying the snapshot's full date range." : ""}</p>
-          <p class="wse-outbreak-summary" aria-live="polite">${view.validWindow ? `<strong>${formatNumber(view.rows.length)} matching source records</strong> · ${esc(this.outbreakStart)} through ${esc(this.outbreakEnd)} by ${basisLabel}.` : "Enter a valid date range with From on or before Through."} ${formatNumber(view.undated)} records in this geographic scope lack a usable ${basisLabel} and are excluded.</p>
+
+          ${selectedPeriodActive ? `
+            <div class="wse-outbreak-period-filter">
+              <span>
+                Source records filtered to
+                <strong>${this.outbreakSelectedStart === this.outbreakSelectedEnd
+                  ? prettyOutbreakDate(this.outbreakSelectedStart)
+                  : `${prettyOutbreakDate(this.outbreakSelectedStart)} – ${prettyOutbreakDate(this.outbreakSelectedEnd)}`}</strong>.
+                The timeline remains unchanged.
+              </span>
+              <button type="button" data-outbreak-clear-period>Show all dates</button>
+            </div>
+          ` : ""}
+
+          <details class="wse-outbreak-advanced"${advancedOpen ? " open" : ""}>
+            <summary>Advanced</summary>
+            <div class="wse-outbreak-controls">
+              <label>Date basis <select data-outbreak-control="basis">${option("collection_date", "Collection date", this.outbreakBasis)}${option("detected_date", "Date detected", this.outbreakBasis)}</select></label>
+              <label><input type="checkbox" data-outbreak-control="lock"${this.outbreakFollow ? "" : " checked"}> Lock date window</label>
+              <label>From <input type="date" data-outbreak-control="start" value="${esc(this.outbreakStart)}"></label>
+              <label>Through <input type="date" data-outbreak-control="end" value="${esc(this.outbreakEnd)}"></label>
+            </div>
+          </details>
+
           ${view.outsideSnapshot ? '<p class="wse-outbreak-caution">This window is outside the date range represented in this snapshot. Zero matches do not establish absence of detections.</p>' : ""}
-          <p class="wse-outbreak-precision">Source precision: county/state. Map: state-level aggregates; shaded areas are not exact detection locations. State matching also applies when sample coordinates are absent. No distance-based linkage is calculated.</p>
-          <p class="wse-outbreak-map-key">The shared map shades all U.S. states for the chosen dates, including neighboring states. This timeline and the source records follow the geographic choice above. Click a shaded state to browse its records without changing the selected WINGS sample. Host filters affect sample points only.</p>
-          <p class="wse-outbreak-sample-label" aria-live="polite">${markerVisible ? '<span class="wse-outbreak-sample-swatch" aria-hidden="true"></span>' : ""}<span>${esc(sampleDateLabel)}</span></p>
+
           <div class="wse-outbreak-timeline"></div>
-          <p class="wse-outbreak-timeline-note">${this.outbreakBasis === "collection_date" ? "Collection date is the sample collection date reported by APHIS." : "Date detected is the date of APHIS confirmatory testing; it can be later than collection."} Click a bar to narrow the date window. A dashed line marks the selected WINGS sample's collection date when it falls in this window.</p>
-          <details class="wse-outbreak-records"${recordsOpen ? " open" : ""}><summary>Source records (${formatNumber(view.rows.length)})</summary>
+
+          <details class="wse-outbreak-about"${aboutOpen ? " open" : ""}>
+            <summary>About this context</summary>
+            <div class="wse-outbreak-about-body">
+              <p>${esc(view.scopeLabel)} ${missingSampleDate ? "Sample collection date unavailable; displaying the snapshot's full date range." : this.outbreakFollow && !sample ? "No selected sample; displaying the snapshot's full date range." : ""}</p>
+              <p>${formatNumber(view.undated)} records in this geographic scope lack a usable ${basisLabel} and are excluded.</p>
+              <p>Source precision: county/state. Map: state-level aggregates; shaded areas are not exact detection locations. State matching also applies when sample coordinates are absent. No distance-based linkage is calculated.</p>
+              <p>The shared map shades all U.S. states for the chosen dates, including neighboring states. This timeline and the source records follow the geographic choice above. Click a shaded state to browse its records without changing the selected WINGS sample. Host filters affect sample points only.</p>
+              <p>${markerVisible ? '<span class="wse-outbreak-sample-swatch" aria-hidden="true"></span>' : ""}${esc(sampleDateLabel)}</p>
+              <p>${this.outbreakBasis === "collection_date" ? "Collection date is the sample collection date reported by APHIS." : "Date detected is the date of APHIS confirmatory testing; it can be later than collection."} Click a bar to filter the source records while keeping the full timeline visible. A dashed line marks the selected WINGS sample's collection date when it falls in this window.</p>
+            </div>
+          </details>
+          <details class="wse-outbreak-records"${recordsOpen ? " open" : ""}><summary>Source records (${formatNumber(resultRows.length)})</summary>
             <p>CSV data-record numbers refer to this snapshot. APHIS supplies no unique record IDs or record-specific URLs; each source link opens the APHIS table. Repeated rows are retained.</p>
             <div class="wse-outbreak-table-wrap"><table><thead><tr><th>CSV record</th><th>State / county</th><th>Bird species</th><th>Collection date</th><th>Date detected</th><th>Source details</th></tr></thead><tbody>${rows.map(row => `
               <tr><td>${row.source_row}</td><td>${esc(row.state)} / ${esc(row.county || "Not recorded")}<small>Source precision: ${esc(row.geographic_precision)}</small></td><td>${esc(row.species)}</td><td>${esc(row.collection_date_raw)}</td><td>${esc(row.detected_date_raw)}</td><td><details><summary>Details</summary><p>Strain: ${esc(row.strain)}<br>Classification: ${esc(row.classification)}<br>Sampling method: ${esc(row.sampling_method)}<br>Submitting agency: ${esc(row.submitting_agency)}</p><p>Snapshot reference: ${esc(context.sha256.slice(0,12))}:${row.source_row}</p></details><a href="${esc(context.source_url)}" target="_blank" rel="noopener noreferrer" aria-label="Open APHIS source table for CSV record ${row.source_row}">APHIS table ↗</a></td></tr>`).join("") || '<tr><td colspan="6">No dated records match these filters in this snapshot.</td></tr>'}</tbody></table></div>
@@ -2845,6 +3389,8 @@
           this.outbreakScope = code;
           this.mapStateCardDismissed = false;
           this.outbreakPage = 0;
+          this.outbreakSelectedStart = "";
+          this.outbreakSelectedEnd = "";
           this.renderOutbreak();
           this.outbreakNode.querySelector('[data-outbreak-control="scope"]')?.focus({preventScroll: true});
         };
@@ -2889,9 +3435,39 @@
         const date = new Date(start);
         const end = daily ? start + 86400000 : Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
         const from = Math.max(start, view.start), through = Math.min(end, view.end + 86400000);
-        const bar = svgEl("rect", {x:x(from), y:bottom - count / max * (bottom - top), width:Math.max(1, x(through) - x(from) - 1), height:count / max * (bottom - top), class:"wse-outbreak-bar", tabindex:0, role:"button", "aria-label":`${key}: ${count} source records; filter to this period`});
+        const binStart = new Date(from).toISOString().slice(0, 10);
+        const binEnd = new Date(through - 86400000).toISOString().slice(0, 10);
+        const selected =
+          this.outbreakSelectedStart === binStart &&
+          this.outbreakSelectedEnd === binEnd;
+
+        const bar = svgEl("rect", {
+          x:x(from),
+          y:bottom - count / max * (bottom - top),
+          width:Math.max(1, x(through) - x(from) - 1),
+          height:count / max * (bottom - top),
+          class:`wse-outbreak-bar${selected ? " is-selected" : ""}`,
+          tabindex:0,
+          role:"button",
+          "aria-pressed":String(selected),
+          "aria-label":`${key}: ${count} source records; ${selected ? "selected" : "filter source records to this period"}`
+        });
         const title = svgEl("title"); title.textContent = `${key}: ${count} source records`; bar.appendChild(title);
-        const choose = () => { this.outbreakStart = new Date(from).toISOString().slice(0, 10); this.outbreakEnd = new Date(through - 86400000).toISOString().slice(0, 10); this.outbreakFollow = false; this.outbreakPage = 0; this.renderOutbreak(true); this.outbreakNode.querySelector('[data-outbreak-control="start"]')?.focus({preventScroll: true}); };
+        const choose = () => {
+          if (selected) {
+            this.outbreakSelectedStart = "";
+            this.outbreakSelectedEnd = "";
+          } else {
+            this.outbreakSelectedStart = binStart;
+            this.outbreakSelectedEnd = binEnd;
+          }
+
+          this.outbreakPage = 0;
+          this.renderOutbreak(true);
+          this.outbreakNode
+            .querySelector(".wse-outbreak-records summary")
+            ?.focus({preventScroll: true});
+        };
         bar.addEventListener("click", choose);
         bar.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(); } });
         svg.appendChild(bar);
