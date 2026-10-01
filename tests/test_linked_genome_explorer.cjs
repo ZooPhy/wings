@@ -30,7 +30,9 @@ const payload = JSON.parse(fixture.stdout);
       const json = JSON.stringify(data).replaceAll("</", "<\\/");
       await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body {font-family: system-ui; margin: 20px;} ${css}</style></head><body><script type="application/json" id="data">${json}</script><div class="wings-surveillance-explorer" data-wse-data-id="data"></div></body></html>`);
       await page.addScriptTag({content: source});
-      await page.waitForSelector(".wse-genome-panel");
+      await page.waitForSelector(".wse-genome-panel", {state: "attached"});
+      await page.locator('.wse-app-tab[data-tab="genome"]').click();
+      await page.waitForSelector(".wse-genome-panel", {state: "visible"});
     }
     const selected = () => page.locator(".wse-tree-grid .wse-tree-tip.is-selected").count();
     const presence = segment => page.locator(`.wse-segment-tree[data-segment="${segment}"] .wse-tree-presence`).innerText();
