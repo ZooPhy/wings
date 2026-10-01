@@ -713,7 +713,7 @@
     explorer.treeStudio=api;return api;
   }
 
-  window.addEventListener?.("message", event => {
+  globalThis.window?.addEventListener?.("message", event => {
     const m=event.data||{};
     if(m.type!=="WINGS_TREE_STUDIO_SELECT"||!sessions.has(m.session))return;
     const entry=sessions.get(m.session), e=entry.explorer;
