@@ -32,6 +32,7 @@ const payload = JSON.parse(fixture.stdout);
       await page.addScriptTag({content: source});
       await page.waitForSelector(".wse-genome-panel", {state: "attached"});
       await page.locator('.wse-app-tab[data-tab="genome"]').click();
+      await page.locator(".wse-genome-details-summary").click();
       await page.waitForSelector(".wse-genome-panel", {state: "visible"});
     }
     const selected = () => page.locator(".wse-tree-grid .wse-tree-tip.is-selected").count();
