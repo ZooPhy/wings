@@ -1,0 +1,3 @@
+period_start	period_end	state	county	host	sampled	tested	positive	sequenced	source	notes
+2025-09-01	2025-09-30	KY		BLVU	120	120	8	6	Example surveillance program	Monthly aggregate example
+2025-10-01	2025-10-31	KY		BLVU	150	150	14	11	Example surveillance program	Monthly aggregate example

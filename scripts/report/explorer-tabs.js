@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.1.2";
+  const VERSION = "0.2.0";
 
   const make = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -10,13 +10,173 @@
     return node;
   };
 
-  const TAB_ORDER = ["overview", "genome", "ecology", "outbreak"];
+  const TAB_ORDER = ["overview", "genome", "ecology", "coverage", "outbreak"];
   const TAB_LABELS = {
     overview: "Overview",
     genome: "Genome",
     ecology: "Ecology",
+    coverage: "Sampling & Detections",
     outbreak: "Outbreak context",
   };
+
+
+  function coverageNumber(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string" && value.trim() === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function coverageFmt(value) {
+    const n = coverageNumber(value);
+    return n === null ? "Unavailable" : n.toLocaleString("en-US");
+  }
+
+  function coveragePct(numerator, denominator) {
+    const n = coverageNumber(numerator), d = coverageNumber(denominator);
+    return n === null || d === null || d <= 0 ? null : 100 * n / d;
+  }
+
+  function coverageChange(current, prior) {
+    const c = coverageNumber(current), p = coverageNumber(prior);
+    if (c === null || p === null || p === 0) return null;
+    return 100 * (c - p) / p;
+  }
+
+  function aggregateCoverageRecords(records, hostFilter="ALL") {
+    const rows = (records || []).filter(row => hostFilter === "ALL" || String(row.host || "") === hostFilter);
+    const fields = ["sampled", "tested", "positive", "sequenced"];
+    const total = field => {
+      const vals = rows.map(row => coverageNumber(row[field])).filter(v => v !== null);
+      return vals.length ? vals.reduce((a,b)=>a+b,0) : null;
+    };
+    const groups = new Map();
+    for (const row of rows) {
+      const key = `${row.period_start}|${row.period_end}`;
+      if (!groups.has(key)) groups.set(key, {period_start:row.period_start,period_end:row.period_end,rows:[]});
+      groups.get(key).rows.push(row);
+    }
+    const periods = [...groups.values()].sort((a,b)=>a.period_start.localeCompare(b.period_start)).map(group => ({
+      period_start:group.period_start,
+      period_end:group.period_end,
+      ...Object.fromEntries(fields.map(field => {
+        const vals = group.rows.map(row=>coverageNumber(row[field])).filter(v=>v!==null);
+        return [field, vals.length ? vals.reduce((a,b)=>a+b,0) : null];
+      })),
+    }));
+    return {visibleRows:rows.length, rows, totals:Object.fromEntries(fields.map(field=>[field,total(field)])), periods};
+  }
+
+  function coverageComparison(periods) {
+    const eligible = (periods || []).filter(p => coverageNumber(p.tested) !== null && coverageNumber(p.positive) !== null);
+    if (eligible.length < 2) return null;
+    const prior = eligible[eligible.length-2], recent = eligible[eligible.length-1];
+    return {
+      prior, recent,
+      tested_change_pct: coverageChange(recent.tested, prior.tested),
+      positive_change_pct: coverageChange(recent.positive, prior.positive),
+      prior_positivity_pct: coveragePct(prior.positive, prior.tested),
+      recent_positivity_pct: coveragePct(recent.positive, recent.tested),
+    };
+  }
+
+  function renderCoveragePanel(explorer) {
+    const ctx = explorer.payload?.coverage_context || {status:"NOT_CONFIGURED",records:[],genomic_summary:{}};
+    const wrap = make("div", "wse-coverage");
+    const title = make("div", "wse-coverage-head");
+    const heading = make("div");
+    heading.append(make("div", "wse-coverage-kicker", "Surveillance lens"), make("h3", "", "Sampling & Detections"));
+    title.append(heading);
+    wrap.append(title);
+
+    const host = explorer.hostFilter || "ALL";
+    const agg = aggregateCoverageRecords(ctx.records || [], host);
+    const genomic = ctx.genomic_summary || {};
+
+    if (ctx.status !== "READY") {
+      const note = make("p", "wse-coverage-note");
+      note.textContent = "Sampling denominator unavailable. WINGS can still show genomic recovery for records in this run, but it will not calculate positivity or normalize detections by testing effort.";
+      wrap.append(note);
+    }
+
+    const cards = make("div", "wse-coverage-cards");
+    const card = (label, value, sub) => {
+      const node = make("div", "wse-coverage-card");
+      node.append(make("span", "", label), make("strong", "", value), make("small", "", sub));
+      return node;
+    };
+    cards.append(
+      card("Sampled", coverageFmt(agg.totals.sampled), "external surveillance denominator"),
+      card("Tested", coverageFmt(agg.totals.tested), "external surveillance denominator"),
+      card("Positive", coverageFmt(agg.totals.positive), "program-reported detections"),
+      card("Sequenced", coverageFmt(agg.totals.sequenced), "program-defined sequencing count")
+    );
+    wrap.append(cards);
+
+    const funnel = make("section", "wse-coverage-section");
+    funnel.append(make("h4", "", "WINGS genomic coverage"));
+    const funnelGrid = make("div", "wse-coverage-funnel");
+    funnelGrid.append(
+      card("WINGS records", coverageFmt(genomic.wings_records), "records entering this run"),
+      card("≥1 QC segment", coverageFmt(genomic.at_least_one_qc_segment), "at least one QC-passing segment"),
+      card("Complete genomes", coverageFmt(genomic.complete_8_segment_genomes), "8 / 8 QC-passing segments"),
+      card("Subtype resolved", coverageFmt(genomic.subtype_resolved), "HA/NA subtype available")
+    );
+    funnel.append(funnelGrid);
+    const caution = make("p", "wse-coverage-caution", "External surveillance totals and WINGS genomic records are shown side by side, not assumed to be one continuous denominator chain.");
+    funnel.append(caution);
+    wrap.append(funnel);
+
+    const diag = make("section", "wse-coverage-section");
+    diag.append(make("h4", "", "Signal-or-Sampling diagnostic"));
+    const comp = coverageComparison(agg.periods);
+    if (!comp) {
+      diag.append(make("p", "wse-coverage-empty", "At least two periods with both tested and positive counts are required for a denominator-aware comparison."));
+    } else {
+      const pctText = value => value === null ? "not estimable" : `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+      const posPrior = comp.prior_positivity_pct, posRecent = comp.recent_positivity_pct;
+      const summary = make("div", "wse-signal-summary");
+      summary.append(
+        card("Testing effort", pctText(comp.tested_change_pct), `${comp.prior.period_start} → ${comp.recent.period_start}`),
+        card("Positive detections", pctText(comp.positive_change_pct), "change in source-record count"),
+        card("Positivity", posPrior === null || posRecent === null ? "Unavailable" : `${posPrior.toFixed(1)}% → ${posRecent.toFixed(1)}%`, "positive / tested")
+      );
+      diag.append(summary);
+      const sentence = make("p", "wse-signal-interpretation");
+      if (comp.tested_change_pct !== null && comp.positive_change_pct !== null) {
+        const delta = comp.positive_change_pct - comp.tested_change_pct;
+        sentence.textContent = Math.abs(delta) < 5
+          ? "Detection counts changed at approximately the same rate as testing effort in the two most recent comparable periods."
+          : delta > 0
+            ? "Positive detections changed faster than testing effort in the two most recent comparable periods."
+            : "Testing effort changed faster than positive detections in the two most recent comparable periods.";
+      } else {
+        sentence.textContent = "Counts are shown, but relative change cannot be estimated because a prior value is zero or unavailable.";
+      }
+      diag.append(sentence, make("p", "wse-coverage-caution", "Descriptive comparison only. It does not establish prevalence, transmission, or whether the difference is biological rather than a change in surveillance design or population mix."));
+    }
+    wrap.append(diag);
+
+    if (ctx.status === "READY") {
+      const tableSection = make("section", "wse-coverage-section");
+      tableSection.append(make("h4", "", "Effort by period"));
+      const table = document.createElement("table");
+      table.className = "wse-coverage-table";
+      table.innerHTML = `<thead><tr><th>Period</th><th>Sampled</th><th>Tested</th><th>Positive</th><th>Sequenced</th><th>Positivity</th></tr></thead><tbody></tbody>`;
+      const body = table.querySelector("tbody");
+      for (const row of agg.periods) {
+        const tr = document.createElement("tr");
+        const positivity = coveragePct(row.positive, row.tested);
+        [ `${row.period_start} – ${row.period_end}`, coverageFmt(row.sampled), coverageFmt(row.tested), coverageFmt(row.positive), coverageFmt(row.sequenced), positivity === null ? "Unavailable" : `${positivity.toFixed(1)}%` ].forEach(value => {
+          const td = document.createElement("td"); td.textContent = value; tr.append(td);
+        });
+        body.append(tr);
+      }
+      tableSection.append(table);
+      wrap.append(tableSection);
+    }
+    return wrap;
+  }
 
   function mount(explorer) {
     if (!explorer || !explorer.root) throw new Error("Explorer instance is required.");
@@ -120,6 +280,7 @@
     if (genomeFooter) panels.genome.append(genomeFooter);
 
     panels.ecology.append(ecology);
+    panels.coverage.append(renderCoveragePanel(explorer));
 
     if (outbreak) {
       panels.outbreak.append(outbreak);
@@ -172,6 +333,9 @@
       shared.hidden = !showShared;
       if (braid) braid.dataset.wseLens = showShared ? name : "";
       placeTreeStudio();
+      if (name === "coverage") {
+        panels.coverage.replaceChildren(renderCoveragePanel(explorer));
+      }
       if (showShared) {
         requestAnimationFrame(() => explorer.braidClock?.refresh?.());
       }
@@ -207,6 +371,7 @@
       explorer.renderLegend?.();
       explorer.renderTrees?.();
       explorer.updateSelection();
+      panels.coverage.replaceChildren(renderCoveragePanel(explorer));
     });
 
     clearButton.addEventListener("click", () => {
@@ -261,5 +426,5 @@
     return api;
   }
 
-  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount };
+  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison} };
 })();

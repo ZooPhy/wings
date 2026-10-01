@@ -365,6 +365,19 @@ if PHENOLOGY_TAXONOMY_FILE:
 PHENOLOGY_OUTPUT = f"{RESULTS}/run_summary/phenology/wings_phenology.json"
 # WINGS_DYNAMIC_PHENOLOGY_CONFIG_END
 
+# WINGS_SIGNAL_SAMPLING_CONFIG_BEGIN
+SURVEILLANCE_EFFORT_CONFIG = config.get("surveillance_effort", {}) or {}
+if not isinstance(SURVEILLANCE_EFFORT_CONFIG, dict):
+    raise ValueError("surveillance_effort must be a mapping")
+SURVEILLANCE_EFFORT_FILE = config_path(
+    "surveillance_effort_file",
+    SURVEILLANCE_EFFORT_CONFIG.get("file", "resources/surveillance_effort.tsv"),
+)
+SURVEILLANCE_EFFORT_ENABLED = as_bool(
+    SURVEILLANCE_EFFORT_CONFIG.get("enabled", Path(SURVEILLANCE_EFFORT_FILE).is_file())
+)
+# WINGS_SIGNAL_SAMPLING_CONFIG_END
+
 # APHIS context uses a pinned local CSV; report builds never fetch live data.
 OUTBREAK_CONFIG = config.get("outbreak_context", {}) or {}
 if not isinstance(OUTBREAK_CONFIG, dict):
@@ -2514,6 +2527,7 @@ rule surveillance_explorer_data:
         ecological_context=([ECOLOGY_JSON] if ECOLOGY_ENABLED else []),
         ecological_loader="scripts/build_ecological_context.py",
         phenology=([PHENOLOGY_OUTPUT] if PHENOLOGY_ENABLED else []),
+        surveillance_effort=([SURVEILLANCE_EFFORT_FILE] if SURVEILLANCE_EFFORT_ENABLED else []),
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",

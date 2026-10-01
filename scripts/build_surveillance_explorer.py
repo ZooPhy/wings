@@ -565,6 +565,138 @@ def load_phenology_snapshot(path: Path, samples: list[dict[str, Any]], metadata:
     return data
 # WINGS_DYNAMIC_PHENOLOGY_LOADER_END
 
+# WINGS_SIGNAL_SAMPLING_COVERAGE_PY_BEGIN
+from datetime import date as _wings_date
+
+
+def _coverage_int(value, *, field, row_number):
+    text = str(value or "").strip()
+    if not text or text.upper() in MISSING_TEXT:
+        return None
+    if not re.fullmatch(r"\d+", text):
+        raise ValueError(f"surveillance effort row {row_number}: {field} must be a non-negative integer or missing")
+    return int(text)
+
+
+def _coverage_date(value, *, field, row_number):
+    text = str(value or "").strip()
+    try:
+        return _wings_date.fromisoformat(text).isoformat()
+    except ValueError as exc:
+        raise ValueError(f"surveillance effort row {row_number}: {field} must be YYYY-MM-DD") from exc
+
+
+def _sum_known(rows, field):
+    values = [row.get(field) for row in rows if row.get(field) is not None]
+    return sum(values) if values else None
+
+
+def _wings_genomic_summary(samples):
+    def segs(sample):
+        value = sample.get("segments_pass")
+        return value if isinstance(value, int) else None
+    resolved = {"", "UNKNOWN", "UNDETERMINED", "NONE", "NA", "N/A"}
+    return {
+        "wings_records": len(samples),
+        "at_least_one_qc_segment": sum(1 for sample in samples if (segs(sample) or 0) >= 1),
+        "complete_8_segment_genomes": sum(1 for sample in samples if segs(sample) == 8),
+        "subtype_resolved": sum(
+            1 for sample in samples
+            if str(sample.get("potential_subtype") or "").strip().upper() not in resolved
+        ),
+    }
+
+
+def build_coverage_context(path, samples):
+    genomic = _wings_genomic_summary(samples)
+    if path is None:
+        return {
+            "status": "NOT_CONFIGURED",
+            "records": [],
+            "periods": [],
+            "comparison": None,
+            "genomic_summary": genomic,
+            "notes": ["External surveillance denominators were not supplied."],
+        }
+
+    path = Path(path)
+    if not path.is_file():
+        raise ValueError(f"surveillance effort file does not exist: {path}")
+    rows = read_tsv(path)
+    if not rows:
+        raise ValueError(f"surveillance effort file is empty: {path}")
+    required = {"period_start", "period_end"}
+    missing = required - set(rows[0])
+    if missing:
+        raise ValueError("surveillance effort file is missing required column(s): " + ", ".join(sorted(missing)))
+
+    count_fields = ("sampled", "tested", "positive", "sequenced")
+    records = []
+    for i, row in enumerate(rows, 1):
+        start = _coverage_date(row.get("period_start"), field="period_start", row_number=i)
+        end = _coverage_date(row.get("period_end"), field="period_end", row_number=i)
+        if end < start:
+            raise ValueError(f"surveillance effort row {i}: period_end precedes period_start")
+        rec = {
+            "source_row": i,
+            "period_start": start,
+            "period_end": end,
+            "state": _clean(row.get("state")),
+            "county": _clean(row.get("county")),
+            "host": _clean(row.get("host")),
+            "source": _clean(row.get("source")),
+            "notes": _clean(row.get("notes")),
+        }
+        for field in count_fields:
+            rec[field] = _coverage_int(row.get(field), field=field, row_number=i)
+        if all(rec[field] is None for field in count_fields):
+            raise ValueError(f"surveillance effort row {i}: at least one count field must be supplied")
+        if rec["sampled"] is not None and rec["tested"] is not None and rec["tested"] > rec["sampled"]:
+            raise ValueError(f"surveillance effort row {i}: tested cannot exceed sampled")
+        if rec["tested"] is not None and rec["positive"] is not None and rec["positive"] > rec["tested"]:
+            raise ValueError(f"surveillance effort row {i}: positive cannot exceed tested")
+        records.append(rec)
+
+    period_keys = sorted({(row["period_start"], row["period_end"]) for row in records})
+    periods = []
+    for start, end in period_keys:
+        subset = [row for row in records if row["period_start"] == start and row["period_end"] == end]
+        periods.append({
+            "period_start": start,
+            "period_end": end,
+            **{field: _sum_known(subset, field) for field in count_fields},
+            "record_count": len(subset),
+        })
+
+    comparison = None
+    eligible = [p for p in periods if p.get("tested") is not None and p.get("positive") is not None]
+    if len(eligible) >= 2:
+        prior, recent = eligible[-2], eligible[-1]
+        comparison = {"prior": prior, "recent": recent}
+
+    raw = path.read_bytes()
+    return {
+        "status": "READY",
+        "source_file": path.name,
+        "snapshot_sha256": hashlib.sha256(raw).hexdigest(),
+        "record_count": len(records),
+        "records": records,
+        "periods": periods,
+        "comparison": comparison,
+        "totals": {field: _sum_known(records, field) for field in count_fields},
+        "genomic_summary": genomic,
+        "count_semantics": {
+            "missing": "Unavailable/not reported; never coerced to zero.",
+            "zero": "Observed zero.",
+            "sequenced": "Program-supplied sequencing count; subset relationship is not assumed by WINGS.",
+        },
+        "notes": [
+            "External surveillance effort is displayed separately from WINGS genomic recovery unless source inclusion criteria establish a shared denominator.",
+            "Signal-or-Sampling comparisons are descriptive and do not establish prevalence, transmission intensity, or causation.",
+        ],
+    }
+# WINGS_SIGNAL_SAMPLING_COVERAGE_PY_END
+
 def build_payload(
     metadata: Path,
     summaries: Iterable[Path],
@@ -582,6 +714,7 @@ def build_payload(
     reference_provenance: Path | None = None,
     reference_loader: Path | None = None,
     phenology: Path | None = None,
+    surveillance_effort: Path | None = None,
 ) -> dict[str, Any]:
     metadata_rows = read_metadata(metadata)
     summary_rows = read_sample_summaries(summaries)
@@ -640,6 +773,7 @@ def build_payload(
         "outbreak_context": build_outbreak_context(aphis_csv, aphis_provenance),
         "ecological_context": ecology,
         "ecological_clock": clock,
+        "coverage_context": build_coverage_context(surveillance_effort, samples),
         "public_reference_context": references,
         "segment_order": list(SEGMENT_ORDER),
         "summary": {
@@ -754,6 +888,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference-provenance", type=Path)
     parser.add_argument("--ecological-context", type=Path)
     parser.add_argument("--phenology", type=Path)
+    parser.add_argument("--surveillance-effort", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -777,6 +912,8 @@ def main() -> None:
         ecological_loader = Path(snakemake.input.ecological_loader) if ecology else None
         phenology_inputs = list(getattr(snakemake.input, "phenology", []))
         phenology = Path(phenology_inputs[0]) if phenology_inputs else None
+        surveillance_effort_inputs = list(getattr(snakemake.input, "surveillance_effort", []))
+        surveillance_effort = Path(surveillance_effort_inputs[0]) if surveillance_effort_inputs else None
     else:
         args = parse_args()
         reference_manifest, reference_provenance, reference_loader = args.reference_manifest, args.reference_provenance, None
@@ -788,6 +925,7 @@ def main() -> None:
         aphis_csv, aphis_provenance = args.aphis_csv, args.aphis_provenance
         ecological_context, ecological_loader = args.ecological_context, None
         phenology = args.phenology
+        surveillance_effort = args.surveillance_effort
 
     payload = build_payload(metadata, summaries, trees, ebird, terms, citation,
                             coverage=coverage, genoflu=genoflu,
@@ -795,7 +933,7 @@ def main() -> None:
                             ecological_context=ecological_context, ecological_loader=ecological_loader,
                             reference_manifest=reference_manifest, reference_provenance=reference_provenance,
                             reference_loader=reference_loader,
-                            phenology=phenology)
+                            phenology=phenology, surveillance_effort=surveillance_effort)
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.
