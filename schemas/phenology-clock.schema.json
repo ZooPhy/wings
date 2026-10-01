@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wings.scotchlab.org/schemas/phenology-clock.schema.json",
+  "title": "WINGS phenology input for the Ecological Clock",
+  "type": "object",
+  "required": ["schema_version", "synthetic", "profiles"],
+  "properties": {
+    "schema_version": {"const": "wings.phenology.v1"},
+    "synthetic": {"type": "boolean"},
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["profile_id", "scope", "season_start", "season_end", "baseline_kind", "measure", "unit", "bins", "provenance"],
+        "properties": {
+          "profile_id": {"type": "string", "minLength": 1},
+          "scope": {
+            "type": "object", "required": ["host", "country", "state"],
+            "properties": {
+              "host": {"type": "string", "minLength": 1},
+              "country": {"type": "string", "minLength": 1},
+              "state": {"type": "string", "minLength": 1}
+            }
+          },
+          "season_start": {"type": "string", "format": "date"},
+          "season_end": {"type": "string", "format": "date"},
+          "baseline_kind": {"enum": ["reference_season", "year_specific"]},
+          "measure": {"type": "string", "minLength": 1},
+          "unit": {"type": "string", "minLength": 1},
+          "bins": {
+            "type": "array", "items": {
+              "type": "object", "required": ["start", "end", "value"],
+              "properties": {
+                "start": {"type": "string", "format": "date"},
+                "end": {"type": "string", "format": "date"},
+                "value": {"type": ["number", "null"], "minimum": 0}
+              }
+            }
+          },
+          "anchor": {
+            "type": "object", "required": ["earliest", "latest", "label", "basis"],
+            "properties": {
+              "earliest": {"type": "string", "format": "date"},
+              "latest": {"type": "string", "format": "date"},
+              "label": {"type": "string", "minLength": 1},
+              "basis": {"type": "string", "minLength": 1}
+            }
+          },
+          "provenance": {
+            "type": "object", "required": ["source", "citation", "retrieved_on", "method"],
+            "properties": {
+              "source": {"type": "string", "minLength": 1},
+              "citation": {"type": "string", "minLength": 1},
+              "retrieved_on": {"type": "string", "format": "date"},
+              "method": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$comment": "Runtime additionally validates unique profile IDs, true calendar dates, ordered nonoverlapping bins, season containment, and supplied anchor bounds. Exact host/location matches are required. No automatic annual projection or host-code inference. The ID is a schema identifier, not a claim that this URL is deployed."
+}

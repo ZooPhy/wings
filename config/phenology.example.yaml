@@ -1,0 +1,14 @@
+# Add this block to config.yaml to build the Ecological Clock automatically.
+phenology:
+  enabled: true
+  source: ebird_status_trends
+  version_year: 2023
+  resolution: 27km
+  # When coordinates are absent, use a clearly labeled U.S. state-level raster mean.
+  regional_fallback: state
+  # Optional. If omitted, WINGS_EBIRDST_CACHE is used, then ~/.cache/wings/ebirdst.
+  cache_dir: null
+  host_map_file: resources/ebird_host_codes_2025.tsv
+  # Optional offline/pinned override. Normally WINGS downloads/caches the
+  # version-matched official eBird taxonomy automatically.
+  taxonomy_file: null

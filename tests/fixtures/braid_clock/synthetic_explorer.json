@@ -1,0 +1,2482 @@
+{
+  "version": 2,
+  "synthetic": true,
+  "title": "WINGS synthetic demonstration",
+  "samples": [
+    {
+      "sample_id": "DEMO-01",
+      "host": "Wetland guild A",
+      "collection_date": "2025-09-18",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group A",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-02",
+      "host": "Wetland guild A",
+      "collection_date": "2025-09-28",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group A",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-03",
+      "host": "Wetland guild A",
+      "collection_date": "2025-10-08",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group A",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-04",
+      "host": "Wetland guild A",
+      "collection_date": "2025-10-18",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group A",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "PB1": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "PA": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-05",
+      "host": "Wetland guild A",
+      "collection_date": "2025-10-28",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group A",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-06",
+      "host": "Coastal guild B",
+      "collection_date": "2025-09-26",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group B",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-07",
+      "host": "Coastal guild B",
+      "collection_date": "2025-10-06",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group B",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-08",
+      "host": "Coastal guild B",
+      "collection_date": "2025-10-16",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group B",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "PB1": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "PA": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-09",
+      "host": "Coastal guild B",
+      "collection_date": "2025-10-26",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group B",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-10",
+      "host": "Coastal guild B",
+      "collection_date": "2025-11-05",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group B",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-11",
+      "host": "Resident guild C",
+      "collection_date": "2025-10-04",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group C",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-12",
+      "host": "Resident guild C",
+      "collection_date": "2025-10-14",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group C",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "PB1": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "PA": {
+          "tree_status": "ABSENT_FROM_TREE",
+          "overall_status": "NOT_RECORDED"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-13",
+      "host": "Resident guild C",
+      "collection_date": "2025-10-24",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group C",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-14",
+      "host": "Resident guild C",
+      "collection_date": "2025-11-03",
+      "state": "Other example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group C",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    },
+    {
+      "sample_id": "DEMO-15",
+      "host": "Resident guild C",
+      "collection_date": "2025-10",
+      "state": "Example region",
+      "country": "Example country",
+      "genotype": {
+        "call": "Group C",
+        "status": "SYNTHETIC"
+      },
+      "segments": {
+        "PB2": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PB1": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "PA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "HA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NA": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "MP": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        },
+        "NS": {
+          "tree_status": "PRESENT",
+          "overall_status": "PASS"
+        }
+      }
+    }
+  ],
+  "trees": {
+    "PB2": {
+      "root": {
+        "length": 0.008373,
+        "children": [
+          {
+            "length": 0.0174,
+            "children": [
+              {
+                "length": 0.021003,
+                "children": [
+                  {
+                    "length": 0.024753,
+                    "children": [
+                      {
+                        "length": 0.033625,
+                        "children": [
+                          {
+                            "name": "DEMO-07__PB2",
+                            "sample_id": "DEMO-07",
+                            "length": 0.02205
+                          },
+                          {
+                            "name": "DEMO-09__PB2",
+                            "sample_id": "DEMO-09",
+                            "length": 0.02146
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.035051,
+                        "children": [
+                          {
+                            "name": "DEMO-10__PB2",
+                            "sample_id": "DEMO-10",
+                            "length": 0.026399
+                          },
+                          {
+                            "name": "DEMO-11__PB2",
+                            "sample_id": "DEMO-11",
+                            "length": 0.027948
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.035586,
+                    "children": [
+                      {
+                        "length": 0.014071,
+                        "children": [
+                          {
+                            "name": "DEMO-13__PB2",
+                            "sample_id": "DEMO-13",
+                            "length": 0.028916
+                          },
+                          {
+                            "name": "DEMO-14__PB2",
+                            "sample_id": "DEMO-14",
+                            "length": 0.004117
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.016843,
+                        "children": [
+                          {
+                            "name": "DEMO-15__PB2",
+                            "sample_id": "DEMO-15",
+                            "length": 0.015069
+                          },
+                          {
+                            "name": "DEMO-01__PB2",
+                            "sample_id": "DEMO-01",
+                            "length": 0.021103
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.006774,
+                "children": [
+                  {
+                    "length": 0.015798,
+                    "children": [
+                      {
+                        "length": 0.035459,
+                        "children": [
+                          {
+                            "name": "DEMO-02__PB2",
+                            "sample_id": "DEMO-02",
+                            "length": 0.016733
+                          },
+                          {
+                            "name": "DEMO-03__PB2",
+                            "sample_id": "DEMO-03",
+                            "length": 0.018629
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.032318,
+                        "children": [
+                          {
+                            "name": "DEMO-05__PB2",
+                            "sample_id": "DEMO-05",
+                            "length": 0.017144
+                          },
+                          {
+                            "name": "DEMO-06__PB2",
+                            "sample_id": "DEMO-06",
+                            "length": 0.017729
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.014246,
+                    "children": [
+                      {
+                        "length": 0.019714,
+                        "children": [
+                          {
+                            "name": "DEMO-REF-1_PB2",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.025548
+                          },
+                          {
+                            "name": "DEMO-REF-2_PB2",
+                            "reference_id": "DEMO-REF-2",
+                            "length": 0.037621
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.03291,
+                        "children": [
+                          {
+                            "name": "DEMO-REF-3_PB2",
+                            "reference_id": "DEMO-REF-3",
+                            "length": 0.032714
+                          },
+                          {
+                            "name": "DEMO-REF-4_PB2",
+                            "reference_id": "DEMO-REF-4",
+                            "length": 0.028039
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "DEMO-REF-5_PB2",
+            "reference_id": "DEMO-REF-5",
+            "length": 0.038515
+          }
+        ]
+      },
+      "tip_count": 17,
+      "source_file": "PB2_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    },
+    "PB1": {
+      "root": {
+        "length": 0.030747,
+        "children": [
+          {
+            "length": 0.027521,
+            "children": [
+              {
+                "length": 0.024382,
+                "children": [
+                  {
+                    "length": 0.007242,
+                    "children": [
+                      {
+                        "length": 0.038572,
+                        "children": [
+                          {
+                            "name": "DEMO-07__PB1",
+                            "sample_id": "DEMO-07",
+                            "length": 0.009442
+                          },
+                          {
+                            "name": "DEMO-09__PB1",
+                            "sample_id": "DEMO-09",
+                            "length": 0.016813
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.010328,
+                        "children": [
+                          {
+                            "name": "DEMO-10__PB1",
+                            "sample_id": "DEMO-10",
+                            "length": 0.005355
+                          },
+                          {
+                            "name": "DEMO-11__PB1",
+                            "sample_id": "DEMO-11",
+                            "length": 0.011858
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.030225,
+                    "children": [
+                      {
+                        "length": 0.028169,
+                        "children": [
+                          {
+                            "name": "DEMO-13__PB1",
+                            "sample_id": "DEMO-13",
+                            "length": 0.020151
+                          },
+                          {
+                            "name": "DEMO-14__PB1",
+                            "sample_id": "DEMO-14",
+                            "length": 0.021443
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.033653,
+                        "children": [
+                          {
+                            "name": "DEMO-15__PB1",
+                            "sample_id": "DEMO-15",
+                            "length": 0.023461
+                          },
+                          {
+                            "name": "DEMO-01__PB1",
+                            "sample_id": "DEMO-01",
+                            "length": 0.01187
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.0163,
+                "children": [
+                  {
+                    "length": 0.016748,
+                    "children": [
+                      {
+                        "length": 0.019383,
+                        "children": [
+                          {
+                            "name": "DEMO-02__PB1",
+                            "sample_id": "DEMO-02",
+                            "length": 0.027176
+                          },
+                          {
+                            "name": "DEMO-03__PB1",
+                            "sample_id": "DEMO-03",
+                            "length": 0.010774
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.013205,
+                        "children": [
+                          {
+                            "name": "DEMO-05__PB1",
+                            "sample_id": "DEMO-05",
+                            "length": 0.01906
+                          },
+                          {
+                            "name": "DEMO-06__PB1",
+                            "sample_id": "DEMO-06",
+                            "length": 0.023095
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.030205,
+                    "children": [
+                      {
+                        "length": 0.029436,
+                        "children": [
+                          {
+                            "name": "DEMO-REF-1_PB1",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.029146
+                          },
+                          {
+                            "name": "DEMO-REF-2_PB1",
+                            "reference_id": "DEMO-REF-2",
+                            "length": 0.029711
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.015353,
+                        "children": [
+                          {
+                            "name": "DEMO-REF-3_PB1",
+                            "reference_id": "DEMO-REF-3",
+                            "length": 0.023595
+                          },
+                          {
+                            "name": "DEMO-REF-4_PB1",
+                            "reference_id": "DEMO-REF-4",
+                            "length": 0.033545
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "DEMO-REF-5_PB1",
+            "reference_id": "DEMO-REF-5",
+            "length": 0.034773
+          }
+        ]
+      },
+      "tip_count": 17,
+      "source_file": "PB1_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    },
+    "PA": {
+      "root": {
+        "length": 0.015235,
+        "children": [
+          {
+            "length": 0.011452,
+            "children": [
+              {
+                "length": 0.018953,
+                "children": [
+                  {
+                    "length": 0.030187,
+                    "children": [
+                      {
+                        "length": 0.015644,
+                        "children": [
+                          {
+                            "name": "DEMO-07__PA",
+                            "sample_id": "DEMO-07",
+                            "length": 0.019893
+                          },
+                          {
+                            "name": "DEMO-09__PA",
+                            "sample_id": "DEMO-09",
+                            "length": 0.010451
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.02962,
+                        "children": [
+                          {
+                            "name": "DEMO-10__PA",
+                            "sample_id": "DEMO-10",
+                            "length": 0.015122
+                          },
+                          {
+                            "name": "DEMO-11__PA",
+                            "sample_id": "DEMO-11",
+                            "length": 0.007702
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.025726,
+                    "children": [
+                      {
+                        "length": 0.032339,
+                        "children": [
+                          {
+                            "name": "DEMO-13__PA",
+                            "sample_id": "DEMO-13",
+                            "length": 0.023893
+                          },
+                          {
+                            "name": "DEMO-14__PA",
+                            "sample_id": "DEMO-14",
+                            "length": 0.007694
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.031966,
+                        "children": [
+                          {
+                            "name": "DEMO-15__PA",
+                            "sample_id": "DEMO-15",
+                            "length": 0.021333
+                          },
+                          {
+                            "name": "DEMO-01__PA",
+                            "sample_id": "DEMO-01",
+                            "length": 0.017361
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.011017,
+                "children": [
+                  {
+                    "length": 0.029823,
+                    "children": [
+                      {
+                        "length": 0.007785,
+                        "children": [
+                          {
+                            "name": "DEMO-02__PA",
+                            "sample_id": "DEMO-02",
+                            "length": 0.01977
+                          },
+                          {
+                            "name": "DEMO-03__PA",
+                            "sample_id": "DEMO-03",
+                            "length": 0.02004
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.021223,
+                        "children": [
+                          {
+                            "name": "DEMO-05__PA",
+                            "sample_id": "DEMO-05",
+                            "length": 0.02357
+                          },
+                          {
+                            "name": "DEMO-06__PA",
+                            "sample_id": "DEMO-06",
+                            "length": 0.015972
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.013296,
+                    "children": [
+                      {
+                        "length": 0.007671,
+                        "children": [
+                          {
+                            "name": "DEMO-REF-1_PA",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.031863
+                          },
+                          {
+                            "name": "DEMO-REF-2_PA",
+                            "reference_id": "DEMO-REF-2",
+                            "length": 0.025625
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.032547,
+                        "children": [
+                          {
+                            "name": "DEMO-REF-3_PA",
+                            "reference_id": "DEMO-REF-3",
+                            "length": 0.038272
+                          },
+                          {
+                            "name": "DEMO-REF-4_PA",
+                            "reference_id": "DEMO-REF-4",
+                            "length": 0.022076
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "DEMO-REF-5_PA",
+            "reference_id": "DEMO-REF-5",
+            "length": 0.025354
+          }
+        ]
+      },
+      "tip_count": 17,
+      "source_file": "PA_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    },
+    "HA": {
+      "root": {
+        "length": 0.020236,
+        "children": [
+          {
+            "length": 0.020082,
+            "children": [
+              {
+                "length": 0.020261,
+                "children": [
+                  {
+                    "length": 0.029513,
+                    "children": [
+                      {
+                        "length": 0.033286,
+                        "children": [
+                          {
+                            "name": "DEMO-06__HA",
+                            "sample_id": "DEMO-06",
+                            "length": 0.010577
+                          },
+                          {
+                            "name": "DEMO-07__HA",
+                            "sample_id": "DEMO-07",
+                            "length": 0.015621
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.028552,
+                        "children": [
+                          {
+                            "name": "DEMO-08__HA",
+                            "sample_id": "DEMO-08",
+                            "length": 0.016197
+                          },
+                          {
+                            "name": "DEMO-09__HA",
+                            "sample_id": "DEMO-09",
+                            "length": 0.018479
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.029909,
+                    "children": [
+                      {
+                        "length": 0.008945,
+                        "children": [
+                          {
+                            "name": "DEMO-10__HA",
+                            "sample_id": "DEMO-10",
+                            "length": 0.005194
+                          },
+                          {
+                            "name": "DEMO-11__HA",
+                            "sample_id": "DEMO-11",
+                            "length": 0.025106
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.014312,
+                        "children": [
+                          {
+                            "name": "DEMO-12__HA",
+                            "sample_id": "DEMO-12",
+                            "length": 0.024765
+                          },
+                          {
+                            "name": "DEMO-13__HA",
+                            "sample_id": "DEMO-13",
+                            "length": 0.022227
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.028203,
+                "children": [
+                  {
+                    "length": 0.022965,
+                    "children": [
+                      {
+                        "length": 0.034621,
+                        "children": [
+                          {
+                            "name": "DEMO-14__HA",
+                            "sample_id": "DEMO-14",
+                            "length": 0.020575
+                          },
+                          {
+                            "name": "DEMO-15__HA",
+                            "sample_id": "DEMO-15",
+                            "length": 0.024748
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.029171,
+                        "children": [
+                          {
+                            "name": "DEMO-01__HA",
+                            "sample_id": "DEMO-01",
+                            "length": 0.004747
+                          },
+                          {
+                            "name": "DEMO-02__HA",
+                            "sample_id": "DEMO-02",
+                            "length": 0.028259
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.012713,
+                    "children": [
+                      {
+                        "length": 0.034301,
+                        "children": [
+                          {
+                            "name": "DEMO-03__HA",
+                            "sample_id": "DEMO-03",
+                            "length": 0.01097
+                          },
+                          {
+                            "name": "DEMO-04__HA",
+                            "sample_id": "DEMO-04",
+                            "length": 0.027326
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.008314,
+                        "children": [
+                          {
+                            "name": "DEMO-05__HA",
+                            "sample_id": "DEMO-05",
+                            "length": 0.011402
+                          },
+                          {
+                            "name": "DEMO-REF-1_HA",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.027047
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "length": 0.00526,
+            "children": [
+              {
+                "length": 0.00755,
+                "children": [
+                  {
+                    "name": "DEMO-REF-2_HA",
+                    "reference_id": "DEMO-REF-2",
+                    "length": 0.032067
+                  },
+                  {
+                    "name": "DEMO-REF-3_HA",
+                    "reference_id": "DEMO-REF-3",
+                    "length": 0.02315
+                  }
+                ]
+              },
+              {
+                "length": 0.021446,
+                "children": [
+                  {
+                    "name": "DEMO-REF-4_HA",
+                    "reference_id": "DEMO-REF-4",
+                    "length": 0.020405
+                  },
+                  {
+                    "name": "DEMO-REF-5_HA",
+                    "reference_id": "DEMO-REF-5",
+                    "length": 0.02898
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "tip_count": 20,
+      "source_file": "HA_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    },
+    "NP": {
+      "root": {
+        "length": 0.024185,
+        "children": [
+          {
+            "length": 0.029786,
+            "children": [
+              {
+                "length": 0.022097,
+                "children": [
+                  {
+                    "length": 0.014186,
+                    "children": [
+                      {
+                        "length": 0.025092,
+                        "children": [
+                          {
+                            "name": "DEMO-09__NP",
+                            "sample_id": "DEMO-09",
+                            "length": 0.021103
+                          },
+                          {
+                            "name": "DEMO-02__NP",
+                            "sample_id": "DEMO-02",
+                            "length": 0.026929
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.038354,
+                        "children": [
+                          {
+                            "name": "DEMO-03__NP",
+                            "sample_id": "DEMO-03",
+                            "length": 0.024584
+                          },
+                          {
+                            "name": "DEMO-04__NP",
+                            "sample_id": "DEMO-04",
+                            "length": 0.021214
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.032452,
+                    "children": [
+                      {
+                        "length": 0.012102,
+                        "children": [
+                          {
+                            "name": "DEMO-05__NP",
+                            "sample_id": "DEMO-05",
+                            "length": 0.008591
+                          },
+                          {
+                            "name": "DEMO-06__NP",
+                            "sample_id": "DEMO-06",
+                            "length": 0.025768
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.017852,
+                        "children": [
+                          {
+                            "name": "DEMO-07__NP",
+                            "sample_id": "DEMO-07",
+                            "length": 0.024614
+                          },
+                          {
+                            "name": "DEMO-08__NP",
+                            "sample_id": "DEMO-08",
+                            "length": 0.013405
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.039998,
+                "children": [
+                  {
+                    "length": 0.017232,
+                    "children": [
+                      {
+                        "length": 0.039277,
+                        "children": [
+                          {
+                            "name": "DEMO-01__NP",
+                            "sample_id": "DEMO-01",
+                            "length": 0.011243
+                          },
+                          {
+                            "name": "DEMO-10__NP",
+                            "sample_id": "DEMO-10",
+                            "length": 0.00493
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.015621,
+                        "children": [
+                          {
+                            "name": "DEMO-11__NP",
+                            "sample_id": "DEMO-11",
+                            "length": 0.011339
+                          },
+                          {
+                            "name": "DEMO-12__NP",
+                            "sample_id": "DEMO-12",
+                            "length": 0.022241
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.031771,
+                    "children": [
+                      {
+                        "length": 0.026993,
+                        "children": [
+                          {
+                            "name": "DEMO-13__NP",
+                            "sample_id": "DEMO-13",
+                            "length": 0.013089
+                          },
+                          {
+                            "name": "DEMO-14__NP",
+                            "sample_id": "DEMO-14",
+                            "length": 0.014266
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.028367,
+                        "children": [
+                          {
+                            "name": "DEMO-15__NP",
+                            "sample_id": "DEMO-15",
+                            "length": 0.02333
+                          },
+                          {
+                            "name": "DEMO-REF-1_NP",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.029248
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "length": 0.032863,
+            "children": [
+              {
+                "length": 0.015017,
+                "children": [
+                  {
+                    "name": "DEMO-REF-2_NP",
+                    "reference_id": "DEMO-REF-2",
+                    "length": 0.022108
+                  },
+                  {
+                    "name": "DEMO-REF-3_NP",
+                    "reference_id": "DEMO-REF-3",
+                    "length": 0.026811
+                  }
+                ]
+              },
+              {
+                "length": 0.026062,
+                "children": [
+                  {
+                    "name": "DEMO-REF-4_NP",
+                    "reference_id": "DEMO-REF-4",
+                    "length": 0.038079
+                  },
+                  {
+                    "name": "DEMO-REF-5_NP",
+                    "reference_id": "DEMO-REF-5",
+                    "length": 0.033292
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "tip_count": 20,
+      "source_file": "NP_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    },
+    "NA": {
+      "root": {
+        "length": 0.024984,
+        "children": [
+          {
+            "length": 0.009268,
+            "children": [
+              {
+                "length": 0.018207,
+                "children": [
+                  {
+                    "length": 0.014132,
+                    "children": [
+                      {
+                        "length": 0.024178,
+                        "children": [
+                          {
+                            "name": "DEMO-01__NA",
+                            "sample_id": "DEMO-01",
+                            "length": 0.016576
+                          },
+                          {
+                            "name": "DEMO-02__NA",
+                            "sample_id": "DEMO-02",
+                            "length": 0.02833
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.022933,
+                        "children": [
+                          {
+                            "name": "DEMO-03__NA",
+                            "sample_id": "DEMO-03",
+                            "length": 0.01684
+                          },
+                          {
+                            "name": "DEMO-04__NA",
+                            "sample_id": "DEMO-04",
+                            "length": 0.005159
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.017659,
+                    "children": [
+                      {
+                        "length": 0.037162,
+                        "children": [
+                          {
+                            "name": "DEMO-05__NA",
+                            "sample_id": "DEMO-05",
+                            "length": 0.021404
+                          },
+                          {
+                            "name": "DEMO-06__NA",
+                            "sample_id": "DEMO-06",
+                            "length": 0.018461
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.016568,
+                        "children": [
+                          {
+                            "name": "DEMO-07__NA",
+                            "sample_id": "DEMO-07",
+                            "length": 0.028513
+                          },
+                          {
+                            "name": "DEMO-08__NA",
+                            "sample_id": "DEMO-08",
+                            "length": 0.015234
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.018439,
+                "children": [
+                  {
+                    "length": 0.02611,
+                    "children": [
+                      {
+                        "length": 0.030069,
+                        "children": [
+                          {
+                            "name": "DEMO-09__NA",
+                            "sample_id": "DEMO-09",
+                            "length": 0.016538
+                          },
+                          {
+                            "name": "DEMO-11__NA",
+                            "sample_id": "DEMO-11",
+                            "length": 0.026656
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.013804,
+                        "children": [
+                          {
+                            "name": "DEMO-12__NA",
+                            "sample_id": "DEMO-12",
+                            "length": 0.015835
+                          },
+                          {
+                            "name": "DEMO-13__NA",
+                            "sample_id": "DEMO-13",
+                            "length": 0.005889
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.030953,
+                    "children": [
+                      {
+                        "length": 0.032022,
+                        "children": [
+                          {
+                            "name": "DEMO-14__NA",
+                            "sample_id": "DEMO-14",
+                            "length": 0.00507
+                          },
+                          {
+                            "name": "DEMO-15__NA",
+                            "sample_id": "DEMO-15",
+                            "length": 0.023136
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.0074,
+                        "children": [
+                          {
+                            "name": "DEMO-REF-1_NA",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.024011
+                          },
+                          {
+                            "name": "DEMO-REF-2_NA",
+                            "reference_id": "DEMO-REF-2",
+                            "length": 0.026927
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "length": 0.037094,
+            "children": [
+              {
+                "length": 0.021817,
+                "children": [
+                  {
+                    "name": "DEMO-REF-3_NA",
+                    "reference_id": "DEMO-REF-3",
+                    "length": 0.039475
+                  },
+                  {
+                    "name": "DEMO-REF-4_NA",
+                    "reference_id": "DEMO-REF-4",
+                    "length": 0.020901
+                  }
+                ]
+              },
+              {
+                "name": "DEMO-REF-5_NA",
+                "reference_id": "DEMO-REF-5",
+                "length": 0.036626
+              }
+            ]
+          }
+        ]
+      },
+      "tip_count": 19,
+      "source_file": "NA_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    },
+    "MP": {
+      "root": {
+        "length": 0.028164,
+        "children": [
+          {
+            "length": 0.020808,
+            "children": [
+              {
+                "length": 0.025404,
+                "children": [
+                  {
+                    "length": 0.005219,
+                    "children": [
+                      {
+                        "length": 0.017725,
+                        "children": [
+                          {
+                            "name": "DEMO-15__MP",
+                            "sample_id": "DEMO-15",
+                            "length": 0.02448
+                          },
+                          {
+                            "name": "DEMO-14__MP",
+                            "sample_id": "DEMO-14",
+                            "length": 0.016433
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.016517,
+                        "children": [
+                          {
+                            "name": "DEMO-13__MP",
+                            "sample_id": "DEMO-13",
+                            "length": 0.017478
+                          },
+                          {
+                            "name": "DEMO-12__MP",
+                            "sample_id": "DEMO-12",
+                            "length": 0.017506
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.005462,
+                    "children": [
+                      {
+                        "length": 0.036218,
+                        "children": [
+                          {
+                            "name": "DEMO-11__MP",
+                            "sample_id": "DEMO-11",
+                            "length": 0.01917
+                          },
+                          {
+                            "name": "DEMO-10__MP",
+                            "sample_id": "DEMO-10",
+                            "length": 0.007991
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.013408,
+                        "children": [
+                          {
+                            "name": "DEMO-09__MP",
+                            "sample_id": "DEMO-09",
+                            "length": 0.028686
+                          },
+                          {
+                            "name": "DEMO-08__MP",
+                            "sample_id": "DEMO-08",
+                            "length": 0.01495
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.023613,
+                "children": [
+                  {
+                    "length": 0.012095,
+                    "children": [
+                      {
+                        "length": 0.027079,
+                        "children": [
+                          {
+                            "name": "DEMO-07__MP",
+                            "sample_id": "DEMO-07",
+                            "length": 0.011257
+                          },
+                          {
+                            "name": "DEMO-06__MP",
+                            "sample_id": "DEMO-06",
+                            "length": 0.004793
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.027137,
+                        "children": [
+                          {
+                            "name": "DEMO-05__MP",
+                            "sample_id": "DEMO-05",
+                            "length": 0.020036
+                          },
+                          {
+                            "name": "DEMO-04__MP",
+                            "sample_id": "DEMO-04",
+                            "length": 0.022261
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.03199,
+                    "children": [
+                      {
+                        "length": 0.01703,
+                        "children": [
+                          {
+                            "name": "DEMO-03__MP",
+                            "sample_id": "DEMO-03",
+                            "length": 0.016196
+                          },
+                          {
+                            "name": "DEMO-02__MP",
+                            "sample_id": "DEMO-02",
+                            "length": 0.024404
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.016263,
+                        "children": [
+                          {
+                            "name": "DEMO-01__MP",
+                            "sample_id": "DEMO-01",
+                            "length": 0.005744
+                          },
+                          {
+                            "name": "DEMO-REF-1_MP",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.038295
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "length": 0.008108,
+            "children": [
+              {
+                "length": 0.033832,
+                "children": [
+                  {
+                    "name": "DEMO-REF-2_MP",
+                    "reference_id": "DEMO-REF-2",
+                    "length": 0.034015
+                  },
+                  {
+                    "name": "DEMO-REF-3_MP",
+                    "reference_id": "DEMO-REF-3",
+                    "length": 0.030426
+                  }
+                ]
+              },
+              {
+                "length": 0.021929,
+                "children": [
+                  {
+                    "name": "DEMO-REF-4_MP",
+                    "reference_id": "DEMO-REF-4",
+                    "length": 0.023664
+                  },
+                  {
+                    "name": "DEMO-REF-5_MP",
+                    "reference_id": "DEMO-REF-5",
+                    "length": 0.021656
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "tip_count": 20,
+      "source_file": "MP_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    },
+    "NS": {
+      "root": {
+        "length": 0.036095,
+        "children": [
+          {
+            "length": 0.008259,
+            "children": [
+              {
+                "length": 0.029782,
+                "children": [
+                  {
+                    "length": 0.033294,
+                    "children": [
+                      {
+                        "length": 0.030194,
+                        "children": [
+                          {
+                            "name": "DEMO-04__NS",
+                            "sample_id": "DEMO-04",
+                            "length": 0.009576
+                          },
+                          {
+                            "name": "DEMO-05__NS",
+                            "sample_id": "DEMO-05",
+                            "length": 0.015053
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.007205,
+                        "children": [
+                          {
+                            "name": "DEMO-06__NS",
+                            "sample_id": "DEMO-06",
+                            "length": 0.005677
+                          },
+                          {
+                            "name": "DEMO-07__NS",
+                            "sample_id": "DEMO-07",
+                            "length": 0.013196
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.031086,
+                    "children": [
+                      {
+                        "length": 0.037624,
+                        "children": [
+                          {
+                            "name": "DEMO-08__NS",
+                            "sample_id": "DEMO-08",
+                            "length": 0.028432
+                          },
+                          {
+                            "name": "DEMO-09__NS",
+                            "sample_id": "DEMO-09",
+                            "length": 0.005527
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.009107,
+                        "children": [
+                          {
+                            "name": "DEMO-10__NS",
+                            "sample_id": "DEMO-10",
+                            "length": 0.018139
+                          },
+                          {
+                            "name": "DEMO-11__NS",
+                            "sample_id": "DEMO-11",
+                            "length": 0.017725
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "length": 0.038031,
+                "children": [
+                  {
+                    "length": 0.020792,
+                    "children": [
+                      {
+                        "length": 0.00656,
+                        "children": [
+                          {
+                            "name": "DEMO-12__NS",
+                            "sample_id": "DEMO-12",
+                            "length": 0.006116
+                          },
+                          {
+                            "name": "DEMO-13__NS",
+                            "sample_id": "DEMO-13",
+                            "length": 0.006912
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.024925,
+                        "children": [
+                          {
+                            "name": "DEMO-14__NS",
+                            "sample_id": "DEMO-14",
+                            "length": 0.024137
+                          },
+                          {
+                            "name": "DEMO-15__NS",
+                            "sample_id": "DEMO-15",
+                            "length": 0.019226
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "length": 0.030501,
+                    "children": [
+                      {
+                        "length": 0.005399,
+                        "children": [
+                          {
+                            "name": "DEMO-01__NS",
+                            "sample_id": "DEMO-01",
+                            "length": 0.021969
+                          },
+                          {
+                            "name": "DEMO-02__NS",
+                            "sample_id": "DEMO-02",
+                            "length": 0.009402
+                          }
+                        ]
+                      },
+                      {
+                        "length": 0.010244,
+                        "children": [
+                          {
+                            "name": "DEMO-03__NS",
+                            "sample_id": "DEMO-03",
+                            "length": 0.02095
+                          },
+                          {
+                            "name": "DEMO-REF-1_NS",
+                            "reference_id": "DEMO-REF-1",
+                            "length": 0.029764
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "length": 0.028448,
+            "children": [
+              {
+                "length": 0.023505,
+                "children": [
+                  {
+                    "name": "DEMO-REF-2_NS",
+                    "reference_id": "DEMO-REF-2",
+                    "length": 0.023454
+                  },
+                  {
+                    "name": "DEMO-REF-3_NS",
+                    "reference_id": "DEMO-REF-3",
+                    "length": 0.030107
+                  }
+                ]
+              },
+              {
+                "length": 0.011727,
+                "children": [
+                  {
+                    "name": "DEMO-REF-4_NS",
+                    "reference_id": "DEMO-REF-4",
+                    "length": 0.029225
+                  },
+                  {
+                    "name": "DEMO-REF-5_NS",
+                    "reference_id": "DEMO-REF-5",
+                    "length": 0.025039
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "tip_count": 20,
+      "source_file": "NS_synthetic.newick",
+      "source_sha256": "synthetic-no-source-hash"
+    }
+  },
+  "segment_order": [
+    "PB2",
+    "PB1",
+    "PA",
+    "HA",
+    "NP",
+    "NA",
+    "MP",
+    "NS"
+  ],
+  "public_reference_context": {
+    "references": [
+      {
+        "reference_id": "DEMO-REF-1",
+        "isolate": "Synthetic reference 1",
+        "host": "Synthetic host",
+        "linkage_basis": "synthetic_example_only",
+        "segments": {}
+      },
+      {
+        "reference_id": "DEMO-REF-2",
+        "isolate": "Synthetic reference 2",
+        "host": "Synthetic host",
+        "linkage_basis": "synthetic_example_only",
+        "segments": {}
+      },
+      {
+        "reference_id": "DEMO-REF-3",
+        "isolate": "Synthetic reference 3",
+        "host": "Synthetic host",
+        "linkage_basis": "synthetic_example_only",
+        "segments": {}
+      },
+      {
+        "reference_id": "DEMO-REF-4",
+        "isolate": "Synthetic reference 4",
+        "host": "Synthetic host",
+        "linkage_basis": "synthetic_example_only",
+        "segments": {}
+      },
+      {
+        "reference_id": "DEMO-REF-5",
+        "isolate": "Synthetic reference 5",
+        "host": "Synthetic host",
+        "linkage_basis": "synthetic_example_only",
+        "segments": {}
+      }
+    ]
+  },
+  "ecological_clock": {
+    "schema_version": "wings.phenology.v1",
+    "synthetic": true,
+    "profiles": [
+      {
+        "profile_id": "synthetic-season-1",
+        "scope": {
+          "host": "Wetland guild A",
+          "state": "Example region",
+          "country": "Example country"
+        },
+        "season_start": "2025-09-01",
+        "season_end": "2025-11-23",
+        "baseline_kind": "reference_season",
+        "measure": "Synthetic seasonal index",
+        "unit": "illustrative units",
+        "bins": [
+          {
+            "start": "2025-09-01",
+            "end": "2025-09-07",
+            "value": 1
+          },
+          {
+            "start": "2025-09-08",
+            "end": "2025-09-14",
+            "value": 2
+          },
+          {
+            "start": "2025-09-15",
+            "end": "2025-09-21",
+            "value": 4
+          },
+          {
+            "start": "2025-09-22",
+            "end": "2025-09-28",
+            "value": 7
+          },
+          {
+            "start": "2025-09-29",
+            "end": "2025-10-05",
+            "value": 12
+          },
+          {
+            "start": "2025-10-06",
+            "end": "2025-10-12",
+            "value": 18
+          },
+          {
+            "start": "2025-10-13",
+            "end": "2025-10-19",
+            "value": 25
+          },
+          {
+            "start": "2025-10-20",
+            "end": "2025-10-26",
+            "value": 20
+          },
+          {
+            "start": "2025-10-27",
+            "end": "2025-11-02",
+            "value": 12
+          },
+          {
+            "start": "2025-11-03",
+            "end": "2025-11-09",
+            "value": 6
+          },
+          {
+            "start": "2025-11-10",
+            "end": "2025-11-16",
+            "value": 3
+          },
+          {
+            "start": "2025-11-17",
+            "end": "2025-11-23",
+            "value": 1
+          }
+        ],
+        "provenance": {
+          "source": "WINGS synthetic demonstration",
+          "citation": "Synthetic values for interface testing. Not eBird, BirdCast, ERA5, or observed biology.",
+          "retrieved_on": "2026-09-30",
+          "method": "Hand-built seasonal bins, with one intentional data gap."
+        }
+      },
+      {
+        "profile_id": "synthetic-season-2",
+        "scope": {
+          "host": "Coastal guild B",
+          "state": "Example region",
+          "country": "Example country"
+        },
+        "season_start": "2025-09-08",
+        "season_end": "2025-11-30",
+        "baseline_kind": "reference_season",
+        "measure": "Synthetic seasonal index",
+        "unit": "illustrative units",
+        "bins": [
+          {
+            "start": "2025-09-08",
+            "end": "2025-09-14",
+            "value": 2
+          },
+          {
+            "start": "2025-09-15",
+            "end": "2025-09-21",
+            "value": 3
+          },
+          {
+            "start": "2025-09-22",
+            "end": "2025-09-28",
+            "value": null
+          },
+          {
+            "start": "2025-09-29",
+            "end": "2025-10-05",
+            "value": 9
+          },
+          {
+            "start": "2025-10-06",
+            "end": "2025-10-12",
+            "value": 15
+          },
+          {
+            "start": "2025-10-13",
+            "end": "2025-10-19",
+            "value": 24
+          },
+          {
+            "start": "2025-10-20",
+            "end": "2025-10-26",
+            "value": 20
+          },
+          {
+            "start": "2025-10-27",
+            "end": "2025-11-02",
+            "value": 13
+          },
+          {
+            "start": "2025-11-03",
+            "end": "2025-11-09",
+            "value": 7
+          },
+          {
+            "start": "2025-11-10",
+            "end": "2025-11-16",
+            "value": 4
+          },
+          {
+            "start": "2025-11-17",
+            "end": "2025-11-23",
+            "value": 2
+          },
+          {
+            "start": "2025-11-24",
+            "end": "2025-11-30",
+            "value": 1
+          }
+        ],
+        "provenance": {
+          "source": "WINGS synthetic demonstration",
+          "citation": "Synthetic values for interface testing. Not eBird, BirdCast, ERA5, or observed biology.",
+          "retrieved_on": "2026-09-30",
+          "method": "Hand-built seasonal bins, with one intentional data gap."
+        }
+      },
+      {
+        "profile_id": "synthetic-season-3",
+        "scope": {
+          "host": "Resident guild C",
+          "state": "Example region",
+          "country": "Example country"
+        },
+        "season_start": "2025-09-15",
+        "season_end": "2025-12-07",
+        "baseline_kind": "reference_season",
+        "measure": "Synthetic seasonal index",
+        "unit": "illustrative units",
+        "bins": [
+          {
+            "start": "2025-09-15",
+            "end": "2025-09-21",
+            "value": 4
+          },
+          {
+            "start": "2025-09-22",
+            "end": "2025-09-28",
+            "value": 5
+          },
+          {
+            "start": "2025-09-29",
+            "end": "2025-10-05",
+            "value": 6
+          },
+          {
+            "start": "2025-10-06",
+            "end": "2025-10-12",
+            "value": 8
+          },
+          {
+            "start": "2025-10-13",
+            "end": "2025-10-19",
+            "value": 11
+          },
+          {
+            "start": "2025-10-20",
+            "end": "2025-10-26",
+            "value": 15
+          },
+          {
+            "start": "2025-10-27",
+            "end": "2025-11-02",
+            "value": 19
+          },
+          {
+            "start": "2025-11-03",
+            "end": "2025-11-09",
+            "value": 25
+          },
+          {
+            "start": "2025-11-10",
+            "end": "2025-11-16",
+            "value": 20
+          },
+          {
+            "start": "2025-11-17",
+            "end": "2025-11-23",
+            "value": 12
+          },
+          {
+            "start": "2025-11-24",
+            "end": "2025-11-30",
+            "value": 8
+          },
+          {
+            "start": "2025-12-01",
+            "end": "2025-12-07",
+            "value": 5
+          }
+        ],
+        "provenance": {
+          "source": "WINGS synthetic demonstration",
+          "citation": "Synthetic values for interface testing. Not eBird, BirdCast, ERA5, or observed biology.",
+          "retrieved_on": "2026-09-30",
+          "method": "Hand-built seasonal bins, with one intentional data gap."
+        }
+      }
+    ]
+  }
+}

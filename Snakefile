@@ -334,6 +334,37 @@ if not isinstance(ECOLOGY_CONFIG, dict):
 ECOLOGY_JSON = str(ECOLOGY_CONFIG.get("snapshot", "resources/ecology/ecological-context.json"))
 ECOLOGY_ENABLED = as_bool(ECOLOGY_CONFIG.get("enabled", Path(ECOLOGY_JSON).is_file()))
 
+# WINGS_DYNAMIC_PHENOLOGY_CONFIG_BEGIN
+# Metadata-driven eBird Status & Trends reference annual cycle.
+PHENOLOGY_CONFIG = config.get("phenology", {}) or {}
+if not isinstance(PHENOLOGY_CONFIG, dict):
+    raise ValueError("phenology must be a mapping")
+PHENOLOGY_ENABLED = as_bool(PHENOLOGY_CONFIG.get("enabled", False))
+PHENOLOGY_VERSION_YEAR = int(PHENOLOGY_CONFIG.get("version_year", 2023))
+PHENOLOGY_RESOLUTION = str(PHENOLOGY_CONFIG.get("resolution", "27km")).strip().lower()
+PHENOLOGY_REGIONAL_FALLBACK = str(PHENOLOGY_CONFIG.get("regional_fallback", "state")).strip().lower()
+if PHENOLOGY_REGIONAL_FALLBACK not in {"none", "state"}:
+    raise ValueError("phenology.regional_fallback must be one of: none, state")
+if PHENOLOGY_RESOLUTION not in {"3km", "9km", "27km"}:
+    raise ValueError("phenology.resolution must be one of: 3km, 9km, 27km")
+PHENOLOGY_CACHE = Path(str(
+    PHENOLOGY_CONFIG.get("cache_dir")
+    or os.environ.get("WINGS_EBIRDST_CACHE")
+    or "~/.cache/wings/ebirdst"
+)).expanduser().resolve()
+if Path(workflow.basedir).resolve() in (PHENOLOGY_CACHE, *PHENOLOGY_CACHE.parents):
+    raise ValueError("phenology.cache_dir must be outside the WINGS repository")
+PHENOLOGY_HOST_MAP = str(PHENOLOGY_CONFIG.get(
+    "host_map_file", "resources/ebird_host_codes_2025.tsv"
+))
+if not Path(PHENOLOGY_HOST_MAP).is_absolute():
+    PHENOLOGY_HOST_MAP = str(Path(workflow.basedir) / PHENOLOGY_HOST_MAP)
+PHENOLOGY_TAXONOMY_FILE = str(PHENOLOGY_CONFIG.get("taxonomy_file") or "").strip()
+if PHENOLOGY_TAXONOMY_FILE:
+    PHENOLOGY_TAXONOMY_FILE = str(Path(PHENOLOGY_TAXONOMY_FILE).expanduser().resolve())
+PHENOLOGY_OUTPUT = f"{RESULTS}/run_summary/phenology/wings_phenology.json"
+# WINGS_DYNAMIC_PHENOLOGY_CONFIG_END
+
 # APHIS context uses a pinned local CSV; report builds never fetch live data.
 OUTBREAK_CONFIG = config.get("outbreak_context", {}) or {}
 if not isinstance(OUTBREAK_CONFIG, dict):
@@ -2438,6 +2469,43 @@ if EBIRD_ENABLED:
             cp {input.citation:q} {output.citation:q}
             """
 
+# WINGS_DYNAMIC_PHENOLOGY_RULE_BEGIN
+rule ebirdst_phenology:
+    input:
+        metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        host_map=PHENOLOGY_HOST_MAP,
+        script="scripts/build_ebirdst_phenology.py",
+        taxonomy=([PHENOLOGY_TAXONOMY_FILE] if PHENOLOGY_TAXONOMY_FILE else []),
+    output:
+        json=PHENOLOGY_OUTPUT
+    log:
+        f"{RESULTS}/run_summary/phenology/phenology.log"
+    conda:
+        "envs/phenology.yaml"
+    params:
+        cache=str(PHENOLOGY_CACHE),
+        version=PHENOLOGY_VERSION_YEAR,
+        resolution=PHENOLOGY_RESOLUTION,
+        regional_fallback=PHENOLOGY_REGIONAL_FALLBACK,
+        taxonomy=(
+            "--taxonomy-file " + shlex.quote(PHENOLOGY_TAXONOMY_FILE)
+            if PHENOLOGY_TAXONOMY_FILE else ""
+        ),
+    shell:
+        r"""
+        python {input.script:q} \
+          --metadata {input.metadata:q} \
+          --host-map {input.host_map:q} \
+          --output {output.json:q} \
+          --cache-dir {params.cache:q} \
+          --version-year {params.version} \
+          --resolution {params.resolution:q} \
+          --regional-fallback {params.regional_fallback:q} \
+          {params.taxonomy} \
+          > {log:q} 2>&1
+        """
+# WINGS_DYNAMIC_PHENOLOGY_RULE_END
+
 rule surveillance_explorer_data:
     input:
         reference_manifest=([REFERENCE_MANIFEST] if REFERENCE_ENABLED else []),
@@ -2445,6 +2513,7 @@ rule surveillance_explorer_data:
         reference_loader="scripts/public_reference_context.py",
         ecological_context=([ECOLOGY_JSON] if ECOLOGY_ENABLED else []),
         ecological_loader="scripts/build_ecological_context.py",
+        phenology=([PHENOLOGY_OUTPUT] if PHENOLOGY_ENABLED else []),
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
