@@ -61,12 +61,16 @@ const payload = JSON.parse(fixture.stdout);
     assert.equal(await page.locator(".wse-app-sample").inputValue(), "complete");
     const axisBefore = await page.locator(".wse-axis-label").allTextContents();
     await page.selectOption(".wse-app-host", "Host B");
-    assert.equal(await selected(), 8);
-    assert.deepEqual(await page.locator(".wse-axis-label").allTextContents(), axisBefore);
-    assert.match(await page.locator(".wse-filter-notice").innerText(), /outside the host filter/);
-    await page.click(".wse-app-clear");
+
     assert.equal(await selected(), 0);
+    assert.equal(await page.locator(".wse-app-sample").inputValue(), "");
     assert.equal(await page.locator(".wse-selected").isVisible(), false);
+    assert.deepEqual(await page.locator(".wse-axis-label").allTextContents(), axisBefore);
+
+    const hostBSamples = await page.locator(".wse-app-sample option").allTextContents();
+    assert.equal(hostBSamples.includes("complete"), false);
+    assert.equal(hostBSamples.includes("partial"), true);
+
     await page.selectOption(".wse-app-host", "ALL");
     await page.selectOption(".wse-app-sample", "complete");
     await page.locator('.wse-app-tab[data-tab="overview"]').click();

@@ -63,7 +63,12 @@ test('map state totals and timeline bars reconcile to the filtered records',()=>
   const bars=timeline.children[0].children.filter(p=>p.name==='rect');
   assert.equal(bars.length,2); assert.equal(bars.reduce((sum,p)=>sum+Number(p.getAttribute('aria-label').match(/: (\d+)/)[1]),0),3);
   a.outbreakNode={querySelector:()=>null}; a.renderOutbreak=()=>{};
-  bars[0].events.click(); assert.equal(a.outbreakFollow,false); assert.equal(a.outbreakStart,a.outbreakEnd);
+  const beforeWindow=[a.outbreakStart,a.outbreakEnd];
+  bars[0].events.click();
+  assert.deepEqual([a.outbreakStart,a.outbreakEnd],beforeWindow);
+  assert.equal(a.outbreakSelectedStart,'2025-01-01');
+  assert.equal(a.outbreakSelectedEnd,'2025-01-01');
+  assert.equal(a.outbreakView().rows.length,3);
   ky.events.click(); assert.equal(a.outbreakScope,'KY');
 });
 test('rendered records disclose source precision, missing dates, repeats and source link limitations',()=>{

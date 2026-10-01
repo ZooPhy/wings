@@ -64,3 +64,4 @@ resources/vadr-models/
 /phylogeny/*.nwk
 /phylogeny/*.tree
 /phylogeny/*.tre
+resources/surveillance_effort.tsv
