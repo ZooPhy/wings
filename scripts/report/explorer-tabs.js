@@ -300,7 +300,8 @@
       panels.outbreak.append(make("p", "wse-app-empty", "No outbreak-context panel is available for this run."));
     }
 
-    app.append(toolbar, nav, shared, views);
+    root.insertBefore(nav, shell);
+    app.append(toolbar, shared, views);
     shell.append(app);
 
     loadPhenology.addEventListener("click", () => {
