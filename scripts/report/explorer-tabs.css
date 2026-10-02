@@ -84,32 +84,48 @@
 
 .wse-app-tabs {
   display: flex;
+  align-items: flex-end;
   gap: 0;
-  border: 1px solid #d8e0e1;
-  border-top: 0;
+  margin: 0;
+  padding: 0 1rem;
+  border: 0;
+  border-bottom: 1px solid #dee2e6;
   background: white;
   overflow-x: auto;
 }
+
 .wse-app-tab {
-  flex: 1 1 0;
-  min-width: 145px;
-  padding: .72rem .9rem;
-  border: 0;
-  border-right: 1px solid #e0e5e6;
-  border-bottom: 3px solid transparent;
-  background: white;
-  color: #4c5f67;
-  font-weight: 800;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-bottom: -1px;
+  padding: .72rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: .25rem .25rem 0 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 1rem;
+  font-weight: 400;
+  white-space: nowrap;
   cursor: pointer;
 }
-.wse-app-tab:last-child { border-right: 0; }
-.wse-app-tab:hover { background: #f6f9f8; }
-.wse-app-tab[aria-selected="true"] {
-  color: #8c1d40;
-  border-bottom-color: #8c1d40;
-  background: #fffafb;
+
+.wse-app-tab:hover {
+  color: #1d4ed8;
+  border-color: #e9ecef #e9ecef #dee2e6;
+  background: transparent;
 }
-.wse-app-tab:focus-visible { outline: 3px solid #ffc627; outline-offset: -3px; }
+
+.wse-app-tab[aria-selected="true"] {
+  color: #212529;
+  border-color: #dee2e6 #dee2e6 #fff;
+  background: #fff;
+  font-weight: 400;
+}
+
+.wse-app-tab:focus-visible {
+  outline: 3px solid #ffc627;
+  outline-offset: -3px;
+}
 
 .wse-app-views {
   border: 1px solid #d8e0e1;

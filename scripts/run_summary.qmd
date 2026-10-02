@@ -521,9 +521,6 @@ header_html <- sprintf(
     <div class="report-title">
       WINGS — Wild-bird Influenza Genomics and Surveillance
     </div>
-    <div class="report-subtitle">
-      Run Summary Report
-    </div>
   </div>
 
   <div class="report-local-badge">
@@ -541,9 +538,13 @@ htmltools::HTML(header_html)
 
 ::: {.panel-tabset}
 
-# Run Summary {.active}
+# Pipeline Results {.active}
 
-## Overview
+::: {.panel-tabset}
+
+## Run Summary {.active}
+
+### Overview
 
 ```{r}
 total_samples <- nrow(summary)
@@ -632,7 +633,7 @@ overview |>
   )
 ```
 
-## H5 Screening
+### H5 Screening
 
 The WINGS H5 screen uses three states. **DETECTED** means HA is QC-qualified H5 and NA is QC-qualified and subtype-resolved, indicating an H5Nx virus. **NOT_DETECTED** means QC-qualified, informative HA is not H5; NA does not change that negative call. **INDETERMINATE** means HA is uninformative, or HA is H5 but NA is missing, failed QC, or unresolved. GenoFLU runs only for **DETECTED** H5Nx samples.
 
@@ -675,9 +676,9 @@ h5_counts |>
   )
 ```
 
-# Sample Detail
+## Sample Detail
 
-## Sample Summary
+### Sample Summary
 
 ```{r}
 sample_table <-
@@ -748,9 +749,9 @@ sample_table |>
 ```
 
 
-# Subtype/Genotype Distribution
+## Subtype/Genotype Distribution
 
-## HA Subtype Distribution
+### HA Subtype Distribution
 
 ```{r}
 ha_counts <- summary %>%
@@ -777,7 +778,7 @@ p <- ggplot(
 p
 ```
 
-## NA Subtype Distribution
+### NA Subtype Distribution
 
 ```{r}
 na_counts <- summary %>%
@@ -804,7 +805,7 @@ p <- ggplot(
 p
 ```
 
-## GenoFLU Genotype Distribution
+### GenoFLU Genotype Distribution
 
 GenoFLU genotype counts include only samples eligible under the QC-qualified H5Nx screen. "Not assigned" means GenoFLU did not return a consensus genotype; "Missing output" identifies an absent or empty GenoFLU result. Samples ineligible for GenoFLU are excluded.
 
@@ -876,9 +877,9 @@ if (!genoflu_enabled) {
 }
 ```
 
-# Genome Coverage
+## Genome Coverage
 
-## QC-qualified Genome Completeness
+### QC-qualified Genome Completeness
 
 Each influenza segment passes WINGS segment QC when median depth is at least **`r format(coverage_threshold, trim = TRUE)`x**; at least **`r format(100 * coverage_breadth_threshold, trim = TRUE)`%** of reference positions have depth of at least **`r format(coverage_threshold, trim = TRUE)`x**; consensus length is at least the configured segment-specific minimum; and the consensus N fraction is at most **`r format(100 * max_n_fraction, trim = TRUE)`%**. A consensus longer than the configured upper length guide is retained as **PASS** but receives a length warning for review. Genome status is based on the number of the eight influenza A segments that pass the hard QC criteria:
 
@@ -934,7 +935,7 @@ p <- ggplot(
 p
 ```
 
-## Average Coverage
+### Average Coverage
 
 ```{r}
 p <- ggplot(
@@ -955,7 +956,7 @@ p <- ggplot(
 p
 ```
 
-## Sequencing Depth Distribution
+### Sequencing Depth Distribution
 
 ```{r}
 p <- ggplot(
@@ -976,6 +977,9 @@ p <- ggplot(
 
 p
 ```
+
+
+:::
 
 # Surveillance Explorer
 
