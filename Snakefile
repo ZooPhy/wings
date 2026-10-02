@@ -13,6 +13,7 @@
 configfile: "config.yaml"
 
 import csv
+import json
 import os
 import re
 import shlex
@@ -91,6 +92,9 @@ INTERPRETATION_STABILITY_TSV = (
 )
 VARIANT_STABILITY_TSV = (
     f"{RESULTS}/run_summary/variant_stability.tsv"
+)
+EFFECTIVE_CONFIG_JSON = (
+    f"{RESULTS}/run_summary/effective_config.json"
 )
 METADATA_FILE = config_path("metadata_file", "metadata.tsv")
 METADATA_REQUIRE_ALL = as_bool(config.get("metadata_require_all_samples", True))
@@ -3105,9 +3109,25 @@ if EBIRD_ENABLED or (
     )
 
 
+rule effective_run_config:
+    output:
+        json=EFFECTIVE_CONFIG_JSON
+    run:
+        path = Path(output.json)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                dict(config),
+                indent=2,
+                sort_keys=True,
+            ) + "\n",
+            encoding="utf-8",
+        )
+
+
 rule run_provenance:
     input:
-        config="config.yaml",
+        config=EFFECTIVE_CONFIG_JSON,
         snakefile="Snakefile",
         blast_manifest="resources/flu_db/database_manifest.tsv",
         script="scripts/write_run_provenance.py",

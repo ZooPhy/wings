@@ -68,7 +68,8 @@ def test_replay_archive_is_content_addressed_and_deduplicated(tmp_path):
     )
 
     assert "Inputs archived: 2" in first_run.stdout
-    assert "New objects: 1" in first_run.stdout
+    # One unique replay-input object plus the provenance document.
+    assert "New objects: 2" in first_run.stdout
     assert "Existing objects reused: 1" in first_run.stdout
 
     current = json.loads(
@@ -87,8 +88,23 @@ def test_replay_archive_is_content_addressed_and_deduplicated(tmp_path):
     )
 
     objects = list((archive / "objects" / "sha256").glob("*/*"))
-    assert len(objects) == 1
-    assert objects[0].read_bytes() == content
+    assert len(objects) == 2
+
+    replay_object = (
+        archive
+        / snapshot["inputs"]["first"]["object_path"]
+    )
+    assert replay_object.read_bytes() == content
+
+    provenance_object = (
+        archive
+        / snapshot["provenance"]["object_path"]
+    )
+    assert provenance_object.read_bytes() == provenance.read_bytes()
+    assert (
+        sha256_bytes(provenance_object.read_bytes())
+        == snapshot["provenance"]["sha256"]
+    )
 
     second_run = subprocess.run(
         command,
@@ -98,8 +114,11 @@ def test_replay_archive_is_content_addressed_and_deduplicated(tmp_path):
     )
 
     assert "New objects: 0" in second_run.stdout
-    assert "Existing objects reused: 2" in second_run.stdout
-    assert len(list((archive / "objects" / "sha256").glob("*/*"))) == 1
+    # Provenance plus both replay-input records reuse existing objects.
+    assert "Existing objects reused: 3" in second_run.stdout
+    assert len(
+        list((archive / "objects" / "sha256").glob("*/*"))
+    ) == 2
 
 
 def test_replay_snapshot_restores_historical_bytes_after_inputs_change(tmp_path):
@@ -755,3 +774,113 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
         )
     )
 
+
+
+def test_schema3_archive_preserves_execution_spec_without_raw_reads(
+    tmp_path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    raw_reads = repo / "sample1.fastq.gz"
+    raw_reads.write_bytes(b"historical raw reads\n")
+    raw_sha = sha256_bytes(raw_reads.read_bytes())
+
+    context = repo / "metadata.tsv"
+    context.write_bytes(b"sample_id\tstate\nsample1\tAZ\n")
+    context_sha = sha256_bytes(context.read_bytes())
+
+    effective_config = repo / "effective_config.json"
+    effective_config.write_text(
+        json.dumps(
+            {
+                "reads_dir": "data",
+                "results_dir": "results",
+                "metadata_file": "metadata.tsv",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_sha = sha256_bytes(effective_config.read_bytes())
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "workflow": {
+                    "config_file": "effective_config.json",
+                    "config_sha256": config_sha,
+                },
+                "primary_inputs": {
+                    "sample1": {
+                        "path": "sample1.fastq.gz",
+                        "sha256": raw_sha,
+                        "size_bytes": raw_reads.stat().st_size,
+                    }
+                },
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": context_sha,
+                    }
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    provenance_sha = sha256_bytes(provenance.read_bytes())
+    archive = repo / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    snapshot = json.loads(
+        (
+            archive
+            / "snapshots"
+            / f"{provenance_sha}.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert snapshot["schema_version"] == 2
+    assert snapshot["snapshot_id"] == provenance_sha
+
+    provenance_record = snapshot["provenance"]
+    assert provenance_record["sha256"] == provenance_sha
+    provenance_object = archive / provenance_record["object_path"]
+    assert provenance_object.read_bytes() == provenance.read_bytes()
+
+    execution = snapshot["execution_spec"]["effective_config"]
+    assert execution["sha256"] == config_sha
+    config_object = archive / execution["object_path"]
+    assert config_object.read_bytes() == effective_config.read_bytes()
+
+    assert snapshot["inputs"]["metadata"]["sha256"] == context_sha
+
+    # Primary FASTQ identity is preserved in historical provenance, but
+    # potentially large raw-read files are not copied into the replay archive.
+    raw_object = (
+        archive
+        / "objects"
+        / "sha256"
+        / raw_sha[:2]
+        / raw_sha
+    )
+    assert not raw_object.exists()

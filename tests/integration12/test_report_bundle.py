@@ -48,6 +48,7 @@ def test_production_wings_bundle_release_artifact():
             "--sdm",
             "conda",
             "--allowed-rules",
+            "effective_run_config",
             "run_provenance",
             "wings_report_bundle",
             "--rerun-incomplete",
@@ -110,6 +111,30 @@ def test_production_wings_bundle_release_artifact():
     assert embedded_provenance["workflow"]["name"] == "WINGS"
     assert embedded_provenance["workflow"]["sample_count"] == 2
     assert embedded_provenance["workflow"]["snakefile"] == "Snakefile"
+
+    effective_config_path = (
+        RESULTS / "run_summary" / "effective_config.json"
+    )
+    assert effective_config_path.is_file()
+    assert (
+        embedded_provenance["workflow"]["config_file"]
+        == "tests/integration12/work/results/run_summary/effective_config.json"
+    )
+    assert (
+        embedded_provenance["workflow"]["config_sha256"]
+        == sha256(effective_config_path)
+    )
+
+    effective_config = json.loads(
+        effective_config_path.read_text(encoding="utf-8")
+    )
+    assert (
+        effective_config["results_dir"]
+        == "tests/integration12/work/results"
+    )
+    assert effective_config["run_genoflu"] is False
+    assert effective_config["run_summary"] is True
+
     assert embedded_provenance["runtime"]["snakemake_version"]
     assert embedded_provenance["runtime"]["python_version"]
 
