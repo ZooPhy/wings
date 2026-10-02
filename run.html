@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run WINGS Pipeline</title>
+  <meta name="description" content="Prepare, validate, launch, and monitor a local WINGS Snakemake run.">
+  <link rel="stylesheet" href="assets/wings-portal.css">
+</head>
+<body>
+<header class="portal-header">
+  <div class="portal-header-inner">
+    <a class="portal-brand" href="index.html">
+      <img src="wings_logo.jpg" alt="WINGS logo">
+      <span>WINGS</span>
+    </a>
+    <div id="runnerPill" class="runner-pill" aria-live="polite">
+      <span class="runner-dot" aria-hidden="true"></span>
+      <span id="runnerText">Checking local runner…</span>
+    </div>
+  </div>
+</header>
+
+<main class="portal-main">
+  <h1 class="portal-title">Run WINGS Pipeline</h1>
+  <p class="portal-lede">
+    Prepare a local avian-influenza sequencing run, validate the inputs, launch the WINGS Snakemake workflow, and follow progress from the same portal.
+  </p>
+
+  <div class="local-note">
+    <strong>Local-first:</strong> sequencing files and metadata are sent only to the WINGS runner on this computer and stored under your local WINGS run directory. They are not uploaded to the WINGS website or a remote service.
+  </div>
+
+  <section id="setupView" class="wizard-layout">
+    <nav class="wizard-nav" aria-label="Run setup steps">
+      <ol class="step-list">
+        <li><button class="step-button" data-step="0" aria-current="step"><span class="step-number">1</span><span class="step-label">Run details</span></button></li>
+        <li><button class="step-button" data-step="1"><span class="step-number">2</span><span class="step-label">Sequences</span></button></li>
+        <li><button class="step-button" data-step="2"><span class="step-number">3</span><span class="step-label">Metadata</span></button></li>
+        <li><button class="step-button" data-step="3"><span class="step-number">4</span><span class="step-label">Analysis</span></button></li>
+        <li><button class="step-button" data-step="4"><span class="step-number">5</span><span class="step-label">Preflight</span></button></li>
+      </ol>
+    </nav>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="stepTitle">Run details</h2>
+        <p id="stepSubtitle">Name the run and choose local compute settings.</p>
+      </div>
+      <div class="panel-body">
+        <section class="wizard-step" data-step-panel="0">
+          <div class="field">
+            <label for="runName">Run name</label>
+            <input id="runName" type="text" autocomplete="off">
+            <div class="help">Used only to identify this analysis in the WINGS portal.</div>
+          </div>
+          <div class="field">
+            <label for="cores">CPU cores</label>
+            <input id="cores" type="number" min="1" max="64" value="4">
+            <div class="help">Snakemake will schedule jobs within this core limit.</div>
+          </div>
+        </section>
+
+        <section class="wizard-step" data-step-panel="1" hidden>
+          <div class="file-box">
+            <div class="field">
+              <label for="readsFiles">Oxford Nanopore FASTQ files</label>
+              <input id="readsFiles" type="file" multiple accept=".fastq,.fq,.gz,application/gzip,application/x-gzip">
+              <div class="help">Use one FASTQ/FASTQ.gz file per WINGS sample. Files are copied over localhost only when you start the run.</div>
+            </div>
+          </div>
+          <div id="readsSummary" class="summary-box">No sequencing files selected.</div>
+        </section>
+
+        <section class="wizard-step" data-step-panel="2" hidden>
+          <div class="file-box">
+            <div class="field">
+              <label for="metadataFile">WINGS metadata TSV</label>
+              <input id="metadataFile" type="file" accept=".tsv,text/tab-separated-values,text/plain">
+              <div class="help">The file must include a <code>sample_id</code> column matching the selected FASTQ sample names.</div>
+            </div>
+          </div>
+          <div id="metadataSummary" class="summary-box">No metadata file selected.</div>
+        </section>
+
+        <section class="wizard-step" data-step-panel="3" hidden>
+          <div class="option-grid">
+            <label class="option-card"><input id="optGenoflu" type="checkbox" checked><span><strong>GenoFLU</strong><small>Influenza genotype assignment.</small></span></label>
+            <label class="option-card"><input id="optVadr" type="checkbox" checked><span><strong>VADR annotation</strong><small>Influenza sequence annotation and validation.</small></span></label>
+            <label class="option-card"><input id="optPhylogeny" type="checkbox"><span><strong>Phylogenetics</strong><small>Build segment-level phylogenetic trees when enough sequences are available.</small></span></label>
+            <label class="option-card"><input id="optExplorer" type="checkbox" checked><span><strong>Surveillance Explorer</strong><small>Generate the integrated run-level surveillance interface.</small></span></label>
+          </div>
+          <details style="margin-top:1rem">
+            <summary><strong>Advanced settings</strong></summary>
+            <p class="help">The first portal version uses the repository's WINGS defaults for thresholds, IRMA, Medaka, BLAST, and VADR resources. Advanced parameter editing will be added here without exposing users to the full YAML file.</p>
+          </details>
+        </section>
+
+        <section class="wizard-step" data-step-panel="4" hidden>
+          <ul id="preflightList" class="preflight-list"></ul>
+          <div id="reviewBox" class="summary-box" style="margin-top:1rem"></div>
+          <div class="actions">
+            <div></div>
+            <button id="startRun" class="btn btn-primary" type="button" disabled>Run WINGS Pipeline</button>
+          </div>
+        </section>
+
+        <div id="wizardActions" class="actions">
+          <button id="backButton" class="btn btn-secondary" type="button" disabled>Back</button>
+          <div class="action-group">
+            <a id="openLocalRunner" class="btn btn-gold" href="http://127.0.0.1:8765/run.html" hidden>Open local runner</a>
+            <button id="nextButton" class="btn btn-primary" type="button">Continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="runStatus" class="run-status" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="statusTitle">WINGS run</h2>
+        <p id="statusSubtitle">Pipeline status</p>
+      </div>
+      <div class="panel-body">
+        <div class="metric-grid">
+          <div class="metric"><span>Status</span><strong id="metricStatus">—</strong></div>
+          <div class="metric"><span>Samples</span><strong id="metricSamples">—</strong></div>
+          <div class="metric"><span>Elapsed</span><strong id="metricElapsed">—</strong></div>
+          <div class="metric"><span>Run ID</span><strong id="metricRunId" style="font-size:.9rem">—</strong></div>
+        </div>
+        <div class="run-status-grid">
+          <div>
+            <h3>Pipeline history</h3>
+            <ol id="timeline" class="timeline"></ol>
+          </div>
+          <div>
+            <h3>Technical details</h3>
+            <pre id="runLog" class="log-box">Waiting for log output…</pre>
+            <div class="actions">
+              <a id="resultsLink" class="btn btn-primary" href="#" hidden>Open WINGS results</a>
+              <button id="stopRun" class="btn btn-secondary" type="button">Stop run</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/wings-run.js"></script>
+</body>
+</html>
