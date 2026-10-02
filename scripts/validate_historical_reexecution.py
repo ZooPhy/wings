@@ -245,6 +245,224 @@ def main() -> int:
         )
 
         #
+        # Verify the explicitly pinned historical interpretation baseline.
+        # It must remain separate from this re-execution's output archive.
+        #
+        baseline_snapshot_id = str(
+            historical.get("baseline_snapshot_id", "")
+        ).strip()
+
+        if baseline_snapshot_id != snapshot_id:
+            raise ValueError(
+                "Historical baseline snapshot is not the re-executed "
+                "snapshot."
+            )
+
+        baseline_archive_text = str(
+            historical.get("baseline_archive_root", "")
+        ).strip()
+
+        if not baseline_archive_text:
+            raise ValueError(
+                "Historical baseline archive is not configured."
+            )
+
+        baseline_archive_root = (
+            Path(baseline_archive_text)
+            .expanduser()
+            .resolve()
+        )
+
+        if not baseline_archive_root.is_dir():
+            raise FileNotFoundError(
+                "Historical baseline archive is unavailable: "
+                f"{baseline_archive_root}"
+            )
+
+        new_archive_root = (
+            results_dir / "replay_archive"
+        ).resolve()
+
+        if baseline_archive_root == new_archive_root:
+            raise ValueError(
+                "Historical baseline archive and new output archive "
+                "must be separate."
+            )
+
+        try:
+            baseline_archive_root.relative_to(workspace)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(
+                "Historical baseline archive must be outside the "
+                "re-execution workspace."
+            )
+
+        baseline_interpretation = (
+            baseline_archive_root
+            / "interpretations"
+            / f"{snapshot_id}.json"
+        )
+
+        if not baseline_interpretation.is_file():
+            raise FileNotFoundError(
+                "Pinned historical interpretation is unavailable: "
+                f"{baseline_interpretation}"
+            )
+
+        baseline_data = read_json(
+            baseline_interpretation
+        )
+
+        if (
+            baseline_data.get("format")
+            != "WINGS_INTERPRETATION_ARCHIVE"
+        ):
+            raise ValueError(
+                "Pinned historical interpretation has invalid format."
+            )
+
+        if (
+            str(baseline_data.get("snapshot_id", "")).strip()
+            != snapshot_id
+        ):
+            raise ValueError(
+                "Pinned historical interpretation snapshot mismatch."
+            )
+
+        if (
+            str(
+                baseline_data.get(
+                    "provenance_sha256",
+                    "",
+                )
+            ).strip()
+            != snapshot_id
+        ):
+            raise ValueError(
+                "Pinned interpretation provenance does not match "
+                "the historical snapshot."
+            )
+
+        replay_snapshot_rel = str(
+            baseline_data.get("replay_snapshot", "")
+        ).strip()
+
+        if not replay_snapshot_rel:
+            raise ValueError(
+                "Pinned historical interpretation has no replay snapshot."
+            )
+
+        replay_snapshot_path = (
+            baseline_archive_root
+            / replay_snapshot_rel
+        ).resolve()
+
+        try:
+            replay_snapshot_path.relative_to(
+                baseline_archive_root
+            )
+        except ValueError as error:
+            raise ValueError(
+                "Historical replay snapshot escapes baseline archive."
+            ) from error
+
+        if not replay_snapshot_path.is_file():
+            raise FileNotFoundError(
+                "Historical replay snapshot is unavailable: "
+                f"{replay_snapshot_path}"
+            )
+
+        replay_snapshot = read_json(
+            replay_snapshot_path
+        )
+
+        if (
+            replay_snapshot.get("archive_format")
+            != "WINGS_REPLAY_ARCHIVE"
+        ):
+            raise ValueError(
+                "Historical replay snapshot has invalid format."
+            )
+
+        if (
+            str(replay_snapshot.get("snapshot_id", "")).strip()
+            != snapshot_id
+        ):
+            raise ValueError(
+                "Historical replay snapshot ID mismatch."
+            )
+
+        baseline_artifacts = baseline_data.get("artifacts")
+        if (
+            not isinstance(baseline_artifacts, dict)
+            or not baseline_artifacts
+        ):
+            raise ValueError(
+                "Pinned historical interpretation has no artifacts."
+            )
+
+        baseline_artifact_count = 0
+
+        for relative, record in sorted(
+            baseline_artifacts.items()
+        ):
+            if not isinstance(record, dict):
+                raise ValueError(
+                    "Invalid historical artifact record: "
+                    f"{relative}"
+                )
+
+            expected_sha = str(
+                record.get("sha256", "")
+            ).strip().lower()
+
+            if not SHA256_RE.fullmatch(expected_sha):
+                raise ValueError(
+                    "Invalid historical artifact SHA-256: "
+                    f"{relative}"
+                )
+
+            object_rel = str(
+                record.get("object_path", "")
+            ).strip()
+
+            if not object_rel:
+                raise ValueError(
+                    "Historical artifact has no object path: "
+                    f"{relative}"
+                )
+
+            artifact_object = (
+                baseline_archive_root / object_rel
+            ).resolve()
+
+            try:
+                artifact_object.relative_to(
+                    baseline_archive_root
+                )
+            except ValueError as error:
+                raise ValueError(
+                    "Historical artifact escapes baseline archive: "
+                    f"{relative}"
+                ) from error
+
+            if not artifact_object.is_file():
+                raise FileNotFoundError(
+                    "Historical artifact object is unavailable: "
+                    f"{relative}"
+                )
+
+            if sha256_file(artifact_object) != expected_sha:
+                raise ValueError(
+                    "Historical artifact failed SHA-256 verification: "
+                    f"{relative}"
+                )
+
+            baseline_artifact_count += 1
+
+        #
         # Reverify primary sequencing inputs and staged symlinks.
         #
         primary_inputs = manifest.get("primary_inputs")
@@ -460,6 +678,15 @@ def main() -> int:
             "tracked_worktree_clean": True,
             "primary_input_count": len(primary_inputs),
             "replay_input_count": len(replay_inputs),
+            "baseline_snapshot_id": baseline_snapshot_id,
+            "baseline_archive_root": str(
+                baseline_archive_root
+            ),
+            "baseline_interpretation_sha256": sha256_file(
+                baseline_interpretation
+            ),
+            "baseline_artifact_count": baseline_artifact_count,
+            "new_archive_root": str(new_archive_root),
             "initial_dag_job_count": initial_job_count,
             "checkpoint_dynamic_dag": checkpoint_dynamic,
             "dry_run_output": dry_run_path.relative_to(
@@ -506,6 +733,11 @@ def main() -> int:
         "Frozen replay/context inputs verified: "
         f"{len(replay_inputs)}"
     )
+    print(
+        "Historical baseline artifacts verified: "
+        f"{baseline_artifact_count}"
+    )
+    print("Historical/output archive separation: PASS")
     print(
         "Initial Snakemake DAG jobs: "
         f"{initial_job_count if initial_job_count is not None else 'UNKNOWN'}"
