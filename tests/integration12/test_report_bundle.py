@@ -106,12 +106,25 @@ def test_production_wings_bundle_release_artifact():
 
     assert bundle["provenance"]["filename"] == "run_provenance.json"
     assert embedded_provenance == disk_provenance
-    assert embedded_provenance["schema_version"] == 1
+    assert embedded_provenance["schema_version"] == 2
     assert embedded_provenance["workflow"]["name"] == "WINGS"
     assert embedded_provenance["workflow"]["sample_count"] == 2
     assert embedded_provenance["workflow"]["snakefile"] == "Snakefile"
     assert embedded_provenance["runtime"]["snakemake_version"]
     assert embedded_provenance["runtime"]["python_version"]
+
+    replay_inputs = embedded_provenance["replay_inputs"]
+    assert "metadata" in replay_inputs
+    assert replay_inputs["metadata"]["path"].endswith(
+        "tests/integration12/work/metadata.tsv"
+    )
+    assert len(replay_inputs["metadata"]["sha256"]) == 64
+
+    assert "validated_metadata" in replay_inputs
+    assert replay_inputs["validated_metadata"]["path"].endswith(
+        "tests/integration12/work/results/metadata/validated_metadata.tsv"
+    )
+    assert len(replay_inputs["validated_metadata"]["sha256"]) == 64
 
     assert embedded_provenance["qc"]["coverage_min_depth"] == "50.0"
     assert embedded_provenance["qc"]["coverage_min_breadth"] == "0.95"

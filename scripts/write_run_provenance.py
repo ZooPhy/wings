@@ -43,14 +43,22 @@ def load_single_row_tsv(path: Path) -> dict[str, str]:
     return rows[0] if rows else {}
 
 
-def parse_env_arg(item: str) -> tuple[str, Path]:
+def parse_labeled_path(item: str, option: str) -> tuple[str, Path]:
     if '=' not in item:
-        raise ValueError(f"--env must be LABEL=PATH, got: {item}")
+        raise ValueError(f"{option} must be LABEL=PATH, got: {item}")
     label, path = item.split('=', 1)
     label = label.strip()
     if not label:
-        raise ValueError(f"empty environment label in: {item}")
+        raise ValueError(f"empty label in {option}: {item}")
     return label, Path(path)
+
+
+def parse_env_arg(item: str) -> tuple[str, Path]:
+    return parse_labeled_path(item, "--env")
+
+
+def parse_replay_input_arg(item: str) -> tuple[str, Path]:
+    return parse_labeled_path(item, "--replay-input")
 
 
 def main() -> None:
@@ -80,6 +88,12 @@ def main() -> None:
     ap.add_argument('--blast-max-target-seqs', required=True)
     ap.add_argument('--blast-max-hsps', required=True)
     ap.add_argument('--env', action='append', default=[])
+    ap.add_argument(
+        '--replay-input',
+        action='append',
+        default=[],
+        help='Replay-sensitive scientific input as LABEL=PATH; may be repeated.',
+    )
     args = ap.parse_args()
 
     repo = args.repo_root.resolve()
@@ -106,8 +120,17 @@ def main() -> None:
 
     blast = load_single_row_tsv(blast_manifest)
 
+    replay_inputs: dict[str, dict[str, str]] = {}
+    for item in args.replay_input:
+        label, path = parse_replay_input_arg(item)
+        p = (repo / path).resolve() if not path.is_absolute() else path.resolve()
+        replay_inputs[label] = {
+            'path': os.path.relpath(p, repo),
+            'sha256': sha256_file(p) if p.is_file() else 'MISSING',
+        }
+
     provenance = {
-        'schema_version': 1,
+        'schema_version': 2,
         'created_at_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'workflow': {
             'name': 'WINGS',
@@ -160,6 +183,7 @@ def main() -> None:
             'database': blast,
         },
         'conda_environment_files': envs,
+        'replay_inputs': replay_inputs,
     }
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)

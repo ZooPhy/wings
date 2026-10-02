@@ -2922,12 +2922,68 @@ rule genoflu:
 # -----------------------------------------------------------------------------
 # Run-level provenance
 # -----------------------------------------------------------------------------
+
+# Replay-sensitive scientific inputs used to interpret a WINGS run.
+# These are recorded by path and SHA-256 in run_provenance.json so that a
+# historical interpretation can be tied to the exact contextual snapshots
+# available at the time of analysis.
+REPLAY_INPUT_SPECS = [
+    ("metadata", METADATA_FILE),
+    ("validated_metadata", f"{RESULTS}/metadata/validated_metadata.tsv"),
+]
+
+if REFERENCE_ENABLED:
+    REPLAY_INPUT_SPECS.extend([
+        ("public_reference_manifest", REFERENCE_MANIFEST),
+        ("public_reference_provenance", REFERENCE_PROVENANCE),
+    ])
+
+if RUN_CONCORDANCE and CONCORDANCE_ECOLOGY_INPUT:
+    REPLAY_INPUT_SPECS.append(
+        ("ecological_context", CONCORDANCE_ECOLOGY_INPUT[0])
+    )
+elif ECOLOGY_ENABLED:
+    REPLAY_INPUT_SPECS.append(
+        ("ecological_context", ECOLOGY_JSON)
+    )
+
+if PHENOLOGY_ENABLED or (
+    RUN_CONCORDANCE and bool(CONCORDANCE_PHENOLOGY_INPUT)
+):
+    REPLAY_INPUT_SPECS.append(
+        ("phenology", PHENOLOGY_OUTPUT)
+    )
+
+if SURVEILLANCE_EFFORT_ENABLED:
+    REPLAY_INPUT_SPECS.append(
+        ("surveillance_effort", SURVEILLANCE_EFFORT_FILE)
+    )
+
+if OUTBREAK_ENABLED:
+    REPLAY_INPUT_SPECS.append(
+        ("aphis_snapshot", APHIS_CSV)
+    )
+    if "provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file():
+        REPLAY_INPUT_SPECS.append(
+            ("aphis_provenance", APHIS_PROVENANCE)
+        )
+
+REPLAY_EBIRD_CONTEXT = f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+if EBIRD_ENABLED or (
+    not EBIRD_DECLARED and Path(REPLAY_EBIRD_CONTEXT).is_file()
+):
+    REPLAY_INPUT_SPECS.append(
+        ("ebird_context", REPLAY_EBIRD_CONTEXT)
+    )
+
+
 rule run_provenance:
     input:
         config="config.yaml",
         snakefile="Snakefile",
         blast_manifest="resources/flu_db/database_manifest.tsv",
         script="scripts/write_run_provenance.py",
+        replay_inputs=[path for _, path in REPLAY_INPUT_SPECS],
         envs=[
             "envs/blast.yaml",
             "envs/coverage.yaml",
@@ -2964,7 +3020,11 @@ rule run_provenance:
         blast_min_query_coverage=BLAST_MIN_QUERY_COVERAGE,
         blast_max_target_seqs=BLAST_MAX_TARGET_SEQS,
         blast_max_hsps=BLAST_MAX_HSPS,
-        reporting_env=REPORTING_ENV
+        reporting_env=REPORTING_ENV,
+        replay_args=" ".join(
+            "--replay-input " + shlex.quote(f"{label}={path}")
+            for label, path in REPLAY_INPUT_SPECS
+        )
     conda:
         "envs/py-tools.yaml"
     shell:
@@ -2977,6 +3037,7 @@ rule run_provenance:
           --config {input.config:q} \
           --snakefile {input.snakefile:q} \
           --blast-manifest {input.blast_manifest:q} \
+          {params.replay_args} \
           --sample-count {params.sample_count} \
           --snakemake-version {params.snakemake_version:q} \
           --irma-image {params.irma_image:q} \
