@@ -12,6 +12,9 @@ SCRIPT = REPO_ROOT / "scripts" / "archive_replay_inputs.py"
 READINESS_SCRIPT = (
     REPO_ROOT / "scripts" / "check_historical_reexecution.py"
 )
+PREPARE_REEXECUTION_SCRIPT = (
+    REPO_ROOT / "scripts" / "prepare_historical_reexecution.py"
+)
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -1047,3 +1050,172 @@ def test_historical_reexecution_readiness_detects_primary_input_drift(
         changed["primary_inputs"]["inputs"][0]["status"]
         == "CHANGED"
     )
+
+
+def test_prepare_historical_reexecution_workspace_is_isolated(
+    tmp_path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    reads_content = b"historical raw reads\n"
+    reads = repo / "sample1.fastq.gz"
+    reads.write_bytes(reads_content)
+    reads_sha = sha256_bytes(reads_content)
+
+    metadata_content = (
+        b"sample_id\tstate\n"
+        b"sample1\tAZ\n"
+    )
+    metadata = repo / "metadata.tsv"
+    metadata.write_bytes(metadata_content)
+    metadata_sha = sha256_bytes(metadata_content)
+
+    effective_config = repo / "effective_config.json"
+    effective_config.write_text(
+        json.dumps(
+            {
+                "reads_dir": ".",
+                "results_dir": "results",
+                "metadata_file": "metadata.tsv",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_bytes = effective_config.read_bytes()
+    config_sha = sha256_bytes(config_bytes)
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "workflow": {
+                    "git_commit": "historical-commit",
+                    "config_file": "effective_config.json",
+                    "config_sha256": config_sha,
+                },
+                "conda_environment_files": {
+                    "py-tools": {
+                        "path": "envs/py-tools.yaml",
+                        "sha256": "a" * 64,
+                    }
+                },
+                "primary_inputs": {
+                    "sample1": {
+                        "path": "sample1.fastq.gz",
+                        "sha256": reads_sha,
+                        "size_bytes": reads.stat().st_size,
+                    }
+                },
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": metadata_sha,
+                    }
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    archive = repo / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    workspace = repo / "reexecution"
+
+    prepared = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE_REEXECUTION_SCRIPT),
+            "--archive-root",
+            str(archive),
+            "--snapshot",
+            "current",
+            "--repo-root",
+            str(repo),
+            "--output-dir",
+            str(workspace),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert prepared.returncode == 0
+    assert (
+        "Re-execution workspace prepared"
+        in prepared.stdout
+    )
+    assert "Launch ready: NO" in prepared.stdout
+
+    assert (
+        workspace / "reexecution_manifest.json"
+    ).is_file()
+    assert (
+        workspace / "historical_provenance.json"
+    ).read_bytes() == provenance.read_bytes()
+    assert (
+        workspace / "historical_effective_config.json"
+    ).read_bytes() == config_bytes
+    assert (workspace / "readiness.json").is_file()
+    assert (workspace / "replay_workspace.json").is_file()
+
+    restored_metadata = (
+        workspace
+        / "inputs"
+        / "metadata"
+        / "metadata.tsv"
+    )
+    assert restored_metadata.read_bytes() == metadata_content
+
+    manifest = json.loads(
+        (
+            workspace / "reexecution_manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert (
+        manifest["format"]
+        == "WINGS_REEXECUTION_WORKSPACE"
+    )
+    assert manifest["schema_version"] == 1
+    assert (
+        manifest["mode"]
+        == "current_code_historical_inputs"
+    )
+    assert manifest["execution_config_generated"] is False
+    assert manifest["launch_ready"] is False
+
+    primary = manifest["primary_inputs"]["sample1"]
+    assert primary["status"] == "MATCH"
+    assert primary["sha256"] == reads_sha
+    assert (
+        Path(primary["verified_source_path"])
+        == reads.resolve()
+    )
+    assert primary["copied_into_workspace"] is False
+
+    # Raw reads remain referenced in place rather than duplicated.
+    assert not list(workspace.rglob("*.fastq.gz"))
+
+    # Preparing the workspace must not mutate source inputs.
+    assert reads.read_bytes() == reads_content
+    assert metadata.read_bytes() == metadata_content
+    assert effective_config.read_bytes() == config_bytes
