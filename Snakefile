@@ -3070,6 +3070,23 @@ if REFERENCE_ENABLED:
         ("public_reference_provenance", REFERENCE_PROVENANCE),
     ])
 
+    # Preserve the exact contextual trees used by the historical run.
+    # Generated contextual-reference trees are required dependencies; for
+    # externally supplied trees, archive each segment that actually exists.
+    if REFERENCE_TREE_DIR:
+        for segment in SEGMENT_SEQUENCE:
+            tree_path = str(
+                Path(REFERENCE_TREE_DIR)
+                / REFERENCE_TREE_PATTERN.format(segment=segment)
+            )
+            if REFERENCE_BUILD_CONTEXTUAL or Path(tree_path).is_file():
+                REPLAY_INPUT_SPECS.append(
+                    (
+                        f"public_reference_tree_{segment}",
+                        tree_path,
+                    )
+                )
+
 if RUN_CONCORDANCE and CONCORDANCE_ECOLOGY_INPUT:
     REPLAY_INPUT_SPECS.append(
         ("ecological_context", CONCORDANCE_ECOLOGY_INPUT[0])
@@ -3100,13 +3117,32 @@ if OUTBREAK_ENABLED:
             ("aphis_provenance", APHIS_PROVENANCE)
         )
 
-REPLAY_EBIRD_CONTEXT = f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+REPLAY_EBIRD_CONTEXT = (
+    f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+)
+REPLAY_EBIRD_TERMS = (
+    f"{RESULTS}/run_summary/ebird/terms_of_use.txt"
+)
+REPLAY_EBIRD_CITATION = (
+    f"{RESULTS}/run_summary/ebird/recommended_citation.txt"
+)
+
 if EBIRD_ENABLED or (
     not EBIRD_DECLARED and Path(REPLAY_EBIRD_CONTEXT).is_file()
 ):
     REPLAY_INPUT_SPECS.append(
         ("ebird_context", REPLAY_EBIRD_CONTEXT)
     )
+
+    if EBIRD_ENABLED or Path(REPLAY_EBIRD_TERMS).is_file():
+        REPLAY_INPUT_SPECS.append(
+            ("ebird_terms", REPLAY_EBIRD_TERMS)
+        )
+
+    if EBIRD_ENABLED or Path(REPLAY_EBIRD_CITATION).is_file():
+        REPLAY_INPUT_SPECS.append(
+            ("ebird_citation", REPLAY_EBIRD_CITATION)
+        )
 
 
 rule effective_run_config:
