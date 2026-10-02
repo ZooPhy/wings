@@ -36,6 +36,7 @@ SUMMARY_FIELDS = [
     "changed_replay_inputs",
     "changed_replay_groups",
     "attribution_summary",
+    "layer_attribution_summary",
     "interpretation",
 ]
 

@@ -193,6 +193,85 @@ def compare_replay_inputs(
     }
 
 
+LAYER_REPLAY_GROUPS = {
+    "surveillance_context": {
+        "sample_metadata",
+        "public_references",
+        "ecological_context",
+        "phenology",
+        "surveillance_effort",
+        "outbreak_context",
+        "ebird_context",
+    },
+    "integrated_concordance": {
+        "sample_metadata",
+        "ecological_context",
+        "phenology",
+        "ebird_context",
+    },
+}
+
+
+def build_layer_attribution(
+    layers: dict[str, dict[str, object]],
+    replay_attribution: dict[str, object],
+) -> dict[str, dict[str, object]]:
+    changed_inputs = [
+        row
+        for row in replay_attribution.get("inputs", [])
+        if row.get("status") != "MATCH"
+    ]
+
+    result: dict[str, dict[str, object]] = {}
+
+    for layer_name, relevant_groups in LAYER_REPLAY_GROUPS.items():
+        layer_status = str(
+            layers.get(layer_name, {}).get(
+                "status",
+                "NOT_AVAILABLE",
+            )
+        )
+
+        relevant = [
+            row
+            for row in changed_inputs
+            if row.get("group") in relevant_groups
+        ]
+
+        changed_labels = sorted(
+            str(row.get("label", ""))
+            for row in relevant
+        )
+        changed_groups = sorted(
+            {
+                str(row.get("group", ""))
+                for row in relevant
+            }
+        )
+
+        if layer_status == "CHANGED" and relevant:
+            relationship = "COINCIDENT_INPUT_CHANGE"
+        elif layer_status == "CHANGED":
+            relationship = (
+                "LAYER_CHANGED_WITHOUT_RECORDED_INPUT_CHANGE"
+            )
+        elif layer_status == "STABLE" and relevant:
+            relationship = "INPUT_CHANGED_LAYER_STABLE"
+        elif layer_status == "STABLE":
+            relationship = "NO_CHANGE"
+        else:
+            relationship = "NOT_ASSESSABLE"
+
+        result[layer_name] = {
+            "layer_status": layer_status,
+            "changed_replay_inputs": changed_labels,
+            "changed_replay_groups": changed_groups,
+            "relationship": relationship,
+        }
+
+    return result
+
+
 REPLAY_INPUT_DISPLAY = {
     "metadata": "sample metadata",
     "validated_metadata": "validated sample metadata",
@@ -235,6 +314,81 @@ def build_attribution_summary(
         + ", ".join(names[:-1])
         + f", and {names[-1]}."
     )
+
+
+def build_layer_attribution_summary(
+    layer_attribution: dict[str, dict[str, object]],
+) -> str:
+    context = layer_attribution.get(
+        "surveillance_context",
+        {},
+    )
+    integrated = layer_attribution.get(
+        "integrated_concordance",
+        {},
+    )
+
+    statements = []
+
+    if (
+        context.get("relationship")
+        == "COINCIDENT_INPUT_CHANGE"
+    ):
+        groups = ", ".join(
+            str(group).replace("_", " ")
+            for group in context.get(
+                "changed_replay_groups",
+                [],
+            )
+        )
+        statements.append(
+            "The surveillance/context change occurred alongside "
+            f"updated {groups} input."
+        )
+    elif (
+        context.get("relationship")
+        == "LAYER_CHANGED_WITHOUT_RECORDED_INPUT_CHANGE"
+    ):
+        statements.append(
+            "The surveillance/context layer changed without a "
+            "recorded change in its replay-sensitive inputs."
+        )
+    elif (
+        context.get("relationship")
+        == "INPUT_CHANGED_LAYER_STABLE"
+    ):
+        statements.append(
+            "Replay-sensitive surveillance/context inputs changed, "
+            "but the archived surveillance/context interpretation "
+            "remained stable."
+        )
+
+    if (
+        integrated.get("relationship")
+        == "COINCIDENT_INPUT_CHANGE"
+    ):
+        statements.append(
+            "The genomic-ecological interpretation changed "
+            "alongside one or more relevant replay-input changes."
+        )
+    elif (
+        integrated.get("relationship")
+        == "LAYER_CHANGED_WITHOUT_RECORDED_INPUT_CHANGE"
+    ):
+        statements.append(
+            "The genomic-ecological interpretation changed without "
+            "a recorded change in its mapped replay-sensitive inputs."
+        )
+    elif (
+        integrated.get("relationship")
+        == "INPUT_CHANGED_LAYER_STABLE"
+    ):
+        statements.append(
+            "Relevant ecological/context inputs changed, but the "
+            "genomic-ecological interpretation remained stable."
+        )
+
+    return " ".join(statements)
 
 
 def summarize_artifact_layer(
@@ -608,6 +762,16 @@ def main() -> int:
             },
         }
 
+        layer_attribution = build_layer_attribution(
+            layers,
+            replay_attribution,
+        )
+        layer_attribution_summary = (
+            build_layer_attribution_summary(
+                layer_attribution
+            )
+        )
+
         report = {
             "format": "WINGS_INTERPRETATION_COMPARISON",
             "schema_version": 3,
@@ -619,6 +783,10 @@ def main() -> int:
             "replay_input_attribution": replay_attribution,
             "attribution_summary": build_attribution_summary(
                 replay_attribution
+            ),
+            "layer_attribution": layer_attribution,
+            "layer_attribution_summary": (
+                layer_attribution_summary
             ),
             "artifact_counts": dict(sorted(counts.items())),
             "variant_counts": dict(

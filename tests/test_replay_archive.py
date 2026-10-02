@@ -721,3 +721,37 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
         == current_aphis_sha
     )
 
+    layer_attribution = comparison["layer_attribution"]
+
+    context_attribution = layer_attribution[
+        "surveillance_context"
+    ]
+    assert context_attribution["layer_status"] == "CHANGED"
+    assert (
+        context_attribution["relationship"]
+        == "COINCIDENT_INPUT_CHANGE"
+    )
+    assert context_attribution["changed_replay_inputs"] == [
+        "aphis_snapshot"
+    ]
+    assert context_attribution["changed_replay_groups"] == [
+        "outbreak_context"
+    ]
+
+    integrated_attribution = layer_attribution[
+        "integrated_concordance"
+    ]
+    assert (
+        integrated_attribution["relationship"]
+        == "NOT_ASSESSABLE"
+    )
+    assert integrated_attribution["changed_replay_inputs"] == []
+
+    assert (
+        comparison["layer_attribution_summary"]
+        == (
+            "The surveillance/context change occurred alongside "
+            "updated outbreak context input."
+        )
+    )
+

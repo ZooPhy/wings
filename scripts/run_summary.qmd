@@ -755,6 +755,21 @@ if (is.null(stability_summary) || nrow(stability_summary) == 0) {
     )
   }
 
+  if (
+    "layer_attribution_summary" %in% names(row) &&
+    !is.na(row$layer_attribution_summary) &&
+    nzchar(row$layer_attribution_summary)
+  ) {
+    cat(
+      '<p><strong>Relationship to interpretation:</strong> ',
+      htmltools::htmlEscape(
+        row$layer_attribution_summary
+      ),
+      '</p>',
+      sep = ""
+    )
+  }
+
   cat(
     '<p style="font-size:0.9rem;color:#5f6b72">',
     'Variant calls: ',
