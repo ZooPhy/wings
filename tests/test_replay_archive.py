@@ -1303,3 +1303,87 @@ def test_prepare_historical_reexecution_workspace_is_isolated(
     assert reads.read_bytes() == reads_content
     assert metadata.read_bytes() == metadata_content
     assert effective_config.read_bytes() == config_bytes
+
+
+def test_historical_baseline_selector_pins_exact_snapshot(tmp_path):
+    archive = tmp_path / "replay_archive"
+    interpretations = archive / "interpretations"
+    interpretations.mkdir(parents=True)
+
+    current_provenance = tmp_path / "current_provenance.json"
+    current_provenance.write_text(
+        json.dumps({"schema_version": 3}) + "\n",
+        encoding="utf-8",
+    )
+
+    requested = "a" * 64
+    newer = "b" * 64
+
+    (interpretations / f"{requested}.json").write_text(
+        json.dumps(
+            {
+                "format": "WINGS_INTERPRETATION_ARCHIVE",
+                "schema_version": 1,
+                "snapshot_id": requested,
+                "created_at_utc": "2026-01-01T00:00:00Z",
+                "artifacts": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    # A newer interpretation exists, but an explicitly requested historical
+    # re-execution baseline must take precedence over recency.
+    (interpretations / f"{newer}.json").write_text(
+        json.dumps(
+            {
+                "format": "WINGS_INTERPRETATION_ARCHIVE",
+                "schema_version": 1,
+                "snapshot_id": newer,
+                "created_at_utc": "2026-09-01T00:00:00Z",
+                "artifacts": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    selection_path = tmp_path / "selection.json"
+
+    selected = subprocess.run(
+        [
+            sys.executable,
+            str(
+                REPO_ROOT
+                / "scripts"
+                / "select_previous_interpretation.py"
+            ),
+            "--provenance",
+            str(current_provenance),
+            "--archive-root",
+            str(archive),
+            "--snapshot-id",
+            requested,
+            "--output",
+            str(selection_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert selected.returncode == 0
+    assert f"Historical baseline: {requested}" in selected.stdout
+    assert "Selection method: explicit_snapshot" in selected.stdout
+
+    selection = json.loads(
+        selection_path.read_text(encoding="utf-8")
+    )
+
+    assert selection["baseline_available"] is True
+    assert selection["baseline_snapshot_id"] == requested
+    assert selection["selection_method"] == "explicit_snapshot"
+    assert (
+        selection["baseline_interpretation"]
+        == f"interpretations/{requested}.json"
+    )

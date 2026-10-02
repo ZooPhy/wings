@@ -115,6 +115,31 @@ REPLAY_ARCHIVE_CURRENT = f"{REPLAY_ARCHIVE_DIR}/current.json"
 INTERPRETATION_ARCHIVE_CURRENT = (
     f"{REPLAY_ARCHIVE_DIR}/interpretations/current.json"
 )
+
+# Historical re-execution writes its new archive inside RESULTS, but may read
+# the comparison baseline from the original archive that produced the frozen
+# historical snapshot.
+HISTORICAL_BASELINE_ARCHIVE_ROOT = str(
+    HISTORICAL_REEXECUTION_CONFIG.get(
+        "baseline_archive_root",
+        "",
+    )
+    or ""
+).strip()
+
+HISTORICAL_BASELINE_SNAPSHOT_ID = str(
+    HISTORICAL_REEXECUTION_CONFIG.get(
+        "baseline_snapshot_id",
+        "",
+    )
+    or ""
+).strip()
+
+HISTORICAL_STABILITY_ARCHIVE_ROOT = (
+    HISTORICAL_BASELINE_ARCHIVE_ROOT
+    or REPLAY_ARCHIVE_DIR
+)
+
 HISTORICAL_BASELINE_JSON = (
     f"{RESULTS}/run_summary/historical_baseline.json"
 )
@@ -2867,7 +2892,8 @@ rule select_historical_baseline:
     output:
         json=HISTORICAL_BASELINE_JSON
     params:
-        archive_root=REPLAY_ARCHIVE_DIR
+        archive_root=HISTORICAL_STABILITY_ARCHIVE_ROOT,
+        snapshot_id=HISTORICAL_BASELINE_SNAPSHOT_ID
     conda:
         "envs/py-tools.yaml"
     shell:
@@ -2876,6 +2902,7 @@ rule select_historical_baseline:
         python {input.script:q} \
           --provenance {input.provenance:q} \
           --archive-root {params.archive_root:q} \
+          --snapshot-id {params.snapshot_id:q} \
           --output {output.json:q}
         """
 
@@ -2926,7 +2953,7 @@ rule historical_stability:
         variants=VARIANT_STABILITY_TSV,
         summary=INTERPRETATION_STABILITY_TSV
     params:
-        archive_root=REPLAY_ARCHIVE_DIR,
+        archive_root=HISTORICAL_STABILITY_ARCHIVE_ROOT,
         results_root=RESULTS
     conda:
         "envs/py-tools.yaml"

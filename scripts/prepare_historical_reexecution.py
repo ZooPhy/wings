@@ -379,6 +379,7 @@ def main() -> int:
             ).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "mode": "current_code_historical_inputs",
             "snapshot_id": snapshot_id,
+            "source_archive_root": str(archive_root),
             "historical_provenance_sha256": provenance_sha,
             "historical_workflow_commit": workflow.get(
                 "git_commit"

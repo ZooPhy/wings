@@ -152,12 +152,20 @@ def safe_pattern_path(
             f"Input pattern produced absolute path: {rendered}"
         )
 
-    destination = (root / relative).resolve(
-        strict=False
-    )
+    if ".." in relative.parts:
+        raise ValueError(
+            f"Input pattern escapes staging directory: {rendered}"
+        )
+
+    destination = root / relative
+
+    # Resolve only the containing directory. The final path may already be a
+    # valid symlink to a primary FASTQ outside the workspace during a repeated
+    # config-generation pass.
+    parent = destination.parent.resolve(strict=False)
 
     try:
-        destination.relative_to(root.resolve())
+        parent.relative_to(root.resolve())
     except ValueError as error:
         raise ValueError(
             f"Input pattern escapes staging directory: {rendered}"
@@ -359,6 +367,56 @@ def main() -> int:
             "mode": "current_code_historical_inputs",
             "frozen_inputs": frozen_inputs,
         }
+
+        # If the exact historical interpretation has been archived, pin the
+        # stability comparison to that snapshot. This archive is read-only
+        # context; newly generated replay/interpretation outputs remain under
+        # this workspace's isolated results directory.
+        source_archive_text = str(
+            manifest.get("source_archive_root", "")
+        ).strip()
+
+        if source_archive_text:
+            source_archive = (
+                Path(source_archive_text)
+                .expanduser()
+                .resolve()
+            )
+
+            baseline_path = (
+                source_archive
+                / "interpretations"
+                / f"{snapshot_id}.json"
+            )
+
+            if baseline_path.is_file():
+                baseline = read_json(baseline_path)
+
+                if (
+                    baseline.get("format")
+                    != "WINGS_INTERPRETATION_ARCHIVE"
+                ):
+                    raise ValueError(
+                        "Historical interpretation has invalid format: "
+                        f"{baseline_path}"
+                    )
+
+                if (
+                    str(baseline.get("snapshot_id", "")).strip()
+                    != snapshot_id
+                ):
+                    raise ValueError(
+                        "Historical interpretation snapshot mismatch."
+                    )
+
+                execution_config[
+                    "historical_reexecution"
+                ]["baseline_archive_root"] = str(
+                    source_archive
+                )
+                execution_config[
+                    "historical_reexecution"
+                ]["baseline_snapshot_id"] = snapshot_id
 
         #
         # Public-reference boundary.
