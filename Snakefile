@@ -2806,6 +2806,7 @@ rule select_historical_baseline:
 rule historical_stability:
     input:
         selection=HISTORICAL_BASELINE_JSON,
+        provenance=f"{RESULTS}/run_summary/run_provenance.json",
         summaries=expand(
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
             sample=SAMPLES,
@@ -2859,6 +2860,7 @@ rule historical_stability:
           --selection {input.selection:q} \
           --archive-root {params.archive_root:q} \
           --results-root {params.results_root:q} \
+          --current-provenance {input.provenance:q} \
           --output-json {output.json:q} \
           --variant-tsv {output.variants:q} \
           --summary-tsv {output.summary:q}

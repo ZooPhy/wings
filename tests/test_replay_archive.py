@@ -432,6 +432,8 @@ def test_historical_comparison_detects_added_variant(tmp_path):
             str(archive),
             "--results-root",
             str(results),
+            "--current-provenance",
+            str(provenance),
             "--output-json",
             str(comparison_json),
             "--variant-tsv",
@@ -478,6 +480,14 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
     )
     metadata_sha = sha256_bytes(metadata.read_bytes())
 
+    aphis = repo / "hpai-wild-birds.csv"
+    aphis.write_text(
+        "case_id,state\n"
+        "historical-case,AZ\n",
+        encoding="utf-8",
+    )
+    historical_aphis_sha = sha256_bytes(aphis.read_bytes())
+
     provenance = repo / "run_provenance.json"
     provenance.write_text(
         json.dumps(
@@ -487,7 +497,11 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
                     "metadata": {
                         "path": "metadata.tsv",
                         "sha256": metadata_sha,
-                    }
+                    },
+                    "aphis_snapshot": {
+                        "path": "hpai-wild-birds.csv",
+                        "sha256": historical_aphis_sha,
+                    },
                 },
             }
         ),
@@ -581,8 +595,37 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
         archive / current["interpretation"]
     )
 
-    # Simulate new external surveillance context while leaving all genomic
-    # outputs byte-for-byte unchanged.
+    # Simulate an updated APHIS surveillance snapshot while leaving all
+    # genomic outputs byte-for-byte unchanged.
+    aphis.write_text(
+        "case_id,state\n"
+        "historical-case,AZ\n"
+        "new-case,CA\n",
+        encoding="utf-8",
+    )
+    current_aphis_sha = sha256_bytes(aphis.read_bytes())
+
+    current_provenance = repo / "current_run_provenance.json"
+    current_provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": metadata_sha,
+                    },
+                    "aphis_snapshot": {
+                        "path": "hpai-wild-birds.csv",
+                        "sha256": current_aphis_sha,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # The derived surveillance/context output changes accordingly.
     explorer.write_text(
         json.dumps(
             {
@@ -611,6 +654,8 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
             str(archive),
             "--results-root",
             str(results),
+            "--current-provenance",
+            str(current_provenance),
             "--output-json",
             str(comparison_json),
             "--variant-tsv",
@@ -644,5 +689,69 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
     assert (
         "surveillance/context outputs changed"
         in comparison["interpretation"].lower()
+    )
+
+    assert comparison["schema_version"] == 3
+    assert (
+        comparison["attribution_summary"]
+        == "Changed replay input: APHIS outbreak snapshot."
+    )
+
+    attribution = comparison["replay_input_attribution"]
+
+    assert attribution["changed_count"] == 1
+    assert attribution["changed_labels"] == ["aphis_snapshot"]
+
+    attribution_by_label = {
+        row["label"]: row
+        for row in attribution["inputs"]
+    }
+
+    assert attribution_by_label["metadata"]["status"] == "MATCH"
+
+    aphis_change = attribution_by_label["aphis_snapshot"]
+    assert aphis_change["status"] == "CHANGED"
+    assert aphis_change["group"] == "outbreak_context"
+    assert (
+        aphis_change["historical_sha256"]
+        == historical_aphis_sha
+    )
+    assert (
+        aphis_change["current_sha256"]
+        == current_aphis_sha
+    )
+
+    layer_attribution = comparison["layer_attribution"]
+
+    context_attribution = layer_attribution[
+        "surveillance_context"
+    ]
+    assert context_attribution["layer_status"] == "CHANGED"
+    assert (
+        context_attribution["relationship"]
+        == "COINCIDENT_INPUT_CHANGE"
+    )
+    assert context_attribution["changed_replay_inputs"] == [
+        "aphis_snapshot"
+    ]
+    assert context_attribution["changed_replay_groups"] == [
+        "outbreak_context"
+    ]
+
+    integrated_attribution = layer_attribution[
+        "integrated_concordance"
+    ]
+    assert (
+        integrated_attribution["relationship"]
+        == "NOT_ASSESSABLE"
+    )
+    assert integrated_attribution["changed_replay_inputs"] == []
+
+    assert (
+        comparison["layer_attribution_summary"]
+        == (
+            "The surveillance/context change occurred alongside "
+            "updated outbreak context input."
+        )
     )
 

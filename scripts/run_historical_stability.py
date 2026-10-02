@@ -32,6 +32,11 @@ SUMMARY_FIELDS = [
     "stable_variant_vcfs",
     "changed_variant_vcfs",
     "missing_variant_vcfs",
+    "changed_replay_input_count",
+    "changed_replay_inputs",
+    "changed_replay_groups",
+    "attribution_summary",
+    "layer_attribution_summary",
     "interpretation",
 ]
 
@@ -67,7 +72,7 @@ def write_no_baseline(
 ) -> None:
     report = {
         "format": "WINGS_INTERPRETATION_COMPARISON",
-        "schema_version": 2,
+        "schema_version": 3,
         "comparison_available": False,
         "historical_snapshot_id": None,
         "layers": {
@@ -107,6 +112,11 @@ def main() -> int:
     parser.add_argument("--selection", required=True, type=Path)
     parser.add_argument("--archive-root", required=True, type=Path)
     parser.add_argument("--results-root", required=True, type=Path)
+    parser.add_argument(
+        "--current-provenance",
+        required=True,
+        type=Path,
+    )
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--variant-tsv", required=True, type=Path)
     parser.add_argument("--summary-tsv", required=True, type=Path)
@@ -164,6 +174,8 @@ def main() -> int:
                 str(archive_root),
                 "--results-root",
                 str(args.results_root),
+                "--current-provenance",
+                str(args.current_provenance),
                 "--output-json",
                 str(args.output_json),
                 "--variant-tsv",
