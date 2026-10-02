@@ -2652,7 +2652,6 @@ rule surveillance_explorer_data:
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
-        stability_summary=INTERPRETATION_STABILITY_TSV,
         summaries=expand(
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
             sample=SAMPLES,
