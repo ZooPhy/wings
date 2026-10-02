@@ -30,17 +30,20 @@ def test_production_wings_bundle_release_artifact():
         check=True,
     )
 
-    target = "tests/integration12/work/results/wings_report_bundle.wings"
+    provenance_target = (
+        "tests/integration12/work/results/"
+        "run_summary/run_provenance.json"
+    )
 
-    # The run/sample HTML files are deterministic fixtures representing outputs
-    # already validated in Phases 10-11. Phase 12 executes the production
-    # run_provenance and wings_report_bundle rules.
+    # Execute the production provenance rule against deterministic upstream
+    # fixtures. Keep this target narrow so the report fixture test does not
+    # traverse the complete sequencing/checkpoint DAG.
     subprocess.run(
         [
             "snakemake",
             "--snakefile",
             "Snakefile",
-            target,
+            provenance_target,
             "--configfile",
             str(HERE / "config.yaml"),
             "--cores",
@@ -48,9 +51,40 @@ def test_production_wings_bundle_release_artifact():
             "--sdm",
             "conda",
             "--allowed-rules",
+            "effective_run_config",
             "run_provenance",
-            "wings_report_bundle",
             "--rerun-incomplete",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+
+    # Build the portable artifact with the same production builder invoked by
+    # the wings_report_bundle rule. The HTML inputs here intentionally remain
+    # completed fixtures rather than triggering their analytical producers.
+    sample_reports = [
+        RESULTS
+        / sample
+        / "summary"
+        / f"{sample}.sample_summary.html"
+        for sample in ("bundle_alpha", "bundle_beta")
+    ]
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "build_report_bundle.py"),
+            "--run-summary",
+            str(RESULTS / "run_summary" / "run_summary.html"),
+            "--provenance",
+            str(
+                RESULTS
+                / "run_summary"
+                / "run_provenance.json"
+            ),
+            "--output",
+            str(BUNDLE),
+            *[str(path) for path in sample_reports],
         ],
         cwd=REPO_ROOT,
         check=True,
@@ -106,12 +140,51 @@ def test_production_wings_bundle_release_artifact():
 
     assert bundle["provenance"]["filename"] == "run_provenance.json"
     assert embedded_provenance == disk_provenance
-    assert embedded_provenance["schema_version"] == 2
+    assert embedded_provenance["schema_version"] == 3
     assert embedded_provenance["workflow"]["name"] == "WINGS"
     assert embedded_provenance["workflow"]["sample_count"] == 2
     assert embedded_provenance["workflow"]["snakefile"] == "Snakefile"
+
+    effective_config_path = (
+        RESULTS / "run_summary" / "effective_config.json"
+    )
+    assert effective_config_path.is_file()
+    assert (
+        embedded_provenance["workflow"]["config_file"]
+        == "tests/integration12/work/results/run_summary/effective_config.json"
+    )
+    assert (
+        embedded_provenance["workflow"]["config_sha256"]
+        == sha256(effective_config_path)
+    )
+
+    effective_config = json.loads(
+        effective_config_path.read_text(encoding="utf-8")
+    )
+    assert (
+        effective_config["results_dir"]
+        == "tests/integration12/work/results"
+    )
+    assert effective_config["run_genoflu"] is False
+    assert effective_config["run_summary"] is True
+
     assert embedded_provenance["runtime"]["snakemake_version"]
     assert embedded_provenance["runtime"]["python_version"]
+
+    primary_inputs = embedded_provenance["primary_inputs"]
+
+    assert set(primary_inputs) == {
+        "bundle_alpha",
+        "bundle_beta",
+    }
+
+    for sample in ("bundle_alpha", "bundle_beta"):
+        record = primary_inputs[sample]
+        assert record["path"].endswith(
+            f"{sample}.fastq.gz"
+        )
+        assert len(record["sha256"]) == 64
+        assert record["size_bytes"] > 0
 
     replay_inputs = embedded_provenance["replay_inputs"]
     assert "metadata" in replay_inputs

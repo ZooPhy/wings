@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ARCHIVE_FORMAT = "WINGS_REPLAY_ARCHIVE"
-ARCHIVE_SCHEMA_VERSION = 1
+ARCHIVE_SCHEMA_VERSION = 2
 
 
 def sha256_file(path: Path) -> str:
@@ -151,6 +151,102 @@ def main() -> int:
         newly_archived = 0
         reused = 0
 
+        # Preserve the provenance document itself. Its SHA-256 is also the
+        # replay snapshot ID, so historical primary-input and execution
+        # metadata remain recoverable after later runs overwrite the live
+        # provenance file.
+        provenance_object_rel = (
+            Path("objects")
+            / "sha256"
+            / provenance_sha256[:2]
+            / provenance_sha256
+        )
+        provenance_object = archive_root / provenance_object_rel
+
+        if archive_object(
+            manifest,
+            provenance_object,
+            provenance_sha256,
+        ):
+            newly_archived += 1
+        else:
+            reused += 1
+
+        execution_spec: dict[str, dict[str, object]] = {}
+
+        if int(provenance.get("schema_version", 0)) >= 3:
+            workflow = provenance.get("workflow")
+            if not isinstance(workflow, dict):
+                raise ValueError(
+                    "Schema-3 provenance has no workflow mapping."
+                )
+
+            config_path_text = str(
+                workflow.get("config_file", "")
+            ).strip()
+            config_sha256 = str(
+                workflow.get("config_sha256", "")
+            ).strip().lower()
+
+            if not config_path_text:
+                raise ValueError(
+                    "Schema-3 provenance has no effective config path."
+                )
+
+            if (
+                len(config_sha256) != 64
+                or any(
+                    c not in "0123456789abcdef"
+                    for c in config_sha256
+                )
+            ):
+                raise ValueError(
+                    "Schema-3 provenance has an invalid config SHA-256."
+                )
+
+            config_source = Path(config_path_text).expanduser()
+            if not config_source.is_absolute():
+                config_source = repo_root / config_source
+            config_source = config_source.resolve()
+
+            if not config_source.is_file():
+                raise FileNotFoundError(
+                    "Effective run config is unavailable: "
+                    f"{config_source}"
+                )
+
+            observed_config_sha256 = sha256_file(config_source)
+            if observed_config_sha256 != config_sha256:
+                raise ValueError(
+                    "Effective run config changed before archival: "
+                    f"expected {config_sha256}, "
+                    f"observed {observed_config_sha256}"
+                )
+
+            config_object_rel = (
+                Path("objects")
+                / "sha256"
+                / config_sha256[:2]
+                / config_sha256
+            )
+            config_object = archive_root / config_object_rel
+
+            if archive_object(
+                config_source,
+                config_object,
+                config_sha256,
+            ):
+                newly_archived += 1
+            else:
+                reused += 1
+
+            execution_spec["effective_config"] = {
+                "original_path": config_path_text,
+                "sha256": config_sha256,
+                "size_bytes": config_source.stat().st_size,
+                "object_path": config_object_rel.as_posix(),
+            }
+
         for label in sorted(replay_inputs):
             record = replay_inputs[label]
 
@@ -237,7 +333,10 @@ def main() -> int:
                 "source_path": os.path.relpath(manifest, repo_root),
                 "sha256": provenance_sha256,
                 "schema_version": provenance.get("schema_version"),
+                "size_bytes": manifest.stat().st_size,
+                "object_path": provenance_object_rel.as_posix(),
             },
+            "execution_spec": execution_spec,
             "inputs": archived_inputs,
         }
 

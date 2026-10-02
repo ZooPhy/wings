@@ -9,6 +9,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "archive_replay_inputs.py"
+READINESS_SCRIPT = (
+    REPO_ROOT / "scripts" / "check_historical_reexecution.py"
+)
+PREPARE_REEXECUTION_SCRIPT = (
+    REPO_ROOT / "scripts" / "prepare_historical_reexecution.py"
+)
+GENERATE_REEXECUTION_CONFIG_SCRIPT = (
+    REPO_ROOT / "scripts" / "generate_historical_execution_config.py"
+)
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -68,7 +77,8 @@ def test_replay_archive_is_content_addressed_and_deduplicated(tmp_path):
     )
 
     assert "Inputs archived: 2" in first_run.stdout
-    assert "New objects: 1" in first_run.stdout
+    # One unique replay-input object plus the provenance document.
+    assert "New objects: 2" in first_run.stdout
     assert "Existing objects reused: 1" in first_run.stdout
 
     current = json.loads(
@@ -87,8 +97,23 @@ def test_replay_archive_is_content_addressed_and_deduplicated(tmp_path):
     )
 
     objects = list((archive / "objects" / "sha256").glob("*/*"))
-    assert len(objects) == 1
-    assert objects[0].read_bytes() == content
+    assert len(objects) == 2
+
+    replay_object = (
+        archive
+        / snapshot["inputs"]["first"]["object_path"]
+    )
+    assert replay_object.read_bytes() == content
+
+    provenance_object = (
+        archive
+        / snapshot["provenance"]["object_path"]
+    )
+    assert provenance_object.read_bytes() == provenance.read_bytes()
+    assert (
+        sha256_bytes(provenance_object.read_bytes())
+        == snapshot["provenance"]["sha256"]
+    )
 
     second_run = subprocess.run(
         command,
@@ -98,8 +123,11 @@ def test_replay_archive_is_content_addressed_and_deduplicated(tmp_path):
     )
 
     assert "New objects: 0" in second_run.stdout
-    assert "Existing objects reused: 2" in second_run.stdout
-    assert len(list((archive / "objects" / "sha256").glob("*/*"))) == 1
+    # Provenance plus both replay-input records reuse existing objects.
+    assert "Existing objects reused: 3" in second_run.stdout
+    assert len(
+        list((archive / "objects" / "sha256").glob("*/*"))
+    ) == 2
 
 
 def test_replay_snapshot_restores_historical_bytes_after_inputs_change(tmp_path):
@@ -755,3 +783,607 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
         )
     )
 
+
+
+def test_schema3_archive_preserves_execution_spec_without_raw_reads(
+    tmp_path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    raw_reads = repo / "sample1.fastq.gz"
+    raw_reads.write_bytes(b"historical raw reads\n")
+    raw_sha = sha256_bytes(raw_reads.read_bytes())
+
+    context = repo / "metadata.tsv"
+    context.write_bytes(b"sample_id\tstate\nsample1\tAZ\n")
+    context_sha = sha256_bytes(context.read_bytes())
+
+    effective_config = repo / "effective_config.json"
+    effective_config.write_text(
+        json.dumps(
+            {
+                "reads_dir": "data",
+                "results_dir": "results",
+                "metadata_file": "metadata.tsv",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_sha = sha256_bytes(effective_config.read_bytes())
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "workflow": {
+                    "config_file": "effective_config.json",
+                    "config_sha256": config_sha,
+                },
+                "primary_inputs": {
+                    "sample1": {
+                        "path": "sample1.fastq.gz",
+                        "sha256": raw_sha,
+                        "size_bytes": raw_reads.stat().st_size,
+                    }
+                },
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": context_sha,
+                    }
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    provenance_sha = sha256_bytes(provenance.read_bytes())
+    archive = repo / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    snapshot = json.loads(
+        (
+            archive
+            / "snapshots"
+            / f"{provenance_sha}.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert snapshot["schema_version"] == 2
+    assert snapshot["snapshot_id"] == provenance_sha
+
+    provenance_record = snapshot["provenance"]
+    assert provenance_record["sha256"] == provenance_sha
+    provenance_object = archive / provenance_record["object_path"]
+    assert provenance_object.read_bytes() == provenance.read_bytes()
+
+    execution = snapshot["execution_spec"]["effective_config"]
+    assert execution["sha256"] == config_sha
+    config_object = archive / execution["object_path"]
+    assert config_object.read_bytes() == effective_config.read_bytes()
+
+    assert snapshot["inputs"]["metadata"]["sha256"] == context_sha
+
+    # Primary FASTQ identity is preserved in historical provenance, but
+    # potentially large raw-read files are not copied into the replay archive.
+    raw_object = (
+        archive
+        / "objects"
+        / "sha256"
+        / raw_sha[:2]
+        / raw_sha
+    )
+    assert not raw_object.exists()
+
+
+def test_historical_reexecution_readiness_detects_primary_input_drift(
+    tmp_path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    reads = repo / "sample1.fastq.gz"
+    reads.write_bytes(b"historical raw reads\n")
+    reads_sha = sha256_bytes(reads.read_bytes())
+
+    metadata = repo / "metadata.tsv"
+    metadata.write_bytes(
+        b"sample_id\tstate\nsample1\tAZ\n"
+    )
+    metadata_sha = sha256_bytes(metadata.read_bytes())
+
+    effective_config = repo / "effective_config.json"
+    effective_config.write_text(
+        json.dumps(
+            {
+                "reads_dir": ".",
+                "results_dir": "results",
+                "metadata_file": "metadata.tsv",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_sha = sha256_bytes(
+        effective_config.read_bytes()
+    )
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "workflow": {
+                    "git_commit": "historical-commit",
+                    "config_file": "effective_config.json",
+                    "config_sha256": config_sha,
+                },
+                "conda_environment_files": {
+                    "py-tools": {
+                        "path": "envs/py-tools.yaml",
+                        "sha256": "a" * 64,
+                    }
+                },
+                "primary_inputs": {
+                    "sample1": {
+                        "path": "sample1.fastq.gz",
+                        "sha256": reads_sha,
+                        "size_bytes": reads.stat().st_size,
+                    }
+                },
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": metadata_sha,
+                    }
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    archive = repo / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    readiness_json = repo / "readiness.json"
+
+    ready_run = subprocess.run(
+        [
+            sys.executable,
+            str(READINESS_SCRIPT),
+            "--archive-root",
+            str(archive),
+            "--snapshot",
+            "current",
+            "--repo-root",
+            str(repo),
+            "--output-json",
+            str(readiness_json),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert ready_run.returncode == 0
+    assert "Re-execution ready: YES" in ready_run.stdout
+
+    readiness = json.loads(
+        readiness_json.read_text(encoding="utf-8")
+    )
+
+    assert readiness["ready"] is True
+    assert readiness["primary_inputs"]["status"] == "MATCH"
+    assert (
+        readiness["effective_config"]["status"]
+        == "AVAILABLE"
+    )
+    assert (
+        readiness["replay_inputs"]["status"]
+        == "AVAILABLE"
+    )
+
+    # Historical raw reads drift after archival.
+    reads.write_bytes(b"changed raw reads\n")
+
+    changed_run = subprocess.run(
+        [
+            sys.executable,
+            str(READINESS_SCRIPT),
+            "--archive-root",
+            str(archive),
+            "--snapshot",
+            "current",
+            "--repo-root",
+            str(repo),
+            "--output-json",
+            str(readiness_json),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert changed_run.returncode == 1
+    assert "Re-execution ready: NO" in changed_run.stdout
+
+    changed = json.loads(
+        readiness_json.read_text(encoding="utf-8")
+    )
+
+    assert changed["ready"] is False
+    assert (
+        changed["primary_inputs"]["status"]
+        == "NOT_READY"
+    )
+    assert (
+        changed["primary_inputs"]["inputs"][0]["status"]
+        == "CHANGED"
+    )
+
+
+def test_prepare_historical_reexecution_workspace_is_isolated(
+    tmp_path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    reads_content = b"historical raw reads\n"
+    reads = repo / "sample1.fastq.gz"
+    reads.write_bytes(reads_content)
+    reads_sha = sha256_bytes(reads_content)
+
+    metadata_content = (
+        b"sample_id\tstate\n"
+        b"sample1\tAZ\n"
+    )
+    metadata = repo / "metadata.tsv"
+    metadata.write_bytes(metadata_content)
+    metadata_sha = sha256_bytes(metadata_content)
+
+    effective_config = repo / "effective_config.json"
+    effective_config.write_text(
+        json.dumps(
+            {
+                "reads_dir": ".",
+                "results_dir": "results",
+                "metadata_file": "metadata.tsv",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_bytes = effective_config.read_bytes()
+    config_sha = sha256_bytes(config_bytes)
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "workflow": {
+                    "git_commit": "historical-commit",
+                    "config_file": "effective_config.json",
+                    "config_sha256": config_sha,
+                },
+                "conda_environment_files": {
+                    "py-tools": {
+                        "path": "envs/py-tools.yaml",
+                        "sha256": "a" * 64,
+                    }
+                },
+                "primary_inputs": {
+                    "sample1": {
+                        "path": "sample1.fastq.gz",
+                        "sha256": reads_sha,
+                        "size_bytes": reads.stat().st_size,
+                    }
+                },
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": metadata_sha,
+                    }
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    archive = repo / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    workspace = repo / "reexecution"
+
+    prepared = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE_REEXECUTION_SCRIPT),
+            "--archive-root",
+            str(archive),
+            "--snapshot",
+            "current",
+            "--repo-root",
+            str(repo),
+            "--output-dir",
+            str(workspace),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert prepared.returncode == 0
+    assert (
+        "Re-execution workspace prepared"
+        in prepared.stdout
+    )
+    assert "Launch ready: NO" in prepared.stdout
+
+    assert (
+        workspace / "reexecution_manifest.json"
+    ).is_file()
+    assert (
+        workspace / "historical_provenance.json"
+    ).read_bytes() == provenance.read_bytes()
+    assert (
+        workspace / "historical_effective_config.json"
+    ).read_bytes() == config_bytes
+    assert (workspace / "readiness.json").is_file()
+    assert (workspace / "replay_workspace.json").is_file()
+
+    restored_metadata = (
+        workspace
+        / "inputs"
+        / "metadata"
+        / "metadata.tsv"
+    )
+    assert restored_metadata.read_bytes() == metadata_content
+
+    manifest = json.loads(
+        (
+            workspace / "reexecution_manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert (
+        manifest["format"]
+        == "WINGS_REEXECUTION_WORKSPACE"
+    )
+    assert manifest["schema_version"] == 1
+    assert (
+        manifest["mode"]
+        == "current_code_historical_inputs"
+    )
+    assert manifest["execution_config_generated"] is False
+    assert manifest["launch_ready"] is False
+
+    primary = manifest["primary_inputs"]["sample1"]
+    assert primary["status"] == "MATCH"
+    assert primary["sha256"] == reads_sha
+    assert (
+        Path(primary["verified_source_path"])
+        == reads.resolve()
+    )
+    assert primary["copied_into_workspace"] is False
+
+    # Raw reads remain referenced in place rather than duplicated.
+    assert not list(workspace.rglob("*.fastq.gz"))
+
+    # Preparing the workspace must not mutate source inputs.
+    assert reads.read_bytes() == reads_content
+    assert metadata.read_bytes() == metadata_content
+    assert effective_config.read_bytes() == config_bytes
+
+    generated = subprocess.run(
+        [
+            sys.executable,
+            str(GENERATE_REEXECUTION_CONFIG_SCRIPT),
+            "--workspace",
+            str(workspace),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert generated.returncode == 0
+    assert "Execution config generated: YES" in generated.stdout
+    assert "Dry-run validated: NO" in generated.stdout
+    assert "Launch ready: NO" in generated.stdout
+
+    execution_config = json.loads(
+        (
+            workspace / "execution_config.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert execution_config["reads_dir"] == str(
+        workspace / "primary_inputs"
+    )
+    assert execution_config["results_dir"] == str(
+        workspace / "results"
+    )
+    assert execution_config["metadata_file"] == str(
+        restored_metadata
+    )
+    assert execution_config["phylogeny_dir"] == str(
+        workspace / "results" / "phylogeny"
+    )
+
+    historical = execution_config[
+        "historical_reexecution"
+    ]
+    assert historical["enabled"] is True
+    assert (
+        historical["mode"]
+        == "current_code_historical_inputs"
+    )
+    assert (
+        historical["frozen_inputs"]["metadata"]
+        == str(restored_metadata)
+    )
+
+    staged_reads = (
+        workspace
+        / "primary_inputs"
+        / "sample1.fastq.gz"
+    )
+    assert staged_reads.is_symlink()
+    assert staged_reads.resolve() == reads.resolve()
+    assert staged_reads.read_bytes() == reads_content
+
+    updated_manifest = json.loads(
+        (
+            workspace / "reexecution_manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert (
+        updated_manifest["execution_config_generated"]
+        is True
+    )
+    assert updated_manifest["dry_run_validated"] is False
+    assert updated_manifest["launch_ready"] is False
+    assert (
+        updated_manifest["primary_inputs"]["sample1"][
+            "workspace_path"
+        ]
+        == "primary_inputs/sample1.fastq.gz"
+    )
+
+    # Config generation still must not modify the historical sources.
+    assert reads.read_bytes() == reads_content
+    assert metadata.read_bytes() == metadata_content
+    assert effective_config.read_bytes() == config_bytes
+
+
+def test_historical_baseline_selector_pins_exact_snapshot(tmp_path):
+    archive = tmp_path / "replay_archive"
+    interpretations = archive / "interpretations"
+    interpretations.mkdir(parents=True)
+
+    current_provenance = tmp_path / "current_provenance.json"
+    current_provenance.write_text(
+        json.dumps({"schema_version": 3}) + "\n",
+        encoding="utf-8",
+    )
+
+    requested = "a" * 64
+    newer = "b" * 64
+
+    (interpretations / f"{requested}.json").write_text(
+        json.dumps(
+            {
+                "format": "WINGS_INTERPRETATION_ARCHIVE",
+                "schema_version": 1,
+                "snapshot_id": requested,
+                "created_at_utc": "2026-01-01T00:00:00Z",
+                "artifacts": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    # A newer interpretation exists, but an explicitly requested historical
+    # re-execution baseline must take precedence over recency.
+    (interpretations / f"{newer}.json").write_text(
+        json.dumps(
+            {
+                "format": "WINGS_INTERPRETATION_ARCHIVE",
+                "schema_version": 1,
+                "snapshot_id": newer,
+                "created_at_utc": "2026-09-01T00:00:00Z",
+                "artifacts": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    selection_path = tmp_path / "selection.json"
+
+    selected = subprocess.run(
+        [
+            sys.executable,
+            str(
+                REPO_ROOT
+                / "scripts"
+                / "select_previous_interpretation.py"
+            ),
+            "--provenance",
+            str(current_provenance),
+            "--archive-root",
+            str(archive),
+            "--snapshot-id",
+            requested,
+            "--output",
+            str(selection_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert selected.returncode == 0
+    assert f"Historical baseline: {requested}" in selected.stdout
+    assert "Selection method: explicit_snapshot" in selected.stdout
+
+    selection = json.loads(
+        selection_path.read_text(encoding="utf-8")
+    )
+
+    assert selection["baseline_available"] is True
+    assert selection["baseline_snapshot_id"] == requested
+    assert selection["selection_method"] == "explicit_snapshot"
+    assert (
+        selection["baseline_interpretation"]
+        == f"interpretations/{requested}.json"
+    )

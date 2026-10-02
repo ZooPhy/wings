@@ -104,10 +104,14 @@ REPLAY_INPUT_GROUPS = {
     "aphis_snapshot": "outbreak_context",
     "aphis_provenance": "outbreak_context",
     "ebird_context": "ebird_context",
+    "ebird_terms": "ebird_context",
+    "ebird_citation": "ebird_context",
 }
 
 
 def replay_input_group(label: str) -> str:
+    if label.startswith("public_reference_tree_"):
+        return "public_references"
     return REPLAY_INPUT_GROUPS.get(label, "other")
 
 
