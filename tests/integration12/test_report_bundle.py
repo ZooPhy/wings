@@ -30,17 +30,20 @@ def test_production_wings_bundle_release_artifact():
         check=True,
     )
 
-    target = "tests/integration12/work/results/wings_report_bundle.wings"
+    provenance_target = (
+        "tests/integration12/work/results/"
+        "run_summary/run_provenance.json"
+    )
 
-    # The run/sample HTML files are deterministic fixtures representing outputs
-    # already validated in Phases 10-11. Phase 12 executes the production
-    # run_provenance and wings_report_bundle rules.
+    # Execute the production provenance rule against deterministic upstream
+    # fixtures. Keep this target narrow so the report fixture test does not
+    # traverse the complete sequencing/checkpoint DAG.
     subprocess.run(
         [
             "snakemake",
             "--snakefile",
             "Snakefile",
-            target,
+            provenance_target,
             "--configfile",
             str(HERE / "config.yaml"),
             "--cores",
@@ -50,8 +53,38 @@ def test_production_wings_bundle_release_artifact():
             "--allowed-rules",
             "effective_run_config",
             "run_provenance",
-            "wings_report_bundle",
             "--rerun-incomplete",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+
+    # Build the portable artifact with the same production builder invoked by
+    # the wings_report_bundle rule. The HTML inputs here intentionally remain
+    # completed fixtures rather than triggering their analytical producers.
+    sample_reports = [
+        RESULTS
+        / sample
+        / "summary"
+        / f"{sample}.sample_summary.html"
+        for sample in ("bundle_alpha", "bundle_beta")
+    ]
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "build_report_bundle.py"),
+            "--run-summary",
+            str(RESULTS / "run_summary" / "run_summary.html"),
+            "--provenance",
+            str(
+                RESULTS
+                / "run_summary"
+                / "run_provenance.json"
+            ),
+            "--output",
+            str(BUNDLE),
+            *[str(path) for path in sample_reports],
         ],
         cwd=REPO_ROOT,
         check=True,
