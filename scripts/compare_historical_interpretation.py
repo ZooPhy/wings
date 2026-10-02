@@ -258,6 +258,11 @@ def main() -> int:
         required=True,
         type=Path,
     )
+    parser.add_argument(
+        "--summary-tsv",
+        type=Path,
+        help="Optional one-row summary for report rendering.",
+    )
     args = parser.parse_args()
 
     archive_root = args.archive_root.resolve()
@@ -495,6 +500,57 @@ def main() -> int:
             )
             writer.writeheader()
             writer.writerows(variant_rows)
+
+        if args.summary_tsv:
+            summary_row = {
+                "historical_snapshot_id": historical.get(
+                    "snapshot_id", ""
+                ),
+                "genomic_overall": layers[
+                    "genomic_overall"
+                ]["status"],
+                "primary_genomic": layers[
+                    "primary_genomic"
+                ]["status"],
+                "variant_calls": layers[
+                    "variant_calls"
+                ]["status"],
+                "surveillance_context": layers[
+                    "surveillance_context"
+                ]["status"],
+                "integrated_concordance": layers[
+                    "integrated_concordance"
+                ]["status"],
+                "stable_variant_vcfs": variant_counts.get(
+                    "STABLE", 0
+                ),
+                "changed_variant_vcfs": variant_counts.get(
+                    "CHANGED", 0
+                ),
+                "missing_variant_vcfs": variant_counts.get(
+                    "MISSING_CURRENT", 0
+                ),
+                "interpretation": report["interpretation"],
+            }
+
+            args.summary_tsv.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            with args.summary_tsv.open(
+                "w",
+                newline="",
+                encoding="utf-8",
+            ) as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=list(summary_row),
+                    delimiter="\t",
+                    lineterminator="\n",
+                )
+                writer.writeheader()
+                writer.writerow(summary_row)
 
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)

@@ -2879,6 +2879,7 @@ rule run_summary_html:
               -P "samples:{params.samples}" \
               -P "run_summary_tsv:run_summary.tsv" \
               -P "review_tsv:samples_requiring_review.tsv" \
+              -P "stability_summary:interpretation_stability.tsv" \
               -P "explorer_json:${{explorer_json_abs}}" \
               -P "explorer_enabled:{params.explorer_enabled}" \
               -P "genoflu_enabled:{params.genoflu_enabled}" \

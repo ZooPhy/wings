@@ -19,6 +19,7 @@ params:
   samples: ""
   run_summary_tsv: "run_summary.tsv"
   review_tsv: "samples_requiring_review.tsv"
+  stability_summary: "interpretation_stability.tsv"
   explorer_json: "surveillance_explorer.json"
   explorer_enabled: true
   genoflu_enabled: false
@@ -68,6 +69,17 @@ if (!is.null(wings_logo_path)) {
 coverage_threshold <- as.numeric(params$coverage_threshold)
 coverage_breadth_threshold <- as.numeric(params$coverage_breadth_threshold)
 max_n_fraction <- as.numeric(params$max_n_fraction)
+
+stability_summary <- NULL
+if (
+  nzchar(params$stability_summary) &&
+  file.exists(params$stability_summary)
+) {
+  stability_summary <- read_tsv(
+    params$stability_summary,
+    show_col_types = FALSE
+  )
+}
 
 sample_ids <- trimws(strsplit(params$samples, ",", fixed = TRUE)[[1]])
 sample_ids <- sample_ids[nzchar(sample_ids)]
@@ -674,6 +686,72 @@ h5_counts |>
     table.font.size = px(14),
     heading.background.color = "#8C1D40"
   )
+```
+
+### Historical Stability
+
+```{r}
+if (is.null(stability_summary) || nrow(stability_summary) == 0) {
+  cat(
+    '<div class="alert alert-secondary" role="note">',
+    '<strong>No historical comparison is available yet.</strong> ',
+    'A prior archived WINGS interpretation is required before stability ',
+    'can be assessed.',
+    '</div>',
+    sep = ""
+  )
+} else {
+  row <- stability_summary[1, ]
+
+  stability_table <- tibble(
+    Layer = c(
+      "Genomic result",
+      "Variant calls",
+      "Surveillance context",
+      "Genomic-ecological interpretation"
+    ),
+    Status = c(
+      row$genomic_overall,
+      row$variant_calls,
+      row$surveillance_context,
+      row$integrated_concordance
+    )
+  )
+
+  print(
+    stability_table |>
+      gt() |>
+      tab_header(
+        title = "Historical Stability",
+        subtitle = "Current interpretation compared with the archived baseline"
+      ) |>
+      tab_options(
+        table.width = pct(70),
+        table.font.size = px(14),
+        heading.background.color = "#8C1D40"
+      )
+  )
+
+  cat(
+    '<p style="margin-top:0.8rem"><strong>What this comparison suggests:</strong> ',
+    htmltools::htmlEscape(row$interpretation),
+    '</p>',
+    sep = ""
+  )
+
+  cat(
+    '<p style="font-size:0.9rem;color:#5f6b72">',
+    'Variant calls: ',
+    row$stable_variant_vcfs,
+    ' stable segment VCFs; ',
+    row$changed_variant_vcfs,
+    ' changed; ',
+    row$missing_variant_vcfs,
+    ' unavailable in the current run.',
+    '</p>',
+    sep = ""
+  )
+}
 ```
 
 ## Sample Detail
