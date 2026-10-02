@@ -61,7 +61,8 @@ jobs:
           tests/test_linked_genome_explorer.py \
           tests/test_outbreak_context.py \
           tests/test_ecological_context.py \
-          tests/test_public_reference_context.py
+          tests/test_public_reference_context.py \
+          tests/test_replay_archive.py
 
   explorer-browser:
     name: Linked explorer / Chromium

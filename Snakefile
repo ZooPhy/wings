@@ -75,6 +75,8 @@ def config_path(key, default):
 
 READS = config_path("reads_dir", "data")
 RESULTS = config_path("results_dir", "results")
+REPLAY_ARCHIVE_DIR = f"{RESULTS}/replay_archive"
+REPLAY_ARCHIVE_CURRENT = f"{REPLAY_ARCHIVE_DIR}/current.json"
 METADATA_FILE = config_path("metadata_file", "metadata.tsv")
 METADATA_REQUIRE_ALL = as_bool(config.get("metadata_require_all_samples", True))
 READ_PATTERN = str(config.get("reads_pattern", "{sample}.fastq.gz"))
@@ -786,6 +788,7 @@ if RUN_SUMMARY:
         f"{RESULTS}/run_summary/run_summary.html",
         f"{RESULTS}/run_summary/run_provenance.tsv",
         f"{RESULTS}/run_summary/run_provenance.json",
+        REPLAY_ARCHIVE_CURRENT,
     ])
 
 
@@ -3067,6 +3070,31 @@ rule run_provenance:
           --env pysam=envs/pysam.yaml \
           --env reporting={params.reporting_env:q} \
           --env seqtk=envs/seqtk.yaml
+        """
+
+
+# -----------------------------------------------------------------------------
+# Historical replay archive
+# -----------------------------------------------------------------------------
+rule archive_replay_inputs:
+    input:
+        provenance=f"{RESULTS}/run_summary/run_provenance.json",
+        script="scripts/archive_replay_inputs.py"
+    output:
+        current=REPLAY_ARCHIVE_CURRENT
+    params:
+        repo_root=".",
+        archive_root=REPLAY_ARCHIVE_DIR
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --manifest {input.provenance:q} \
+          --repo-root {params.repo_root:q} \
+          --archive-root {params.archive_root:q} \
+          --output-index {output.current:q}
         """
 
 
