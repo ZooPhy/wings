@@ -14,9 +14,15 @@
       <img src="wings_logo.jpg" alt="WINGS logo">
       <span>WINGS</span>
     </a>
-    <div id="runnerPill" class="runner-pill" aria-live="polite">
-      <span class="runner-dot" aria-hidden="true"></span>
-      <span id="runnerText">Checking local runner…</span>
+    <div class="portal-header-actions">
+      <div id="runnerPill" class="runner-pill" aria-live="polite">
+        <span class="runner-dot" aria-hidden="true"></span>
+        <span id="runnerText">Checking local runner…</span>
+      </div>
+
+      <a class="btn btn-secondary portal-home-button" href="index.html">
+        Back to WINGS home
+      </a>
     </div>
   </div>
 </header>
@@ -106,7 +112,7 @@
         </section>
 
         <div id="wizardActions" class="actions">
-          <button id="backButton" class="btn btn-secondary" type="button" disabled>Back</button>
+          <button id="backButton" class="btn btn-secondary" type="button" disabled>Previous</button>
           <div class="action-group">
             <a id="openLocalRunner" class="btn btn-gold" href="http://127.0.0.1:8765/run.html" hidden>Open local runner</a>
             <button id="nextButton" class="btn btn-primary" type="button">Continue</button>
