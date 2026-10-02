@@ -739,6 +739,22 @@ if (is.null(stability_summary) || nrow(stability_summary) == 0) {
     sep = ""
   )
 
+  if (
+    "changed_replay_input_count" %in% names(row) &&
+    !is.na(row$changed_replay_input_count) &&
+    row$changed_replay_input_count > 0 &&
+    "attribution_summary" %in% names(row) &&
+    !is.na(row$attribution_summary) &&
+    nzchar(row$attribution_summary)
+  ) {
+    cat(
+      '<p><strong>Replay-input differences:</strong> ',
+      htmltools::htmlEscape(row$attribution_summary),
+      '</p>',
+      sep = ""
+    )
+  }
+
   cat(
     '<p style="font-size:0.9rem;color:#5f6b72">',
     'Variant calls: ',

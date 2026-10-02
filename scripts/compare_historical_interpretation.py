@@ -93,6 +93,150 @@ INTEGRATED_CATEGORIES = {
 }
 
 
+REPLAY_INPUT_GROUPS = {
+    "metadata": "sample_metadata",
+    "validated_metadata": "sample_metadata",
+    "public_reference_manifest": "public_references",
+    "public_reference_provenance": "public_references",
+    "ecological_context": "ecological_context",
+    "phenology": "phenology",
+    "surveillance_effort": "surveillance_effort",
+    "aphis_snapshot": "outbreak_context",
+    "aphis_provenance": "outbreak_context",
+    "ebird_context": "ebird_context",
+}
+
+
+def replay_input_group(label: str) -> str:
+    return REPLAY_INPUT_GROUPS.get(label, "other")
+
+
+def compare_replay_inputs(
+    historical_snapshot: dict,
+    current_provenance: dict,
+) -> dict[str, object]:
+    historical_inputs = historical_snapshot.get("inputs", {})
+    current_inputs = current_provenance.get("replay_inputs", {})
+
+    if not isinstance(historical_inputs, dict):
+        raise ValueError(
+            "Historical replay snapshot has no inputs mapping."
+        )
+    if not isinstance(current_inputs, dict):
+        raise ValueError(
+            "Current provenance has no replay_inputs mapping."
+        )
+
+    rows = []
+
+    for label in sorted(
+        set(historical_inputs) | set(current_inputs)
+    ):
+        historical = historical_inputs.get(label)
+        current = current_inputs.get(label)
+
+        historical_sha = (
+            str(historical.get("sha256", ""))
+            if isinstance(historical, dict)
+            else ""
+        )
+        current_sha = (
+            str(current.get("sha256", ""))
+            if isinstance(current, dict)
+            else ""
+        )
+
+        if historical is None:
+            status = "NEW"
+        elif current is None or current_sha.upper() == "MISSING":
+            status = "MISSING_CURRENT"
+        elif historical_sha == current_sha:
+            status = "MATCH"
+        else:
+            status = "CHANGED"
+
+        rows.append(
+            {
+                "label": label,
+                "group": replay_input_group(label),
+                "status": status,
+                "historical_sha256": historical_sha or None,
+                "current_sha256": current_sha or None,
+                "historical_path": (
+                    historical.get("original_path")
+                    if isinstance(historical, dict)
+                    else None
+                ),
+                "current_path": (
+                    current.get("path")
+                    if isinstance(current, dict)
+                    else None
+                ),
+            }
+        )
+
+    counts = Counter(row["status"] for row in rows)
+
+    changed = [
+        row
+        for row in rows
+        if row["status"] != "MATCH"
+    ]
+
+    return {
+        "counts": dict(sorted(counts.items())),
+        "changed_count": len(changed),
+        "changed_labels": [
+            row["label"] for row in changed
+        ],
+        "inputs": rows,
+    }
+
+
+REPLAY_INPUT_DISPLAY = {
+    "metadata": "sample metadata",
+    "validated_metadata": "validated sample metadata",
+    "public_reference_manifest": "public-reference manifest",
+    "public_reference_provenance": "public-reference provenance",
+    "ecological_context": "ecological context",
+    "phenology": "phenology context",
+    "surveillance_effort": "surveillance-effort data",
+    "aphis_snapshot": "APHIS outbreak snapshot",
+    "aphis_provenance": "APHIS outbreak provenance",
+    "ebird_context": "eBird context",
+}
+
+
+def build_attribution_summary(
+    attribution: dict[str, object],
+) -> str:
+    changed = [
+        row
+        for row in attribution.get("inputs", [])
+        if row.get("status") != "MATCH"
+    ]
+
+    if not changed:
+        return "No replay-sensitive inputs changed."
+
+    names = [
+        REPLAY_INPUT_DISPLAY.get(
+            str(row.get("label", "")),
+            str(row.get("label", "")),
+        )
+        for row in changed
+    ]
+
+    if len(names) == 1:
+        return f"Changed replay input: {names[0]}."
+
+    return (
+        "Changed replay inputs: "
+        + ", ".join(names[:-1])
+        + f", and {names[-1]}."
+    )
+
+
 def summarize_artifact_layer(
     artifact_results: dict[str, dict[str, object]],
     categories: set[str],
@@ -249,6 +393,11 @@ def main() -> int:
         type=Path,
     )
     parser.add_argument(
+        "--current-provenance",
+        required=True,
+        type=Path,
+    )
+    parser.add_argument(
         "--output-json",
         required=True,
         type=Path,
@@ -270,6 +419,28 @@ def main() -> int:
 
     try:
         historical = read_json(args.interpretation.resolve())
+        current_provenance = read_json(
+            args.current_provenance.resolve()
+        )
+
+        replay_snapshot_rel = str(
+            historical.get("replay_snapshot", "")
+        ).strip()
+
+        if not replay_snapshot_rel:
+            raise ValueError(
+                "Historical interpretation does not reference "
+                "a replay snapshot."
+            )
+
+        historical_replay_snapshot = read_json(
+            archive_root / replay_snapshot_rel
+        )
+
+        replay_attribution = compare_replay_inputs(
+            historical_replay_snapshot,
+            current_provenance,
+        )
 
         historical_artifacts = historical.get("artifacts")
         if not isinstance(historical_artifacts, dict):
@@ -439,12 +610,16 @@ def main() -> int:
 
         report = {
             "format": "WINGS_INTERPRETATION_COMPARISON",
-            "schema_version": 2,
+            "schema_version": 3,
             "historical_snapshot_id": historical.get(
                 "snapshot_id"
             ),
             "layers": layers,
             "interpretation": build_interpretation(layers),
+            "replay_input_attribution": replay_attribution,
+            "attribution_summary": build_attribution_summary(
+                replay_attribution
+            ),
             "artifact_counts": dict(sorted(counts.items())),
             "variant_counts": dict(
                 sorted(variant_counts.items())
