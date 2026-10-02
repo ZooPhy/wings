@@ -3043,6 +3043,14 @@ rule genoflu:
 # Run-level provenance
 # -----------------------------------------------------------------------------
 
+# Primary sequencing inputs used to generate the genomic result.
+# These are recorded by path, size, and SHA-256 but are not copied into the
+# replay archive because raw-read files may be very large.
+PRIMARY_INPUT_SPECS = [
+    (sample, SAMPLE_FASTQ[sample])
+    for sample in SAMPLES
+]
+
 # Replay-sensitive scientific inputs used to interpret a WINGS run.
 # These are recorded by path and SHA-256 in run_provenance.json so that a
 # historical interpretation can be tied to the exact contextual snapshots
@@ -3103,6 +3111,9 @@ rule run_provenance:
         snakefile="Snakefile",
         blast_manifest="resources/flu_db/database_manifest.tsv",
         script="scripts/write_run_provenance.py",
+        primary_inputs=[
+            path for _, path in PRIMARY_INPUT_SPECS
+        ],
         replay_inputs=[path for _, path in REPLAY_INPUT_SPECS],
         envs=[
             "envs/blast.yaml",
@@ -3144,6 +3155,10 @@ rule run_provenance:
         replay_args=" ".join(
             "--replay-input " + shlex.quote(f"{label}={path}")
             for label, path in REPLAY_INPUT_SPECS
+        ),
+        primary_args=" ".join(
+            "--primary-input " + shlex.quote(f"{label}={path}")
+            for label, path in PRIMARY_INPUT_SPECS
         )
     conda:
         "envs/py-tools.yaml"
@@ -3157,6 +3172,7 @@ rule run_provenance:
           --config {input.config:q} \
           --snakefile {input.snakefile:q} \
           --blast-manifest {input.blast_manifest:q} \
+          {params.primary_args} \
           {params.replay_args} \
           --sample-count {params.sample_count} \
           --snakemake-version {params.snakemake_version:q} \

@@ -61,6 +61,10 @@ def parse_replay_input_arg(item: str) -> tuple[str, Path]:
     return parse_labeled_path(item, "--replay-input")
 
 
+def parse_primary_input_arg(item: str) -> tuple[str, Path]:
+    return parse_labeled_path(item, "--primary-input")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description='Write WINGS run-level provenance records.')
     ap.add_argument('--output-tsv', required=True, type=Path)
@@ -93,6 +97,15 @@ def main() -> None:
         action='append',
         default=[],
         help='Replay-sensitive scientific input as LABEL=PATH; may be repeated.',
+    )
+    ap.add_argument(
+        '--primary-input',
+        action='append',
+        default=[],
+        help=(
+            'Primary sequencing input as LABEL=PATH; '
+            'may be repeated.'
+        ),
     )
     args = ap.parse_args()
 
@@ -129,8 +142,22 @@ def main() -> None:
             'sha256': sha256_file(p) if p.is_file() else 'MISSING',
         }
 
+    primary_inputs: dict[str, dict[str, object]] = {}
+    for item in args.primary_input:
+        label, path = parse_primary_input_arg(item)
+        p = (
+            (repo / path).resolve()
+            if not path.is_absolute()
+            else path.resolve()
+        )
+        primary_inputs[label] = {
+            'path': os.path.relpath(p, repo),
+            'sha256': sha256_file(p) if p.is_file() else 'MISSING',
+            'size_bytes': p.stat().st_size if p.is_file() else None,
+        }
+
     provenance = {
-        'schema_version': 2,
+        'schema_version': 3,
         'created_at_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'workflow': {
             'name': 'WINGS',
@@ -183,6 +210,7 @@ def main() -> None:
             'database': blast,
         },
         'conda_environment_files': envs,
+        'primary_inputs': primary_inputs,
         'replay_inputs': replay_inputs,
     }
 

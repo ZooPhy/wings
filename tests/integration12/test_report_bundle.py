@@ -106,12 +106,27 @@ def test_production_wings_bundle_release_artifact():
 
     assert bundle["provenance"]["filename"] == "run_provenance.json"
     assert embedded_provenance == disk_provenance
-    assert embedded_provenance["schema_version"] == 2
+    assert embedded_provenance["schema_version"] == 3
     assert embedded_provenance["workflow"]["name"] == "WINGS"
     assert embedded_provenance["workflow"]["sample_count"] == 2
     assert embedded_provenance["workflow"]["snakefile"] == "Snakefile"
     assert embedded_provenance["runtime"]["snakemake_version"]
     assert embedded_provenance["runtime"]["python_version"]
+
+    primary_inputs = embedded_provenance["primary_inputs"]
+
+    assert set(primary_inputs) == {
+        "bundle_alpha",
+        "bundle_beta",
+    }
+
+    for sample in ("bundle_alpha", "bundle_beta"):
+        record = primary_inputs[sample]
+        assert record["path"].endswith(
+            f"{sample}.fastq.gz"
+        )
+        assert len(record["sha256"]) == 64
+        assert record["size_bytes"] > 0
 
     replay_inputs = embedded_provenance["replay_inputs"]
     assert "metadata" in replay_inputs
