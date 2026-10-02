@@ -51,6 +51,17 @@ button, input, select { font: inherit; }
   border-radius: 8px;
   background: var(--asu-white);
 }
+.portal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.portal-home-button {
+  white-space: nowrap;
+}
+
 .runner-pill {
   display: inline-flex;
   align-items: center;
