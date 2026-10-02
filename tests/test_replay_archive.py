@@ -9,6 +9,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "archive_replay_inputs.py"
+READINESS_SCRIPT = (
+    REPO_ROOT / "scripts" / "check_historical_reexecution.py"
+)
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -884,3 +887,163 @@ def test_schema3_archive_preserves_execution_spec_without_raw_reads(
         / raw_sha
     )
     assert not raw_object.exists()
+
+
+def test_historical_reexecution_readiness_detects_primary_input_drift(
+    tmp_path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    reads = repo / "sample1.fastq.gz"
+    reads.write_bytes(b"historical raw reads\n")
+    reads_sha = sha256_bytes(reads.read_bytes())
+
+    metadata = repo / "metadata.tsv"
+    metadata.write_bytes(
+        b"sample_id\tstate\nsample1\tAZ\n"
+    )
+    metadata_sha = sha256_bytes(metadata.read_bytes())
+
+    effective_config = repo / "effective_config.json"
+    effective_config.write_text(
+        json.dumps(
+            {
+                "reads_dir": ".",
+                "results_dir": "results",
+                "metadata_file": "metadata.tsv",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_sha = sha256_bytes(
+        effective_config.read_bytes()
+    )
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "workflow": {
+                    "git_commit": "historical-commit",
+                    "config_file": "effective_config.json",
+                    "config_sha256": config_sha,
+                },
+                "conda_environment_files": {
+                    "py-tools": {
+                        "path": "envs/py-tools.yaml",
+                        "sha256": "a" * 64,
+                    }
+                },
+                "primary_inputs": {
+                    "sample1": {
+                        "path": "sample1.fastq.gz",
+                        "sha256": reads_sha,
+                        "size_bytes": reads.stat().st_size,
+                    }
+                },
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": metadata_sha,
+                    }
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    archive = repo / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    readiness_json = repo / "readiness.json"
+
+    ready_run = subprocess.run(
+        [
+            sys.executable,
+            str(READINESS_SCRIPT),
+            "--archive-root",
+            str(archive),
+            "--snapshot",
+            "current",
+            "--repo-root",
+            str(repo),
+            "--output-json",
+            str(readiness_json),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert ready_run.returncode == 0
+    assert "Re-execution ready: YES" in ready_run.stdout
+
+    readiness = json.loads(
+        readiness_json.read_text(encoding="utf-8")
+    )
+
+    assert readiness["ready"] is True
+    assert readiness["primary_inputs"]["status"] == "MATCH"
+    assert (
+        readiness["effective_config"]["status"]
+        == "AVAILABLE"
+    )
+    assert (
+        readiness["replay_inputs"]["status"]
+        == "AVAILABLE"
+    )
+
+    # Historical raw reads drift after archival.
+    reads.write_bytes(b"changed raw reads\n")
+
+    changed_run = subprocess.run(
+        [
+            sys.executable,
+            str(READINESS_SCRIPT),
+            "--archive-root",
+            str(archive),
+            "--snapshot",
+            "current",
+            "--repo-root",
+            str(repo),
+            "--output-json",
+            str(readiness_json),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert changed_run.returncode == 1
+    assert "Re-execution ready: NO" in changed_run.stdout
+
+    changed = json.loads(
+        readiness_json.read_text(encoding="utf-8")
+    )
+
+    assert changed["ready"] is False
+    assert (
+        changed["primary_inputs"]["status"]
+        == "NOT_READY"
+    )
+    assert (
+        changed["primary_inputs"]["inputs"][0]["status"]
+        == "CHANGED"
+    )
