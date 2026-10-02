@@ -74,6 +74,40 @@ def config_path(key, default):
     return os.path.normpath(str(config.get(key, default)))
 
 
+# Historical re-execution may pin selected contextual artifacts to archived
+# copies while the analytical workflow itself runs under the current code.
+HISTORICAL_REEXECUTION_CONFIG = (
+    config.get("historical_reexecution", {}) or {}
+)
+if not isinstance(HISTORICAL_REEXECUTION_CONFIG, dict):
+    raise ValueError("historical_reexecution must be a mapping")
+
+HISTORICAL_REEXECUTION_ENABLED = as_bool(
+    HISTORICAL_REEXECUTION_CONFIG.get("enabled", False)
+)
+
+HISTORICAL_FROZEN_INPUTS = (
+    HISTORICAL_REEXECUTION_CONFIG.get("frozen_inputs", {}) or {}
+)
+if not isinstance(HISTORICAL_FROZEN_INPUTS, dict):
+    raise ValueError(
+        "historical_reexecution.frozen_inputs must be a mapping"
+    )
+
+
+def frozen_reexecution_input(label):
+    """Return an explicitly frozen historical input, when configured."""
+    if not HISTORICAL_REEXECUTION_ENABLED:
+        return ""
+    return str(HISTORICAL_FROZEN_INPUTS.get(label, "") or "").strip()
+
+
+FROZEN_PHENOLOGY = frozen_reexecution_input("phenology")
+FROZEN_EBIRD_CONTEXT = frozen_reexecution_input("ebird_context")
+FROZEN_EBIRD_TERMS = frozen_reexecution_input("ebird_terms")
+FROZEN_EBIRD_CITATION = frozen_reexecution_input("ebird_citation")
+
+
 READS = config_path("reads_dir", "data")
 RESULTS = config_path("results_dir", "results")
 REPLAY_ARCHIVE_DIR = f"{RESULTS}/replay_archive"
@@ -456,11 +490,16 @@ CONCORDANCE_ECOLOGY_INPUT = (
 # phenology output automatically using the existing phenology rule/defaults.
 CONCORDANCE_AUTO_PHENOLOGY = as_bool(CONCORDANCE_CONFIG.get("auto_phenology", True))
 CONCORDANCE_PHENOLOGY_INPUT = (
-    [PHENOLOGY_OUTPUT]
+    [FROZEN_PHENOLOGY]
+    if RUN_CONCORDANCE and FROZEN_PHENOLOGY
+    else [PHENOLOGY_OUTPUT]
     if RUN_CONCORDANCE and (
         PHENOLOGY_ENABLED
         or Path(PHENOLOGY_OUTPUT).is_file()
-        or (CONCORDANCE_AUTO_PHENOLOGY and bool(os.environ.get("EBIRDST_ACCESS_KEY")))
+        or (
+            CONCORDANCE_AUTO_PHENOLOGY
+            and bool(os.environ.get("EBIRDST_ACCESS_KEY"))
+        )
     )
     else []
 )
@@ -2651,7 +2690,11 @@ rule surveillance_explorer_data:
         reference_loader="scripts/public_reference_context.py",
         ecological_context=([ECOLOGY_JSON] if ECOLOGY_ENABLED else []),
         ecological_loader="scripts/build_ecological_context.py",
-        phenology=([PHENOLOGY_OUTPUT] if PHENOLOGY_ENABLED else []),
+        phenology=(
+            [FROZEN_PHENOLOGY]
+            if FROZEN_PHENOLOGY
+            else ([PHENOLOGY_OUTPUT] if PHENOLOGY_ENABLED else [])
+        ),
         surveillance_effort=([SURVEILLANCE_EFFORT_FILE] if SURVEILLANCE_EFFORT_ENABLED else []),
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
@@ -2671,19 +2714,50 @@ rule surveillance_explorer_data:
             if RUN_GENOFLU else []
         ),
         ebird_samples=(
-            [f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"]
-            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/ebird_samples.tsv").is_file())
-            else []
+            [FROZEN_EBIRD_CONTEXT]
+            if FROZEN_EBIRD_CONTEXT
+            else (
+                [f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"]
+                if EBIRD_ENABLED or (
+                    not EBIRD_DECLARED
+                    and Path(
+                        f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+                    ).is_file()
+                )
+                else []
+            )
         ),
         ebird_terms=(
-            [f"{RESULTS}/run_summary/ebird/terms_of_use.txt"]
-            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/terms_of_use.txt").is_file())
-            else []
+            [FROZEN_EBIRD_TERMS]
+            if FROZEN_EBIRD_TERMS
+            else (
+                [f"{RESULTS}/run_summary/ebird/terms_of_use.txt"]
+                if EBIRD_ENABLED or (
+                    not EBIRD_DECLARED
+                    and Path(
+                        f"{RESULTS}/run_summary/ebird/terms_of_use.txt"
+                    ).is_file()
+                )
+                else []
+            )
         ),
         ebird_citation=(
-            [f"{RESULTS}/run_summary/ebird/recommended_citation.txt"]
-            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/recommended_citation.txt").is_file())
-            else []
+            [FROZEN_EBIRD_CITATION]
+            if FROZEN_EBIRD_CITATION
+            else (
+                [
+                    f"{RESULTS}/run_summary/ebird/"
+                    "recommended_citation.txt"
+                ]
+                if EBIRD_ENABLED or (
+                    not EBIRD_DECLARED
+                    and Path(
+                        f"{RESULTS}/run_summary/ebird/"
+                        "recommended_citation.txt"
+                    ).is_file()
+                )
+                else []
+            )
         )
     output:
         json=f"{RESULTS}/run_summary/surveillance_explorer.json"
@@ -3096,11 +3170,15 @@ elif ECOLOGY_ENABLED:
         ("ecological_context", ECOLOGY_JSON)
     )
 
-if PHENOLOGY_ENABLED or (
+REPLAY_PHENOLOGY_INPUT = (
+    FROZEN_PHENOLOGY or PHENOLOGY_OUTPUT
+)
+
+if FROZEN_PHENOLOGY or PHENOLOGY_ENABLED or (
     RUN_CONCORDANCE and bool(CONCORDANCE_PHENOLOGY_INPUT)
 ):
     REPLAY_INPUT_SPECS.append(
-        ("phenology", PHENOLOGY_OUTPUT)
+        ("phenology", REPLAY_PHENOLOGY_INPUT)
     )
 
 if SURVEILLANCE_EFFORT_ENABLED:
@@ -3118,28 +3196,39 @@ if OUTBREAK_ENABLED:
         )
 
 REPLAY_EBIRD_CONTEXT = (
-    f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+    FROZEN_EBIRD_CONTEXT
+    or f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
 )
 REPLAY_EBIRD_TERMS = (
-    f"{RESULTS}/run_summary/ebird/terms_of_use.txt"
+    FROZEN_EBIRD_TERMS
+    or f"{RESULTS}/run_summary/ebird/terms_of_use.txt"
 )
 REPLAY_EBIRD_CITATION = (
-    f"{RESULTS}/run_summary/ebird/recommended_citation.txt"
+    FROZEN_EBIRD_CITATION
+    or f"{RESULTS}/run_summary/ebird/recommended_citation.txt"
 )
 
-if EBIRD_ENABLED or (
+if FROZEN_EBIRD_CONTEXT or EBIRD_ENABLED or (
     not EBIRD_DECLARED and Path(REPLAY_EBIRD_CONTEXT).is_file()
 ):
     REPLAY_INPUT_SPECS.append(
         ("ebird_context", REPLAY_EBIRD_CONTEXT)
     )
 
-    if EBIRD_ENABLED or Path(REPLAY_EBIRD_TERMS).is_file():
+    if (
+        FROZEN_EBIRD_TERMS
+        or EBIRD_ENABLED
+        or Path(REPLAY_EBIRD_TERMS).is_file()
+    ):
         REPLAY_INPUT_SPECS.append(
             ("ebird_terms", REPLAY_EBIRD_TERMS)
         )
 
-    if EBIRD_ENABLED or Path(REPLAY_EBIRD_CITATION).is_file():
+    if (
+        FROZEN_EBIRD_CITATION
+        or EBIRD_ENABLED
+        or Path(REPLAY_EBIRD_CITATION).is_file()
+    ):
         REPLAY_INPUT_SPECS.append(
             ("ebird_citation", REPLAY_EBIRD_CITATION)
         )
