@@ -74,6 +74,158 @@ def variant_text(variant: tuple[str, int, str, str]) -> str:
     return f"{chrom}:{pos}:{ref}>{alt}"
 
 
+PRIMARY_GENOMIC_CATEGORIES = {
+    "sample_summary",
+    "blast",
+    "coverage",
+    "consensus",
+    "genoflu",
+    "variant_status",
+}
+
+CONTEXT_CATEGORIES = {
+    "contextual_tree",
+    "surveillance_explorer",
+}
+
+INTEGRATED_CATEGORIES = {
+    "concordance",
+}
+
+
+def summarize_artifact_layer(
+    artifact_results: dict[str, dict[str, object]],
+    categories: set[str],
+) -> dict[str, object]:
+    selected = [
+        record
+        for record in artifact_results.values()
+        if record.get("category") in categories
+    ]
+
+    counts = Counter(
+        str(record.get("status", ""))
+        for record in selected
+    )
+
+    if not selected:
+        status = "NOT_AVAILABLE"
+    elif counts.get("MISSING", 0):
+        status = "INCOMPLETE"
+    elif counts.get("CHANGED", 0) or counts.get("NEW", 0):
+        status = "CHANGED"
+    else:
+        status = "STABLE"
+
+    return {
+        "status": status,
+        "artifact_count": len(selected),
+        "counts": dict(sorted(counts.items())),
+    }
+
+
+def summarize_variant_layer(
+    artifact_results: dict[str, dict[str, object]],
+    variant_rows: list[dict[str, object]],
+) -> dict[str, object]:
+    vcfs = [
+        record
+        for record in artifact_results.values()
+        if record.get("category") == "variant_vcf"
+    ]
+
+    row_counts = Counter(
+        str(row.get("status", ""))
+        for row in variant_rows
+    )
+
+    new_vcfs = sum(
+        record.get("status") == "NEW"
+        for record in vcfs
+    )
+    missing_vcfs = sum(
+        record.get("status") == "MISSING"
+        for record in vcfs
+    )
+
+    if not vcfs:
+        status = "NOT_AVAILABLE"
+    elif missing_vcfs or row_counts.get("MISSING_CURRENT", 0):
+        status = "INCOMPLETE"
+    elif new_vcfs or row_counts.get("CHANGED", 0):
+        status = "CHANGED"
+    else:
+        status = "STABLE"
+
+    return {
+        "status": status,
+        "segment_vcf_count": len(vcfs),
+        "counts": dict(sorted(row_counts.items())),
+        "new_vcf_count": new_vcfs,
+        "missing_vcf_count": missing_vcfs,
+    }
+
+
+def combine_genomic_status(
+    primary_status: str,
+    variant_status: str,
+) -> str:
+    statuses = {primary_status, variant_status}
+
+    if "INCOMPLETE" in statuses:
+        return "INCOMPLETE"
+    if "CHANGED" in statuses:
+        return "CHANGED"
+    if statuses <= {"STABLE", "NOT_AVAILABLE"} and "STABLE" in statuses:
+        return "STABLE"
+    return "NOT_AVAILABLE"
+
+
+def build_interpretation(layers: dict[str, dict[str, object]]) -> str:
+    genomic = str(layers["genomic_overall"]["status"])
+    context = str(layers["surveillance_context"]["status"])
+    integrated = str(layers["integrated_concordance"]["status"])
+
+    if genomic == "INCOMPLETE":
+        return (
+            "The genomic comparison is incomplete because one or more "
+            "historical or current genomic outputs are unavailable."
+        )
+
+    if genomic == "CHANGED":
+        return (
+            "The primary genomic interpretation changed. Downstream "
+            "surveillance/context or concordance changes should therefore "
+            "be interpreted in light of the changed genomic result."
+        )
+
+    if genomic == "STABLE" and integrated == "CHANGED":
+        return (
+            "The underlying genomic result is stable, but the integrated "
+            "genomic-ecological interpretation changed."
+        )
+
+    if genomic == "STABLE" and context == "CHANGED":
+        return (
+            "The underlying genomic result is stable, while "
+            "surveillance/context outputs changed. The change is downstream "
+            "of the genomic calls; replay-input provenance can distinguish "
+            "updated context from other workflow changes."
+        )
+
+    if genomic == "STABLE":
+        return (
+            "The underlying genomic result is stable, with no detected "
+            "change in the archived surveillance/context or integrated "
+            "interpretation."
+        )
+
+    return (
+        "Historical comparison is available, but there are not enough "
+        "archived genomic outputs to classify genomic stability."
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -250,12 +402,44 @@ def main() -> int:
             for row in variant_rows
         )
 
+        primary_layer = summarize_artifact_layer(
+            artifact_results,
+            PRIMARY_GENOMIC_CATEGORIES,
+        )
+        variant_layer = summarize_variant_layer(
+            artifact_results,
+            variant_rows,
+        )
+        context_layer = summarize_artifact_layer(
+            artifact_results,
+            CONTEXT_CATEGORIES,
+        )
+        integrated_layer = summarize_artifact_layer(
+            artifact_results,
+            INTEGRATED_CATEGORIES,
+        )
+
+        layers = {
+            "primary_genomic": primary_layer,
+            "variant_calls": variant_layer,
+            "surveillance_context": context_layer,
+            "integrated_concordance": integrated_layer,
+            "genomic_overall": {
+                "status": combine_genomic_status(
+                    str(primary_layer["status"]),
+                    str(variant_layer["status"]),
+                )
+            },
+        }
+
         report = {
             "format": "WINGS_INTERPRETATION_COMPARISON",
-            "schema_version": 1,
+            "schema_version": 2,
             "historical_snapshot_id": historical.get(
                 "snapshot_id"
             ),
+            "layers": layers,
+            "interpretation": build_interpretation(layers),
             "artifact_counts": dict(sorted(counts.items())),
             "variant_counts": dict(
                 sorted(variant_counts.items())
