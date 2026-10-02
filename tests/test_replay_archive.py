@@ -182,3 +182,280 @@ def test_replay_snapshot_restores_historical_bytes_after_inputs_change(tmp_path)
 
     # The current project input remains changed and untouched.
     assert source.read_bytes() != historical
+
+
+def test_interpretation_archive_is_immutable_for_snapshot(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    historical_input = b"historical input\n"
+    input_sha = sha256_bytes(historical_input)
+
+    source = repo / "metadata.tsv"
+    source.write_bytes(historical_input)
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": input_sha,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    results = repo / "results"
+    summary_dir = results / "sample1" / "summary"
+    medaka_dir = results / "sample1" / "medaka" / "HA"
+    summary_dir.mkdir(parents=True)
+    medaka_dir.mkdir(parents=True)
+
+    sample_summary = summary_dir / "sample1.sample_summary.tsv"
+    sample_summary.write_text(
+        "sample_id\tstatus\nsample1\tPASS\n",
+        encoding="utf-8",
+    )
+
+    vcf = medaka_dir / "variants.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.2\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "HA\t10\t.\tA\tG\t60\tPASS\t.\n",
+        encoding="utf-8",
+    )
+
+    variant_status = medaka_dir / "variants.status.tsv"
+    variant_status.write_text(
+        "status\treason\nSUCCESS\tvcf_generated\n",
+        encoding="utf-8",
+    )
+
+    archive = results / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    interpretation_script = (
+        REPO_ROOT / "scripts" / "archive_interpretation_outputs.py"
+    )
+
+    command = [
+        sys.executable,
+        str(interpretation_script),
+        "--provenance",
+        str(provenance),
+        "--results-root",
+        str(results),
+        "--archive-root",
+        str(archive),
+    ]
+
+    subprocess.run(
+        command,
+        check=True,
+    )
+
+    current = json.loads(
+        (
+            archive
+            / "interpretations"
+            / "current.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    interpretation = json.loads(
+        (
+            archive
+            / current["interpretation"]
+        ).read_text(encoding="utf-8")
+    )
+
+    categories = {
+        record["category"]
+        for record in interpretation["artifacts"].values()
+    }
+
+    assert "sample_summary" in categories
+    assert "variant_vcf" in categories
+    assert "variant_status" in categories
+
+    # Changing an analytical result without changing the provenance must not
+    # silently rewrite the historical interpretation snapshot.
+    sample_summary.write_text(
+        "sample_id\tstatus\nsample1\tCHANGED\n",
+        encoding="utf-8",
+    )
+
+    changed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+    )
+
+    assert changed.returncode != 0
+    assert "immutable" in changed.stderr.lower()
+
+
+def test_historical_comparison_detects_added_variant(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    # Minimal replay-sensitive input.
+    metadata = repo / "metadata.tsv"
+    metadata.write_text(
+        "sample_id\nsample1\n",
+        encoding="utf-8",
+    )
+    metadata_sha = sha256_bytes(metadata.read_bytes())
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": metadata_sha,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    results = repo / "results"
+    vcf_dir = results / "sample1" / "medaka" / "HA"
+    vcf_dir.mkdir(parents=True)
+
+    vcf = vcf_dir / "variants.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.2\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "HA\t10\t.\tA\tG\t60\tPASS\t.\n",
+        encoding="utf-8",
+    )
+
+    status = vcf_dir / "variants.status.tsv"
+    status.write_text(
+        "status\treason\nSUCCESS\tvcf_generated\n",
+        encoding="utf-8",
+    )
+
+    archive = results / "replay_archive"
+
+    # Archive replay inputs.
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    # Archive the historical interpretation.
+    interpretation_script = (
+        REPO_ROOT / "scripts" / "archive_interpretation_outputs.py"
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(interpretation_script),
+            "--provenance",
+            str(provenance),
+            "--results-root",
+            str(results),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    current = json.loads(
+        (
+            archive
+            / "interpretations"
+            / "current.json"
+        ).read_text(encoding="utf-8")
+    )
+    historical_interpretation = (
+        archive / current["interpretation"]
+    )
+
+    # Simulate a later analysis finding one additional HA variant.
+    vcf.write_text(
+        "##fileformat=VCFv4.2\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "HA\t10\t.\tA\tG\t60\tPASS\t.\n"
+        "HA\t25\t.\tC\tT\t60\tPASS\t.\n",
+        encoding="utf-8",
+    )
+
+    comparison_json = results / "comparison.json"
+    variant_tsv = results / "variant_stability.tsv"
+
+    compare_script = (
+        REPO_ROOT / "scripts" / "compare_historical_interpretation.py"
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(compare_script),
+            "--interpretation",
+            str(historical_interpretation),
+            "--archive-root",
+            str(archive),
+            "--results-root",
+            str(results),
+            "--output-json",
+            str(comparison_json),
+            "--variant-tsv",
+            str(variant_tsv),
+        ],
+        check=True,
+    )
+
+    comparison = json.loads(
+        comparison_json.read_text(encoding="utf-8")
+    )
+
+    assert comparison["variant_counts"] == {"CHANGED": 1}
+
+    rows = comparison["variants"]
+    assert len(rows) == 1
+
+    row = rows[0]
+    assert row["sample"] == "sample1"
+    assert row["segment"] == "HA"
+    assert row["status"] == "CHANGED"
+    assert row["historical_variant_count"] == 1
+    assert row["current_variant_count"] == 2
+    assert row["added_count"] == 1
+    assert row["removed_count"] == 0
+    assert row["added_variants"] == "HA:25:C>T"
+    assert row["removed_variants"] == ""

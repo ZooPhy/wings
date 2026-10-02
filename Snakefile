@@ -77,6 +77,9 @@ READS = config_path("reads_dir", "data")
 RESULTS = config_path("results_dir", "results")
 REPLAY_ARCHIVE_DIR = f"{RESULTS}/replay_archive"
 REPLAY_ARCHIVE_CURRENT = f"{REPLAY_ARCHIVE_DIR}/current.json"
+INTERPRETATION_ARCHIVE_CURRENT = (
+    f"{REPLAY_ARCHIVE_DIR}/interpretations/current.json"
+)
 METADATA_FILE = config_path("metadata_file", "metadata.tsv")
 METADATA_REQUIRE_ALL = as_bool(config.get("metadata_require_all_samples", True))
 READ_PATTERN = str(config.get("reads_pattern", "{sample}.fastq.gz"))
@@ -811,6 +814,15 @@ if RUN_CONCORDANCE:
     ])
 # WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_TARGETS_END
 
+
+
+# Freeze the completed analytical target set before adding the interpretation
+# archive itself. This ensures archival occurs only after the scientific
+# outputs for the run are complete.
+INTERPRETATION_ARCHIVE_INPUTS = list(FINAL_TARGETS)
+
+if RUN_SUMMARY:
+    FINAL_TARGETS.append(INTERPRETATION_ARCHIVE_CURRENT)
 
 
 rule all:
@@ -3095,6 +3107,33 @@ rule archive_replay_inputs:
           --repo-root {params.repo_root:q} \
           --archive-root {params.archive_root:q} \
           --output-index {output.current:q}
+        """
+
+
+# -----------------------------------------------------------------------------
+# Historical interpretation archive
+# -----------------------------------------------------------------------------
+rule archive_interpretation_outputs:
+    input:
+        provenance=f"{RESULTS}/run_summary/run_provenance.json",
+        replay_snapshot=REPLAY_ARCHIVE_CURRENT,
+        artifacts=INTERPRETATION_ARCHIVE_INPUTS,
+        script="scripts/archive_interpretation_outputs.py"
+    output:
+        current=INTERPRETATION_ARCHIVE_CURRENT
+    params:
+        results_root=RESULTS,
+        archive_root=REPLAY_ARCHIVE_DIR
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --provenance {input.provenance:q} \
+          --results-root {params.results_root:q} \
+          --archive-root {params.archive_root:q}
+        test -s {output.current:q}
         """
 
 
