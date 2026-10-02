@@ -100,3 +100,85 @@ def test_replay_archive_is_content_addressed_and_deduplicated(tmp_path):
     assert "New objects: 0" in second_run.stdout
     assert "Existing objects reused: 2" in second_run.stdout
     assert len(list((archive / "objects" / "sha256").glob("*/*"))) == 1
+
+
+def test_replay_snapshot_restores_historical_bytes_after_inputs_change(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    historical = b"historical WINGS context\n"
+    historical_sha = sha256_bytes(historical)
+
+    source = repo / "context.tsv"
+    source.write_bytes(historical)
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "replay_inputs": {
+                    "context": {
+                        "path": "context.tsv",
+                        "sha256": historical_sha,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    archive = repo / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    # Simulate the live input changing after the historical run.
+    source.write_bytes(b"new context that should not replace history\n")
+
+    restore_script = (
+        REPO_ROOT / "scripts" / "restore_replay_snapshot.py"
+    )
+    workspace = repo / "historical_replay"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(restore_script),
+            "--archive-root",
+            str(archive),
+            "--snapshot",
+            "current",
+            "--output-dir",
+            str(workspace),
+        ],
+        check=True,
+    )
+
+    workspace_manifest = json.loads(
+        (workspace / "replay_workspace.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    restored_rel = workspace_manifest["inputs"]["context"][
+        "restored_path"
+    ]
+    restored = workspace / restored_rel
+
+    assert restored.read_bytes() == historical
+    assert sha256_bytes(restored.read_bytes()) == historical_sha
+
+    # The current project input remains changed and untouched.
+    assert source.read_bytes() != historical
