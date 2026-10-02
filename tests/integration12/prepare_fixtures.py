@@ -25,10 +25,20 @@ def main() -> None:
         with gzip.open(DATA / f"{sample}.fastq.gz", "wt", encoding="utf-8") as handle:
             handle.write("@fixture\nACGT\n+\nIIII\n")
 
-    (WORK / "metadata.tsv").write_text(
+    metadata_text = (
         "sample_id\thost_common_name\tstate\tcountry\n"
         "bundle_alpha\tMallard\tArizona\tUSA\n"
-        "bundle_beta\tNorthern Pintail\tNevada\tUSA\n",
+        "bundle_beta\tNorthern Pintail\tNevada\tUSA\n"
+    )
+    (WORK / "metadata.tsv").write_text(
+        metadata_text,
+        encoding="utf-8",
+    )
+
+    metadata_dir = RESULTS / "metadata"
+    metadata_dir.mkdir(parents=True)
+    (metadata_dir / "validated_metadata.tsv").write_text(
+        metadata_text,
         encoding="utf-8",
     )
 

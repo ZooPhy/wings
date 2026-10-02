@@ -75,6 +75,23 @@ def config_path(key, default):
 
 READS = config_path("reads_dir", "data")
 RESULTS = config_path("results_dir", "results")
+REPLAY_ARCHIVE_DIR = f"{RESULTS}/replay_archive"
+REPLAY_ARCHIVE_CURRENT = f"{REPLAY_ARCHIVE_DIR}/current.json"
+INTERPRETATION_ARCHIVE_CURRENT = (
+    f"{REPLAY_ARCHIVE_DIR}/interpretations/current.json"
+)
+HISTORICAL_BASELINE_JSON = (
+    f"{RESULTS}/run_summary/historical_baseline.json"
+)
+INTERPRETATION_STABILITY_JSON = (
+    f"{RESULTS}/run_summary/interpretation_stability.json"
+)
+INTERPRETATION_STABILITY_TSV = (
+    f"{RESULTS}/run_summary/interpretation_stability.tsv"
+)
+VARIANT_STABILITY_TSV = (
+    f"{RESULTS}/run_summary/variant_stability.tsv"
+)
 METADATA_FILE = config_path("metadata_file", "metadata.tsv")
 METADATA_REQUIRE_ALL = as_bool(config.get("metadata_require_all_samples", True))
 READ_PATTERN = str(config.get("reads_pattern", "{sample}.fastq.gz"))
@@ -786,6 +803,11 @@ if RUN_SUMMARY:
         f"{RESULTS}/run_summary/run_summary.html",
         f"{RESULTS}/run_summary/run_provenance.tsv",
         f"{RESULTS}/run_summary/run_provenance.json",
+        REPLAY_ARCHIVE_CURRENT,
+        HISTORICAL_BASELINE_JSON,
+        INTERPRETATION_STABILITY_JSON,
+        INTERPRETATION_STABILITY_TSV,
+        VARIANT_STABILITY_TSV,
     ])
 
 
@@ -808,6 +830,15 @@ if RUN_CONCORDANCE:
     ])
 # WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_TARGETS_END
 
+
+
+# Freeze the completed analytical target set before adding the interpretation
+# archive itself. This ensures archival occurs only after the scientific
+# outputs for the run are complete.
+INTERPRETATION_ARCHIVE_INPUTS = list(FINAL_TARGETS)
+
+if RUN_SUMMARY:
+    FINAL_TARGETS.append(INTERPRETATION_ARCHIVE_CURRENT)
 
 
 rule all:
@@ -2621,6 +2652,7 @@ rule surveillance_explorer_data:
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        stability_summary=INTERPRETATION_STABILITY_TSV,
         summaries=expand(
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
             sample=SAMPLES,
@@ -2748,6 +2780,91 @@ rule attach_genomic_ecological_concordance:
         """
 # WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_RULE_END
 
+# -----------------------------------------------------------------------------
+# Historical interpretation stability
+# -----------------------------------------------------------------------------
+rule select_historical_baseline:
+    input:
+        provenance=f"{RESULTS}/run_summary/run_provenance.json",
+        script="scripts/select_previous_interpretation.py"
+    output:
+        json=HISTORICAL_BASELINE_JSON
+    params:
+        archive_root=REPLAY_ARCHIVE_DIR
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --provenance {input.provenance:q} \
+          --archive-root {params.archive_root:q} \
+          --output {output.json:q}
+        """
+
+
+rule historical_stability:
+    input:
+        selection=HISTORICAL_BASELINE_JSON,
+        summaries=expand(
+            f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
+            sample=SAMPLES,
+        ),
+        blast=expand(
+            f"{RESULTS}/{{sample}}/summary/blast_top_hits.csv",
+            sample=SAMPLES,
+        ),
+        coverage=expand(
+            f"{RESULTS}/{{sample}}/coverage/coverage.tsv",
+            sample=SAMPLES,
+        ),
+        consensus=expand(
+            f"{RESULTS}/{{sample}}/merged/consensus_all_segments.fasta",
+            sample=SAMPLES,
+        ),
+        genoflu=(
+            expand(
+                f"{RESULTS}/{{sample}}/genoflu/GenoFLU.tsv",
+                sample=SAMPLES,
+            )
+            if RUN_GENOFLU
+            else []
+        ),
+        variant_status=expand(
+            f"{RESULTS}/{{sample}}/medaka/{{segment}}/variants.status.tsv",
+            sample=SAMPLES,
+            segment=SEGMENT_SEQUENCE,
+        ),
+        explorer=(
+            CONCORDANCE_REPORT_EXPLORER_JSON
+            if RUN_CONCORDANCE
+            else f"{RESULTS}/run_summary/surveillance_explorer.json"
+        ),
+        runner="scripts/run_historical_stability.py",
+        comparator="scripts/compare_historical_interpretation.py",
+        artifact_helper="scripts/archive_interpretation_outputs.py"
+    output:
+        json=INTERPRETATION_STABILITY_JSON,
+        variants=VARIANT_STABILITY_TSV,
+        summary=INTERPRETATION_STABILITY_TSV
+    params:
+        archive_root=REPLAY_ARCHIVE_DIR,
+        results_root=RESULTS
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.runner:q} \
+          --selection {input.selection:q} \
+          --archive-root {params.archive_root:q} \
+          --results-root {params.results_root:q} \
+          --output-json {output.json:q} \
+          --variant-tsv {output.variants:q} \
+          --summary-tsv {output.summary:q}
+        """
+
+
 # Produce a run-level report across all FASTQ-derived samples
 # -----------------------------------------------------------------------------
 rule run_summary_html:
@@ -2864,6 +2981,7 @@ rule run_summary_html:
               -P "samples:{params.samples}" \
               -P "run_summary_tsv:run_summary.tsv" \
               -P "review_tsv:samples_requiring_review.tsv" \
+              -P "stability_summary:interpretation_stability.tsv" \
               -P "explorer_json:${{explorer_json_abs}}" \
               -P "explorer_enabled:{params.explorer_enabled}" \
               -P "genoflu_enabled:{params.genoflu_enabled}" \
@@ -2922,12 +3040,68 @@ rule genoflu:
 # -----------------------------------------------------------------------------
 # Run-level provenance
 # -----------------------------------------------------------------------------
+
+# Replay-sensitive scientific inputs used to interpret a WINGS run.
+# These are recorded by path and SHA-256 in run_provenance.json so that a
+# historical interpretation can be tied to the exact contextual snapshots
+# available at the time of analysis.
+REPLAY_INPUT_SPECS = [
+    ("metadata", METADATA_FILE),
+    ("validated_metadata", f"{RESULTS}/metadata/validated_metadata.tsv"),
+]
+
+if REFERENCE_ENABLED:
+    REPLAY_INPUT_SPECS.extend([
+        ("public_reference_manifest", REFERENCE_MANIFEST),
+        ("public_reference_provenance", REFERENCE_PROVENANCE),
+    ])
+
+if RUN_CONCORDANCE and CONCORDANCE_ECOLOGY_INPUT:
+    REPLAY_INPUT_SPECS.append(
+        ("ecological_context", CONCORDANCE_ECOLOGY_INPUT[0])
+    )
+elif ECOLOGY_ENABLED:
+    REPLAY_INPUT_SPECS.append(
+        ("ecological_context", ECOLOGY_JSON)
+    )
+
+if PHENOLOGY_ENABLED or (
+    RUN_CONCORDANCE and bool(CONCORDANCE_PHENOLOGY_INPUT)
+):
+    REPLAY_INPUT_SPECS.append(
+        ("phenology", PHENOLOGY_OUTPUT)
+    )
+
+if SURVEILLANCE_EFFORT_ENABLED:
+    REPLAY_INPUT_SPECS.append(
+        ("surveillance_effort", SURVEILLANCE_EFFORT_FILE)
+    )
+
+if OUTBREAK_ENABLED:
+    REPLAY_INPUT_SPECS.append(
+        ("aphis_snapshot", APHIS_CSV)
+    )
+    if "provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file():
+        REPLAY_INPUT_SPECS.append(
+            ("aphis_provenance", APHIS_PROVENANCE)
+        )
+
+REPLAY_EBIRD_CONTEXT = f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+if EBIRD_ENABLED or (
+    not EBIRD_DECLARED and Path(REPLAY_EBIRD_CONTEXT).is_file()
+):
+    REPLAY_INPUT_SPECS.append(
+        ("ebird_context", REPLAY_EBIRD_CONTEXT)
+    )
+
+
 rule run_provenance:
     input:
         config="config.yaml",
         snakefile="Snakefile",
         blast_manifest="resources/flu_db/database_manifest.tsv",
         script="scripts/write_run_provenance.py",
+        replay_inputs=[path for _, path in REPLAY_INPUT_SPECS],
         envs=[
             "envs/blast.yaml",
             "envs/coverage.yaml",
@@ -2964,7 +3138,11 @@ rule run_provenance:
         blast_min_query_coverage=BLAST_MIN_QUERY_COVERAGE,
         blast_max_target_seqs=BLAST_MAX_TARGET_SEQS,
         blast_max_hsps=BLAST_MAX_HSPS,
-        reporting_env=REPORTING_ENV
+        reporting_env=REPORTING_ENV,
+        replay_args=" ".join(
+            "--replay-input " + shlex.quote(f"{label}={path}")
+            for label, path in REPLAY_INPUT_SPECS
+        )
     conda:
         "envs/py-tools.yaml"
     shell:
@@ -2977,6 +3155,7 @@ rule run_provenance:
           --config {input.config:q} \
           --snakefile {input.snakefile:q} \
           --blast-manifest {input.blast_manifest:q} \
+          {params.replay_args} \
           --sample-count {params.sample_count} \
           --snakemake-version {params.snakemake_version:q} \
           --irma-image {params.irma_image:q} \
@@ -3006,6 +3185,58 @@ rule run_provenance:
           --env pysam=envs/pysam.yaml \
           --env reporting={params.reporting_env:q} \
           --env seqtk=envs/seqtk.yaml
+        """
+
+
+# -----------------------------------------------------------------------------
+# Historical replay archive
+# -----------------------------------------------------------------------------
+rule archive_replay_inputs:
+    input:
+        provenance=f"{RESULTS}/run_summary/run_provenance.json",
+        script="scripts/archive_replay_inputs.py"
+    output:
+        current=REPLAY_ARCHIVE_CURRENT
+    params:
+        repo_root=".",
+        archive_root=REPLAY_ARCHIVE_DIR
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --manifest {input.provenance:q} \
+          --repo-root {params.repo_root:q} \
+          --archive-root {params.archive_root:q} \
+          --output-index {output.current:q}
+        """
+
+
+# -----------------------------------------------------------------------------
+# Historical interpretation archive
+# -----------------------------------------------------------------------------
+rule archive_interpretation_outputs:
+    input:
+        provenance=f"{RESULTS}/run_summary/run_provenance.json",
+        replay_snapshot=REPLAY_ARCHIVE_CURRENT,
+        artifacts=INTERPRETATION_ARCHIVE_INPUTS,
+        script="scripts/archive_interpretation_outputs.py"
+    output:
+        current=INTERPRETATION_ARCHIVE_CURRENT
+    params:
+        results_root=RESULTS,
+        archive_root=REPLAY_ARCHIVE_DIR
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --provenance {input.provenance:q} \
+          --results-root {params.results_root:q} \
+          --archive-root {params.archive_root:q}
+        test -s {output.current:q}
         """
 
 

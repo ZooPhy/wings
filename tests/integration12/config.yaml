@@ -15,3 +15,32 @@ blast_max_hsps: 1
 run_genoflu: false
 run_vadr: false
 run_summary: true
+
+# Keep the bundle/provenance integration fixture independent of optional
+# features enabled in a developer's local config.yaml.
+run_surveillance_explorer: false
+
+phylogeny:
+  enabled: false
+
+public_references:
+  enabled: false
+  build_contextual: false
+
+ecological_context:
+  enabled: false
+
+phenology:
+  enabled: false
+
+surveillance_effort:
+  enabled: false
+
+outbreak_context:
+  enabled: false
+
+ebird:
+  enabled: false
+
+genomic_ecological_concordance:
+  enabled: false
