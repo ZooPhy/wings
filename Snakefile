@@ -80,6 +80,18 @@ REPLAY_ARCHIVE_CURRENT = f"{REPLAY_ARCHIVE_DIR}/current.json"
 INTERPRETATION_ARCHIVE_CURRENT = (
     f"{REPLAY_ARCHIVE_DIR}/interpretations/current.json"
 )
+HISTORICAL_BASELINE_JSON = (
+    f"{RESULTS}/run_summary/historical_baseline.json"
+)
+INTERPRETATION_STABILITY_JSON = (
+    f"{RESULTS}/run_summary/interpretation_stability.json"
+)
+INTERPRETATION_STABILITY_TSV = (
+    f"{RESULTS}/run_summary/interpretation_stability.tsv"
+)
+VARIANT_STABILITY_TSV = (
+    f"{RESULTS}/run_summary/variant_stability.tsv"
+)
 METADATA_FILE = config_path("metadata_file", "metadata.tsv")
 METADATA_REQUIRE_ALL = as_bool(config.get("metadata_require_all_samples", True))
 READ_PATTERN = str(config.get("reads_pattern", "{sample}.fastq.gz"))
@@ -792,6 +804,10 @@ if RUN_SUMMARY:
         f"{RESULTS}/run_summary/run_provenance.tsv",
         f"{RESULTS}/run_summary/run_provenance.json",
         REPLAY_ARCHIVE_CURRENT,
+        HISTORICAL_BASELINE_JSON,
+        INTERPRETATION_STABILITY_JSON,
+        INTERPRETATION_STABILITY_TSV,
+        VARIANT_STABILITY_TSV,
     ])
 
 
@@ -2636,6 +2652,7 @@ rule surveillance_explorer_data:
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        stability_summary=INTERPRETATION_STABILITY_TSV,
         summaries=expand(
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
             sample=SAMPLES,
@@ -2762,6 +2779,91 @@ rule attach_genomic_ecological_concordance:
           --output {output.json:q}
         """
 # WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_RULE_END
+
+# -----------------------------------------------------------------------------
+# Historical interpretation stability
+# -----------------------------------------------------------------------------
+rule select_historical_baseline:
+    input:
+        provenance=f"{RESULTS}/run_summary/run_provenance.json",
+        script="scripts/select_previous_interpretation.py"
+    output:
+        json=HISTORICAL_BASELINE_JSON
+    params:
+        archive_root=REPLAY_ARCHIVE_DIR
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.script:q} \
+          --provenance {input.provenance:q} \
+          --archive-root {params.archive_root:q} \
+          --output {output.json:q}
+        """
+
+
+rule historical_stability:
+    input:
+        selection=HISTORICAL_BASELINE_JSON,
+        summaries=expand(
+            f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
+            sample=SAMPLES,
+        ),
+        blast=expand(
+            f"{RESULTS}/{{sample}}/summary/blast_top_hits.csv",
+            sample=SAMPLES,
+        ),
+        coverage=expand(
+            f"{RESULTS}/{{sample}}/coverage/coverage.tsv",
+            sample=SAMPLES,
+        ),
+        consensus=expand(
+            f"{RESULTS}/{{sample}}/merged/consensus_all_segments.fasta",
+            sample=SAMPLES,
+        ),
+        genoflu=(
+            expand(
+                f"{RESULTS}/{{sample}}/genoflu/GenoFLU.tsv",
+                sample=SAMPLES,
+            )
+            if RUN_GENOFLU
+            else []
+        ),
+        variant_status=expand(
+            f"{RESULTS}/{{sample}}/medaka/{{segment}}/variants.status.tsv",
+            sample=SAMPLES,
+            segment=SEGMENT_SEQUENCE,
+        ),
+        explorer=(
+            CONCORDANCE_REPORT_EXPLORER_JSON
+            if RUN_CONCORDANCE
+            else f"{RESULTS}/run_summary/surveillance_explorer.json"
+        ),
+        runner="scripts/run_historical_stability.py",
+        comparator="scripts/compare_historical_interpretation.py",
+        artifact_helper="scripts/archive_interpretation_outputs.py"
+    output:
+        json=INTERPRETATION_STABILITY_JSON,
+        variants=VARIANT_STABILITY_TSV,
+        summary=INTERPRETATION_STABILITY_TSV
+    params:
+        archive_root=REPLAY_ARCHIVE_DIR,
+        results_root=RESULTS
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        set -euo pipefail
+        python {input.runner:q} \
+          --selection {input.selection:q} \
+          --archive-root {params.archive_root:q} \
+          --results-root {params.results_root:q} \
+          --output-json {output.json:q} \
+          --variant-tsv {output.variants:q} \
+          --summary-tsv {output.summary:q}
+        """
+
 
 # Produce a run-level report across all FASTQ-derived samples
 # -----------------------------------------------------------------------------
