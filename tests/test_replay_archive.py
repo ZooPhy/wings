@@ -15,6 +15,9 @@ READINESS_SCRIPT = (
 PREPARE_REEXECUTION_SCRIPT = (
     REPO_ROOT / "scripts" / "prepare_historical_reexecution.py"
 )
+GENERATE_REEXECUTION_CONFIG_SCRIPT = (
+    REPO_ROOT / "scripts" / "generate_historical_execution_config.py"
+)
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -1216,6 +1219,87 @@ def test_prepare_historical_reexecution_workspace_is_isolated(
     assert not list(workspace.rglob("*.fastq.gz"))
 
     # Preparing the workspace must not mutate source inputs.
+    assert reads.read_bytes() == reads_content
+    assert metadata.read_bytes() == metadata_content
+    assert effective_config.read_bytes() == config_bytes
+
+    generated = subprocess.run(
+        [
+            sys.executable,
+            str(GENERATE_REEXECUTION_CONFIG_SCRIPT),
+            "--workspace",
+            str(workspace),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert generated.returncode == 0
+    assert "Execution config generated: YES" in generated.stdout
+    assert "Dry-run validated: NO" in generated.stdout
+    assert "Launch ready: NO" in generated.stdout
+
+    execution_config = json.loads(
+        (
+            workspace / "execution_config.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert execution_config["reads_dir"] == str(
+        workspace / "primary_inputs"
+    )
+    assert execution_config["results_dir"] == str(
+        workspace / "results"
+    )
+    assert execution_config["metadata_file"] == str(
+        restored_metadata
+    )
+    assert execution_config["phylogeny_dir"] == str(
+        workspace / "results" / "phylogeny"
+    )
+
+    historical = execution_config[
+        "historical_reexecution"
+    ]
+    assert historical["enabled"] is True
+    assert (
+        historical["mode"]
+        == "current_code_historical_inputs"
+    )
+    assert (
+        historical["frozen_inputs"]["metadata"]
+        == str(restored_metadata)
+    )
+
+    staged_reads = (
+        workspace
+        / "primary_inputs"
+        / "sample1.fastq.gz"
+    )
+    assert staged_reads.is_symlink()
+    assert staged_reads.resolve() == reads.resolve()
+    assert staged_reads.read_bytes() == reads_content
+
+    updated_manifest = json.loads(
+        (
+            workspace / "reexecution_manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert (
+        updated_manifest["execution_config_generated"]
+        is True
+    )
+    assert updated_manifest["dry_run_validated"] is False
+    assert updated_manifest["launch_ready"] is False
+    assert (
+        updated_manifest["primary_inputs"]["sample1"][
+            "workspace_path"
+        ]
+        == "primary_inputs/sample1.fastq.gz"
+    )
+
+    # Config generation still must not modify the historical sources.
     assert reads.read_bytes() == reads_content
     assert metadata.read_bytes() == metadata_content
     assert effective_config.read_bytes() == config_bytes
