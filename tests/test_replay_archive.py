@@ -645,3 +645,182 @@ def test_context_change_does_not_imply_genomic_instability(tmp_path):
         "surveillance/context outputs changed"
         in comparison["interpretation"].lower()
     )
+
+
+def test_context_change_does_not_imply_genomic_instability(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    metadata = repo / "metadata.tsv"
+    metadata.write_text(
+        "sample_id\nsample1\n",
+        encoding="utf-8",
+    )
+    metadata_sha = sha256_bytes(metadata.read_bytes())
+
+    provenance = repo / "run_provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "replay_inputs": {
+                    "metadata": {
+                        "path": "metadata.tsv",
+                        "sha256": metadata_sha,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    results = repo / "results"
+
+    summary_dir = results / "sample1" / "summary"
+    summary_dir.mkdir(parents=True)
+
+    (summary_dir / "sample1.sample_summary.tsv").write_text(
+        "sample_id\tstatus\n"
+        "sample1\tPASS\n",
+        encoding="utf-8",
+    )
+
+    medaka_dir = results / "sample1" / "medaka" / "HA"
+    medaka_dir.mkdir(parents=True)
+
+    (medaka_dir / "variants.vcf").write_text(
+        "##fileformat=VCFv4.2\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "HA\t10\t.\tA\tG\t60\tPASS\t.\n",
+        encoding="utf-8",
+    )
+
+    (medaka_dir / "variants.status.tsv").write_text(
+        "status\treason\n"
+        "SUCCESS\tvcf_generated\n",
+        encoding="utf-8",
+    )
+
+    run_summary = results / "run_summary"
+    run_summary.mkdir(parents=True)
+
+    explorer = run_summary / "surveillance_explorer.json"
+    explorer.write_text(
+        json.dumps(
+            {
+                "samples": ["sample1"],
+                "context_version": "historical",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    archive = results / "replay_archive"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--manifest",
+            str(provenance),
+            "--repo-root",
+            str(repo),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    interpretation_script = (
+        REPO_ROOT / "scripts" / "archive_interpretation_outputs.py"
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(interpretation_script),
+            "--provenance",
+            str(provenance),
+            "--results-root",
+            str(results),
+            "--archive-root",
+            str(archive),
+        ],
+        check=True,
+    )
+
+    current = json.loads(
+        (
+            archive
+            / "interpretations"
+            / "current.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    historical_interpretation = (
+        archive / current["interpretation"]
+    )
+
+    # Only the external surveillance context changes.
+    explorer.write_text(
+        json.dumps(
+            {
+                "samples": ["sample1"],
+                "context_version": "updated",
+                "new_reference": "REF_NEW",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    comparison_json = results / "comparison.json"
+    variant_tsv = results / "variant_stability.tsv"
+
+    compare_script = (
+        REPO_ROOT / "scripts" / "compare_historical_interpretation.py"
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(compare_script),
+            "--interpretation",
+            str(historical_interpretation),
+            "--archive-root",
+            str(archive),
+            "--results-root",
+            str(results),
+            "--output-json",
+            str(comparison_json),
+            "--variant-tsv",
+            str(variant_tsv),
+        ],
+        check=True,
+    )
+
+    comparison = json.loads(
+        comparison_json.read_text(encoding="utf-8")
+    )
+
+    assert comparison["layers"]["primary_genomic"]["status"] == "STABLE"
+    assert comparison["layers"]["variant_calls"]["status"] == "STABLE"
+    assert comparison["layers"]["genomic_overall"]["status"] == "STABLE"
+
+    assert (
+        comparison["layers"]["surveillance_context"]["status"]
+        == "CHANGED"
+    )
+
+    assert (
+        comparison["layers"]["integrated_concordance"]["status"]
+        == "NOT_AVAILABLE"
+    )
+
+    assert (
+        "underlying genomic result is stable"
+        in comparison["interpretation"].lower()
+    )
+    assert (
+        "surveillance/context outputs changed"
+        in comparison["interpretation"].lower()
+    )
