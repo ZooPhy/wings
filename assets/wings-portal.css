@@ -206,6 +206,44 @@ button, input, select { font: inherit; }
 .btn-gold { background: var(--asu-gold); color: var(--asu-black); border-color: var(--asu-gold); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
+[hidden] {
+  display: none !important;
+}
+
+.status-activity {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 32px;
+}
+
+.wings-flying-status {
+  width: 42px;
+  height: 28px;
+  object-fit: contain;
+  display: none;
+}
+
+.status-activity.running .wings-flying-status {
+  display: block;
+  animation: wings-fly 1.8s ease-in-out infinite;
+}
+
+@keyframes wings-fly {
+  0%, 100% {
+    transform: translate(0, 1px) rotate(-1deg);
+  }
+  50% {
+    transform: translate(6px, -2px) rotate(1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-activity.running .wings-flying-status {
+    animation: none;
+  }
+}
+
 .run-status[hidden] { display: none; }
 .run-status-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(260px, .65fr); gap: 1.25rem; }
 .log-box {

@@ -36,13 +36,16 @@ RULE_STAGE = {
     "validate_metadata": "inputs",
     "porechop": "read_qc", "fastplong": "read_qc", "nanoplot": "read_qc",
     "irma": "assembly", "normalize_irma_outputs": "assembly", "check_coverage": "assembly", "coverage_table": "assembly", "concat_consensus": "assembly",
-    "resolve_medaka_model": "polishing", "medaka_inference": "polishing", "medaka_consensus": "polishing", "medaka_vcf": "polishing",
+    "medaka_inference": "polishing", "medaka_consensus": "polishing", "medaka_vcf": "polishing",
     "summarize_blast": "characterization", "vadr_annotate": "characterization", "summarize_vadr": "characterization", "genoflu": "characterization", "detect_h5_with_na": "characterization",
     "phylogeny_align": "phylogeny", "phylogeny_segment_input": "phylogeny", "phylogeny_tree": "phylogeny",
     "surveillance_explorer_data": "surveillance", "genomic_ecological_concordance": "surveillance", "attach_genomic_ecological_concordance": "surveillance",
-    "sample_summary": "reporting", "sample_summary_html": "reporting", "run_summary_html": "reporting", "archive_interpretation_outputs": "reporting", "archive_replay_inputs": "reporting",
+    "sample_summary": "reporting", "sample_summary_html": "reporting", "run_summary_html": "reporting", "archive_interpretation_outputs": "reporting",
 }
-RULE_RE = re.compile(r"^(?:rule|checkpoint)\s+([A-Za-z0-9_]+):\s*$", re.MULTILINE)
+RULE_RE = re.compile(
+    r"^(?:\[[^\n]+\]\s*)?\s*(?:(?:local)?rule|checkpoint)\s+([A-Za-z0-9_]+):\s*$",
+    re.MULTILINE,
+)
 
 
 def utc_now() -> str:

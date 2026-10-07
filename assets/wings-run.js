@@ -279,8 +279,21 @@
       if (!response.ok) throw new Error("status unavailable");
       const run = await response.json();
       $("statusTitle").textContent = run.name || "WINGS run";
-      $("statusSubtitle").textContent = run.status === "running" ? "WINGS is processing this run locally." : `Run ${run.status}.`;
-      $("metricStatus").textContent = run.status;
+      $("statusSubtitle").textContent =
+        run.status === "running"
+          ? "WINGS is flying through this run locally."
+          : run.status === "complete"
+            ? "WINGS has landed successfully."
+            : `Run ${run.status}.`;
+      const statusLabel = {
+        running: "flying",
+        complete: "landed",
+        failed: "failed",
+        stopped: "stopped",
+      }[run.status] || run.status;
+
+      $("metricStatus").textContent = statusLabel;
+      $("statusActivity").classList.toggle("running", run.status === "running");
       $("metricSamples").textContent = run.sample_count ?? "—";
       $("metricElapsed").textContent = elapsedText(run.started_at);
       $("metricRunId").textContent = run.run_id;
@@ -288,12 +301,17 @@
       $("runLog").scrollTop = $("runLog").scrollHeight;
       renderTimeline(run.stages);
       $("stopRun").disabled = run.status !== "running";
-      if (run.status === "complete") {
+      const resultsReady = run.status === "complete";
+      $("resultsLink").hidden = !resultsReady;
+
+      if (resultsReady) {
         clearInterval(state.poller);
         $("resultsLink").href = `results.html?run=${encodeURIComponent(run.run_id)}`;
-        $("resultsLink").hidden = false;
-      } else if (["failed", "stopped"].includes(run.status)) {
-        clearInterval(state.poller);
+      } else {
+        $("resultsLink").removeAttribute("href");
+        if (["failed", "stopped"].includes(run.status)) {
+          clearInterval(state.poller);
+        }
       }
     } catch (error) {
       $("statusSubtitle").textContent = "Temporarily unable to read local run status.";
