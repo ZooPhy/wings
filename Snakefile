@@ -580,6 +580,40 @@ if not SAMPLES:
 SEGMENT_SEQUENCE = ("HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS")
 
 
+def ready_phylogeny_segments(wildcards):
+    """Return only segments with enough QC-qualified sequences for a tree."""
+    manifest = Path(
+        str(checkpoints.phylogeny_ready_segments.get().output.manifest)
+    )
+
+    ready = set()
+
+    with manifest.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle, delimiter="\t"):
+            segment = str(row.get("segment", "")).strip().upper()
+            status = str(row.get("status", "")).strip().upper()
+
+            if status == "READY" and segment in SEGMENT_SEQUENCE:
+                ready.add(segment)
+
+    return [
+        segment
+        for segment in SEGMENT_SEQUENCE
+        if segment in ready
+    ]
+
+
+def generated_phylogeny_tree_inputs(wildcards):
+    """Return expected trees only for phylogeny-eligible segments."""
+    return [
+        str(
+            Path(PHYLOGENY_DIR)
+            / PHYLOGENY_PATTERN.format(segment=segment)
+        )
+        for segment in ready_phylogeny_segments(wildcards)
+    ]
+
+
 def surveillance_tree_inputs(_wildcards):
     """Return segment trees used by the Surveillance Explorer."""
     if not RUN_SURVEILLANCE_EXPLORER:
@@ -610,13 +644,7 @@ def surveillance_tree_inputs(_wildcards):
         return existing
 
     if RUN_PHYLOGENY:
-        return [
-            str(
-                Path(PHYLOGENY_DIR)
-                / PHYLOGENY_PATTERN.format(segment=segment)
-            )
-            for segment in SEGMENT_SEQUENCE
-        ]
+        return generated_phylogeny_tree_inputs(_wildcards)
 
     paths = []
     for segment in SEGMENT_SEQUENCE:
@@ -793,9 +821,8 @@ if RUN_VADR:
     )
 
 if RUN_PHYLOGENY:
-    FINAL_TARGETS.extend(
-        str(Path(PHYLOGENY_DIR) / PHYLOGENY_PATTERN.format(segment=segment))
-        for segment in SEGMENT_SEQUENCE
+    FINAL_TARGETS.append(
+        f"{RESULTS}/run_summary/phylogeny/complete.done"
     )
 
 if RUN_SUMMARY:
@@ -2452,9 +2479,72 @@ rule phylogeny_segment_input:
         "scripts/build_phylogeny_input.py"
 
 
+# Determine which segments have enough QC-qualified consensus sequences
+# for phylogenetic inference. Missing or underrepresented segments are
+# valid outcomes and should not fail the workflow.
+checkpoint phylogeny_ready_segments:
+    input:
+        statuses=expand(
+            f"{RESULTS}/run_summary/phylogeny/{{segment}}.status.tsv",
+            segment=SEGMENT_SEQUENCE,
+        )
+    output:
+        manifest=f"{RESULTS}/run_summary/phylogeny/ready_segments.tsv"
+    run:
+        manifest = Path(str(output.manifest))
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+
+        fieldnames = [
+            "segment",
+            "status",
+            "sequence_count",
+            "min_sequences",
+        ]
+
+        rows = []
+
+        for status_path in input.statuses:
+            with Path(str(status_path)).open(
+                newline="",
+                encoding="utf-8",
+            ) as handle:
+                row = next(csv.DictReader(handle, delimiter="\t"))
+
+            rows.append(
+                {
+                    key: row.get(key, "")
+                    for key in fieldnames
+                }
+            )
+
+        order = {
+            segment: index
+            for index, segment in enumerate(SEGMENT_SEQUENCE)
+        }
+
+        rows.sort(
+            key=lambda row: order.get(
+                row["segment"],
+                len(SEGMENT_SEQUENCE),
+            )
+        )
+
+        with manifest.open(
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=fieldnames,
+                delimiter="\t",
+            )
+            writer.writeheader()
+            writer.writerows(rows)
+
+
 # Align QC-qualified segment consensus sequences and infer maximum-likelihood
-# trees with ultrafast bootstrap support. Each segment needs at least
-# phylogeny.min_sequences passing samples.
+# trees with ultrafast bootstrap support. Only READY segments are scheduled.
 rule phylogeny_align:
     input:
         fasta=f"{RESULTS}/run_summary/phylogeny/{{segment}}.input.fasta",
@@ -2497,6 +2587,17 @@ rule phylogeny_tree:
         test -s {params.prefix:q}.treefile
         cp {params.prefix:q}.treefile {output.tree:q}
         """
+
+
+rule phylogeny_complete:
+    input:
+        trees=generated_phylogeny_tree_inputs
+    output:
+        done=f"{RESULTS}/run_summary/phylogeny/complete.done"
+    run:
+        done = Path(str(output.done))
+        done.parent.mkdir(parents=True, exist_ok=True)
+        done.write_text("complete\n", encoding="utf-8")
 
 
 # -----------------------------------------------------------------------------
