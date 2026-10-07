@@ -11,7 +11,7 @@
 <header class="portal-header">
   <div class="portal-header-inner">
     <a class="portal-brand" href="index.html">
-      <img src="wings_logo.jpg" alt="WINGS logo">
+      <img src="assets/wings_logo.jpg" alt="WINGS logo">
       <span>WINGS</span>
     </a>
     <div class="portal-header-actions">
@@ -130,7 +130,16 @@
       </div>
       <div class="panel-body">
         <div class="metric-grid">
-          <div class="metric"><span>Status</span><strong id="metricStatus">—</strong></div>
+          <div class="metric">
+            <span>Status</span>
+            <div id="statusActivity" class="status-activity">
+              <img src="assets/wings-flying.png"
+                   class="wings-flying-status"
+                   alt=""
+                   aria-hidden="true">
+              <strong id="metricStatus">—</strong>
+            </div>
+          </div>
           <div class="metric"><span>Samples</span><strong id="metricSamples">—</strong></div>
           <div class="metric"><span>Elapsed</span><strong id="metricElapsed">—</strong></div>
           <div class="metric"><span>Run ID</span><strong id="metricRunId" style="font-size:.9rem">—</strong></div>

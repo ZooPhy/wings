@@ -40,7 +40,7 @@ find_wings_logo <- function() {
   current <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 
   repeat {
-    candidate <- file.path(current, "wings_logo.jpg")
+    candidate <- file.path(current, "assets/wings_logo.jpg")
     if (file.exists(candidate) && file.info(candidate)$size > 0) {
       return(candidate)
     }

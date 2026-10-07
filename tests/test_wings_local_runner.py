@@ -31,3 +31,36 @@ def test_stage_inference_marks_latest_stage_running():
     assert stages["assembly"] == "complete"
     assert stages["polishing"] == "running"
     assert stages["reporting"] == "waiting"
+
+
+def test_stage_inference_accepts_indented_and_timestamped_rules():
+    runner = load_runner()
+    state = {"status": "running"}
+    log = (
+        "[Fri Oct  2 15:08:32 2026]\n"
+        "    rule porechop:\n"
+        "[Fri Oct  2 15:09:10 2026] rule irma:\n"
+    )
+
+    stages = runner.infer_stages(state, log)
+
+    assert stages["read_qc"] == "complete"
+    assert stages["assembly"] == "running"
+    assert stages["polishing"] == "waiting"
+
+
+def test_setup_rules_do_not_advance_pipeline_stage():
+    runner = load_runner()
+    state = {"status": "running"}
+    log = (
+        "rule validate_metadata:\n"
+        "rule resolve_medaka_model:\n"
+        "rule archive_replay_inputs:\n"
+    )
+
+    stages = runner.infer_stages(state, log)
+
+    assert stages["inputs"] == "running"
+    assert stages["read_qc"] == "waiting"
+    assert stages["polishing"] == "waiting"
+    assert stages["reporting"] == "waiting"
