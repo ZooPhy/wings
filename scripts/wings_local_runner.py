@@ -71,6 +71,13 @@ def state_path(run_id: str) -> Path:
     return run_dir(run_id) / "state.json"
 
 
+def bundle_path(run_id: str) -> Path:
+    directory = run_dir(run_id)
+    path = (directory / "results" / "wings_report_bundle.wings").resolve()
+    path.relative_to(directory)
+    return path
+
+
 def read_state(run_id: str) -> dict:
     return json.loads(state_path(run_id).read_text(encoding="utf-8"))
 
@@ -260,6 +267,40 @@ class Handler(SimpleHTTPRequestHandler):
                         continue
                 self.json_response(rows)
                 return
+            match = re.fullmatch(r"/api/runs/([^/]+)/bundle", parsed.path)
+            if match:
+                run_id = unquote(match.group(1))
+                directory = run_dir(run_id)
+                if not directory.is_dir():
+                    self.error_response("Unknown run", HTTPStatus.NOT_FOUND)
+                    return
+
+                state = read_state(run_id)
+                if state.get("status") != "complete":
+                    self.error_response(
+                        "Run results are not available until the run is complete",
+                        HTTPStatus.CONFLICT,
+                    )
+                    return
+
+                bundle = bundle_path(run_id)
+                if not bundle.is_file():
+                    self.error_response(
+                        "WINGS report bundle is not available",
+                        HTTPStatus.NOT_FOUND,
+                    )
+                    return
+
+                body = bundle.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             match = re.fullmatch(r"/api/runs/([^/]+)", parsed.path)
             if match:
                 self.json_response(enriched_state(unquote(match.group(1))))

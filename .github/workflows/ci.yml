@@ -62,7 +62,8 @@ jobs:
           tests/test_outbreak_context.py \
           tests/test_ecological_context.py \
           tests/test_public_reference_context.py \
-          tests/test_replay_archive.py
+          tests/test_replay_archive.py \
+          tests/test_wings_local_runner.py
 
   explorer-browser:
     name: Linked explorer / Chromium
@@ -84,3 +85,5 @@ jobs:
         run: node --test tests/test_linked_genome_state.cjs tests/test_surveillance_map.cjs tests/test_outbreak_context.cjs tests/test_ecological_context.cjs tests/test_public_reference_context.cjs
       - name: Check linked explorer interactions
         run: node tests/test_linked_genome_explorer.cjs
+      - name: Check completed-run results auto-open
+        run: node tests/test_results_auto_open.cjs
