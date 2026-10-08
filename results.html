@@ -375,6 +375,31 @@
       await openBundle(bundle, label);
     }
 
+    async function loadRunBundle(runId) {
+      status.textContent = `Loading completed WINGS run ${runId}...`;
+
+      const response = await fetch(
+        `/api/runs/${encodeURIComponent(runId)}/bundle`,
+        { cache: "no-store" }
+      );
+
+      if (!response.ok) {
+        let message = `WINGS run results are unavailable (${response.status}).`;
+        try {
+          const payload = await response.json();
+          if (payload && payload.error) message = payload.error;
+        } catch (error) {
+          // Keep the generic HTTP error when the response is not JSON.
+        }
+        throw new Error(message);
+      }
+
+      const bundle = await response.json();
+      const label =
+        `WINGS run ${runId} · ${Object.keys(bundle.samples || {}).length} sample reports`;
+      await openBundle(bundle, label);
+    }
+
     reportFrame.addEventListener("load", attachReportNavigation);
 
     backToRun.addEventListener("click", renderRunSummary);
@@ -445,8 +470,17 @@
       }
     });
 
-    if (new URLSearchParams(window.location.search).get("demo") === "1") {
-      loadDemo().catch((error) => { status.textContent = error.message; });
+    const query = new URLSearchParams(window.location.search);
+    const runId = query.get("run");
+
+    if (runId) {
+      loadRunBundle(runId).catch((error) => {
+        status.textContent = error.message;
+      });
+    } else if (query.get("demo") === "1") {
+      loadDemo().catch((error) => {
+        status.textContent = error.message;
+      });
     }
   </script>
 </body>
