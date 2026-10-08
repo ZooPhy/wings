@@ -2,7 +2,6 @@
 
 import csv
 import json
-import os
 from pathlib import Path
 
 
@@ -75,9 +74,8 @@ def read_h5_flag(path: Path) -> str:
     return status
 
 
-def read_genoflu(path: Path) -> str:
-    # The Snakefile passes os.devnull when GenoFLU is disabled by configuration.
-    if str(path) == os.devnull:
+def read_genoflu(path: Path | None) -> str:
+    if path is None:
         return "DISABLED_BY_CONFIG"
 
     if not path.exists() or path.stat().st_size == 0:
@@ -274,7 +272,12 @@ def main() -> None:
         # Temporary compatibility with Snakefiles that still name this input "h5n1".
         h5_input = getattr(snakemake.input, "h5n1")
     h5_status = read_h5_flag(Path(h5_input))
-    genoflu_status = read_genoflu(Path(snakemake.input.genoflu))
+    genoflu_file = str(
+        getattr(snakemake.params, "genoflu_file", "") or ""
+    ).strip()
+    genoflu_status = read_genoflu(
+        Path(genoflu_file) if genoflu_file else None
+    )
     consensus_segments = count_fasta_records(Path(snakemake.input.consensus))
 
     write_summary(

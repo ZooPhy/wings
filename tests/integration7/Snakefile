@@ -1,8 +1,5 @@
 from pathlib import Path
 import csv
-import shutil
-import subprocess
-import sys
 
 HERE = Path(workflow.basedir).resolve()
 REPO_ROOT = HERE.parents[1]
@@ -11,78 +8,33 @@ PROJECT = WORK / "irma" / "project"
 SEGMENT_SEQUENCE = ("HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS")
 
 
+rule build_valid_bam_fixtures:
+    output:
+        stamp=WORK / "irma" / "valid_bams.done"
+    params:
+        project=str(PROJECT)
+    conda:
+        "../../envs/pysam.yaml"
+    script:
+        "build_valid_bams.py"
+
+
 checkpoint normalize_irma_outputs:
     input:
         project=PROJECT,
+        prepared=WORK / "irma" / "valid_bams.done",
         normalizer=str(REPO_ROOT / "scripts" / "normalize_irma_outputs.py")
     output:
         segments=directory(WORK / "irma" / "segments"),
         manifest=WORK / "irma" / "manifest.tsv"
     log:
         WORK / "irma" / "normalize.log"
+    params:
+        sample="checkpoint_smoke"
     conda:
         "../../envs/pysam.yaml"
-    run:
-        project_path = Path(str(input.project)).resolve()
-        normalizer_path = Path(str(input.normalizer)).resolve()
-        segments_path = Path(str(output.segments)).resolve()
-        manifest_path = Path(str(output.manifest)).resolve()
-        log_path = Path(str(log[0])).resolve()
-
-        segments_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if segments_path.exists():
-            shutil.rmtree(segments_path)
-        if manifest_path.exists():
-            manifest_path.unlink()
-
-        command = [
-            sys.executable,
-            str(normalizer_path),
-            "--project", str(project_path),
-            "--segments", str(segments_path),
-            "--manifest", str(manifest_path),
-            "--sample", "checkpoint_smoke",
-        ]
-
-        with log_path.open("w") as log_handle:
-            log_handle.write("Normalization command: " + " ".join(command) + "\n")
-            log_handle.flush()
-            subprocess.run(
-                command,
-                check=True,
-                stdout=log_handle,
-                stderr=subprocess.STDOUT,
-            )
-
-        if not manifest_path.is_file() or manifest_path.stat().st_size == 0:
-            raise RuntimeError("Normalizer did not create a non-empty manifest")
-
-        with manifest_path.open(encoding="utf-8") as handle:
-            reader = csv.DictReader(handle, delimiter="\t")
-            rows = list(reader)
-
-        ready = sorted(
-            {
-                row["segment"]
-                for row in rows
-                if row.get("status") == "READY"
-                and row.get("segment") in SEGMENT_SEQUENCE
-            },
-            key=SEGMENT_SEQUENCE.index,
-        )
-
-        with log_path.open("a") as log_handle:
-            log_handle.write("\nESCAPE_STATUS=IRMA_NORMALIZATION_COMPLETED\n")
-            log_handle.write(f"ESCAPE_READY_SEGMENT_COUNT={len(ready)}\n")
-            log_handle.write(
-                "ESCAPE_READY_SEGMENTS="
-                + (",".join(ready) if ready else "NONE")
-                + "\n"
-            )
-
+    script:
+        "../../scripts/run_normalize_irma_checkpoint.py"
 
 def normalized_manifest(_wildcards):
     return str(
