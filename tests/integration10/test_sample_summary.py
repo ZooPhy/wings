@@ -118,13 +118,13 @@ def test_production_sample_summary_reporting():
     # NA is informative at assembly level but fails QC, so the H5N1 screen is
     # indeterminate rather than a biological negative. GenoFLU is disabled by
     # configuration in this reporting-focused integration test.
-    assert row["h5n1_screen"] == "INDETERMINATE"
+    assert row["h5_screen"] == "INDETERMINATE"
     assert row["genoflu_status"] == "DISABLED_BY_CONFIG"
     assert row["consensus_segments"] == "1"
 
     flags = set(row["review_flags"].split(";"))
     assert "fewer_than_8_pass_segments" in flags
-    assert "h5n1_screen_indeterminate" in flags
+    assert "h5_screen_indeterminate" in flags
     assert "coverage_failures" in flags
 
     assert "PHASE10_H5_REFERENCE" in row["ha_top_blast_hit"]

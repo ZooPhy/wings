@@ -711,17 +711,17 @@ def fasta_path(wildcards):
 
 
 def optional_genoflu_input(wildcards):
-    """Return GenoFLU output when enabled without scheduling GenoFLU when disabled."""
+    """Schedule GenoFLU output only when GenoFLU is enabled."""
     if RUN_GENOFLU:
         return f"{RESULTS}/{wildcards.sample}/genoflu/GenoFLU.tsv"
-    return os.devnull
+    return []
 
 
 def optional_vadr_log_input(wildcards):
-    """Return the VADR log when enabled without scheduling VADR when disabled."""
+    """Schedule the VADR log only when VADR is enabled."""
     if RUN_VADR:
         return f"{RESULTS}/{wildcards.sample}/vadr/{wildcards.sample}.vadr.log"
-    return os.devnull
+    return []
 
 
 def blast_db_files(_wildcards):
@@ -1191,98 +1191,12 @@ checkpoint normalize_irma_outputs:
         manifest=f"{RESULTS}/{{sample}}/irma/manifest.tsv"
     log:
         f"{RESULTS}/{{sample}}/irma/normalize.log"
+    params:
+        sample=lambda wildcards: wildcards.sample
     conda:
         "envs/pysam.yaml"
-    run:
-        project_path = Path(str(input.project)).resolve()
-        normalizer_path = Path(str(input.normalizer)).resolve()
-        segments_path = Path(str(output.segments)).resolve()
-        manifest_path = Path(str(output.manifest)).resolve()
-        log_path = Path(str(log[0])).resolve()
-
-        segments_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if segments_path.exists():
-            shutil.rmtree(segments_path)
-        if manifest_path.exists():
-            manifest_path.unlink()
-
-        def remove_partial_normalized_outputs():
-            if segments_path.exists():
-                shutil.rmtree(segments_path, ignore_errors=True)
-            if manifest_path.exists():
-                manifest_path.unlink()
-
-        normalize_command = [
-            sys.executable,
-            str(normalizer_path),
-            "--project",
-            str(project_path),
-            "--segments",
-            str(segments_path),
-            "--manifest",
-            str(manifest_path),
-            "--sample",
-            str(wildcards.sample),
-        ]
-        with log_path.open("w") as log_handle:
-            log_handle.write("Normalization command: " + shlex.join(normalize_command) + "\n")
-            log_handle.flush()
-            try:
-                subprocess.run(
-                    normalize_command,
-                    check=True,
-                    stdout=log_handle,
-                    stderr=subprocess.STDOUT,
-                )
-            except subprocess.CalledProcessError as exc:
-                log_handle.write(
-                    f"\nESCAPE_STATUS=IRMA_NORMALIZATION_FAILED\n"
-                    f"NORMALIZER_RETURN_CODE={exc.returncode}\n"
-                )
-                log_handle.flush()
-                remove_partial_normalized_outputs()
-                raise RuntimeError(
-                    f"IRMA output normalization failed for sample {wildcards.sample}. "
-                    f"See {log_path}."
-                ) from exc
-
-        if not manifest_path.is_file() or manifest_path.stat().st_size == 0:
-            remove_partial_normalized_outputs()
-            raise RuntimeError(
-                f"IRMA normalization did not create a non-empty manifest for "
-                f"sample {wildcards.sample}. See {log_path}."
-            )
-
-        with manifest_path.open(encoding="utf-8", errors="replace") as handle:
-            reader = csv.DictReader(handle, delimiter="\t")
-            required_columns = {"segment", "status"}
-            if reader.fieldnames is None or not required_columns.issubset(reader.fieldnames):
-                fieldnames = reader.fieldnames or []
-                remove_partial_normalized_outputs()
-                raise RuntimeError(
-                    f"IRMA manifest for sample {wildcards.sample} is malformed; "
-                    f"required columns are {sorted(required_columns)}, found "
-                    f"{fieldnames}. See {log_path}."
-                )
-            manifest_rows = list(reader)
-
-        ready_segments = sorted({
-            row.get("segment", "")
-            for row in manifest_rows
-            if row.get("status") == "READY" and row.get("segment") in SEGMENT_SEQUENCE
-        })
-        with log_path.open("a") as log_handle:
-            log_handle.write("\nESCAPE_STATUS=IRMA_NORMALIZATION_COMPLETED\n")
-            log_handle.write(f"ESCAPE_READY_SEGMENT_COUNT={len(ready_segments)}\n")
-            log_handle.write(
-                "ESCAPE_READY_SEGMENTS="
-                + (",".join(ready_segments) if ready_segments else "NONE")
-                + "\n"
-            )
-
+    script:
+        "scripts/run_normalize_irma_checkpoint.py"
 
 # -----------------------------------------------------------------------------
 # Pre-polishing segment QC
@@ -2018,6 +1932,12 @@ rule sample_summary:
         consensus=f"{RESULTS}/{{sample}}/merged/consensus_all_segments.fasta"
     output:
         tsv=f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv"
+    params:
+        genoflu_file=lambda wildcards: (
+            f"{RESULTS}/{wildcards.sample}/genoflu/GenoFLU.tsv"
+            if RUN_GENOFLU
+            else ""
+        )
     conda:
         REPORTING_ENV
     script:
@@ -2059,6 +1979,16 @@ rule sample_summary_html:
         coverage_breadth_threshold=COVERAGE_MIN_BREADTH,
         max_n_fraction=SEGMENT_MAX_N_FRACTION,
         snakemake_version=SNAKEMAKE_VERSION,
+        genoflu_file=lambda wildcards: (
+            f"{RESULTS}/{wildcards.sample}/genoflu/GenoFLU.tsv"
+            if RUN_GENOFLU
+            else ""
+        ),
+        vadr_log_file=lambda wildcards: (
+            f"{RESULTS}/{wildcards.sample}/vadr/{wildcards.sample}.vadr.log"
+            if RUN_VADR
+            else ""
+        ),
         quarto=QUARTO_CMD,
     conda:
         REPORTING_ENV
@@ -2070,8 +2000,19 @@ rule sample_summary_html:
         summary_abs="$(cd "$(dirname {input.summary:q})" && pwd)/$(basename {input.summary:q})"
         coverage_abs="$(cd "$(dirname {input.coverage:q})" && pwd)/$(basename {input.coverage:q})"
         blast_abs="$(cd "$(dirname {input.blast:q})" && pwd)/$(basename {input.blast:q})"
-        genoflu_abs="$(cd "$(dirname {input.genoflu:q})" && pwd)/$(basename {input.genoflu:q})"
-        vadr_log_abs="$(cd "$(dirname {input.vadr_log:q})" && pwd)/$(basename {input.vadr_log:q})"
+        genoflu_path={params.genoflu_file:q}
+        if [[ -n "$genoflu_path" ]]; then
+            genoflu_abs="$(cd "$(dirname "$genoflu_path")" && pwd)/$(basename "$genoflu_path")"
+        else
+            genoflu_abs=""
+        fi
+
+        vadr_log_path={params.vadr_log_file:q}
+        if [[ -n "$vadr_log_path" ]]; then
+            vadr_log_abs="$(cd "$(dirname "$vadr_log_path")" && pwd)/$(basename "$vadr_log_path")"
+        else
+            vadr_log_abs=""
+        fi
         template_abs="$(cd "$(dirname {input.template:q})" && pwd)/$(basename {input.template:q})"
         css_abs="$(cd "$(dirname {input.css:q})" && pwd)/$(basename {input.css:q})"
         report_html_abs="$(cd "$(dirname {input.report_html:q})" && pwd)/$(basename {input.report_html:q})"

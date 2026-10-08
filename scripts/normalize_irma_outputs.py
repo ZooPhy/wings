@@ -10,9 +10,11 @@ knowing IRMA's internal directory layout.
 
 import argparse
 import csv
+import heapq
 import re
 import shutil
 import statistics
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -198,6 +200,158 @@ def selection_reason(candidate: Candidate, count: int) -> str:
     return "; ".join(parts)
 
 
+def bam_record_sort_key(record) -> tuple:
+    """Return a deterministic coordinate-compatible total ordering for a BAM record.
+
+    Coordinate remains the primary key so that the resulting BAM can be indexed.
+    The complete SAM representation provides a deterministic tie-breaker for
+    records sharing the same coordinate.
+    """
+    reference_id = record.reference_id
+    reference_start = record.reference_start
+
+    # Coordinate-sorted BAMs place records without a reference/position last.
+    reference_key = reference_id if reference_id >= 0 else 2**31
+    position_key = reference_start if reference_start >= 0 else 2**63
+
+    return (
+        reference_key,
+        position_key,
+        1 if record.is_reverse else 0,
+        record.query_name or "",
+        record.flag,
+        record.cigarstring or "",
+        record.next_reference_id,
+        record.next_reference_start,
+        record.template_length,
+        record.to_string(),
+    )
+
+
+def canonicalize_bam(
+    source: Path,
+    destination: Path,
+    *,
+    chunk_size: int = 100_000,
+) -> None:
+    """Write BAM records in a deterministic coordinate-compatible order.
+
+    Sorting is performed in bounded-memory chunks followed by a k-way merge,
+    allowing large IRMA BAMs to be canonicalized without loading the complete
+    file into memory.
+    """
+    if pysam is None:
+        raise RuntimeError(
+            "pysam is required to canonicalize IRMA BAM files deterministically"
+        )
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(
+        prefix="wings-bam-sort-",
+        dir=str(destination.parent),
+    ) as tmpdir_name:
+        tmpdir = Path(tmpdir_name)
+        chunk_paths: list[Path] = []
+
+        with pysam.AlignmentFile(str(source), "rb") as input_bam:
+            header = input_bam.header.to_dict()
+            header.setdefault("HD", {})
+            header["HD"]["SO"] = "coordinate"
+
+            chunk = []
+
+            def flush_chunk() -> None:
+                if not chunk:
+                    return
+
+                chunk.sort(key=bam_record_sort_key)
+                chunk_path = tmpdir / f"chunk-{len(chunk_paths):06d}.bam"
+
+                with pysam.AlignmentFile(
+                    str(chunk_path),
+                    "wb",
+                    header=header,
+                ) as chunk_bam:
+                    for record in chunk:
+                        chunk_bam.write(record)
+
+                chunk_paths.append(chunk_path)
+                chunk.clear()
+
+            for record in input_bam.fetch(until_eof=True):
+                chunk.append(record)
+                if len(chunk) >= chunk_size:
+                    flush_chunk()
+
+            flush_chunk()
+
+        if not chunk_paths:
+            with pysam.AlignmentFile(
+                str(destination),
+                "wb",
+                header=header,
+            ):
+                pass
+            return
+
+        handles = [
+            pysam.AlignmentFile(str(chunk_path), "rb")
+            for chunk_path in chunk_paths
+        ]
+
+        try:
+            iterators = [
+                handle.fetch(until_eof=True)
+                for handle in handles
+            ]
+
+            heap = []
+
+            for chunk_index, iterator in enumerate(iterators):
+                try:
+                    record = next(iterator)
+                except StopIteration:
+                    continue
+
+                heapq.heappush(
+                    heap,
+                    (
+                        bam_record_sort_key(record),
+                        chunk_index,
+                        record,
+                        iterator,
+                    ),
+                )
+
+            with pysam.AlignmentFile(
+                str(destination),
+                "wb",
+                header=header,
+            ) as output_bam:
+                while heap:
+                    _, chunk_index, record, iterator = heapq.heappop(heap)
+                    output_bam.write(record)
+
+                    try:
+                        next_record = next(iterator)
+                    except StopIteration:
+                        continue
+
+                    heapq.heappush(
+                        heap,
+                        (
+                            bam_record_sort_key(next_record),
+                            chunk_index,
+                            next_record,
+                            iterator,
+                        ),
+                    )
+        finally:
+            for handle in handles:
+                handle.close()
+
+
 def copy_candidate(candidate: Candidate, segment_dir: Path) -> dict[str, str]:
     segment_dir.mkdir(parents=True, exist_ok=True)
     copied = {"fasta": "", "bam": "", "bam_index": "", "coverage": ""}
@@ -209,21 +363,19 @@ def copy_candidate(candidate: Candidate, segment_dir: Path) -> dict[str, str]:
 
     if candidate.bam is not None:
         destination = segment_dir / "alignment.bam"
-        shutil.copy2(candidate.bam, destination)
-        copied["bam"] = str(destination)
         index_destination = segment_dir / "alignment.bam.bai"
-        if candidate.bam_index is not None:
-            shutil.copy2(candidate.bam_index, index_destination)
-            copied["bam_index"] = str(index_destination)
-        elif pysam is not None:
-            try:
-                pysam.index(str(destination))
-                if index_destination.is_file():
-                    copied["bam_index"] = str(index_destination)
-            except Exception:
-                # Coverage can still be streamed without an index, and Medaka's
-                # fail-soft behavior will handle BAMs it cannot consume.
-                pass
+
+        canonicalize_bam(candidate.bam, destination)
+        copied["bam"] = str(destination)
+
+        try:
+            pysam.index(str(destination))
+            if index_destination.is_file():
+                copied["bam_index"] = str(index_destination)
+        except Exception:
+            # Coverage can still be streamed without an index, and Medaka's
+            # fail-soft behavior will handle BAMs it cannot consume.
+            pass
 
     if candidate.coverage is not None:
         destination = segment_dir / "irma_coverage.tsv"
