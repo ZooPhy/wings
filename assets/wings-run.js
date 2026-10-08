@@ -4,6 +4,8 @@
   const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
   const localOrigin = LOCAL_HOSTS.has(location.hostname) ? location.origin : "http://127.0.0.1:8765";
   const localMode = LOCAL_HOSTS.has(location.hostname);
+  const initialParams = new URLSearchParams(location.search);
+  let restorePending = localMode && !initialParams.has("run") && initialParams.get("new") !== "1";
 
   const stageDefinitions = [
     ["inputs", "Inputs & metadata"],
@@ -24,7 +26,6 @@
     metadataIds: [],
     metadataError: "",
     runId: null,
-    startedAt: null,
     poller: null
   };
 
@@ -90,6 +91,60 @@
       $("openLocalRunner").hidden = localMode;
     }
     if (state.step === 4) renderPreflight();
+  }
+
+  async function refreshRuns() {
+    if (!localMode) return;
+    $("savedRuns").hidden = false;
+    try {
+      const response = await fetch(`${localOrigin}/api/runs`, {cache: "no-store"});
+      if (!response.ok) throw new Error("runs unavailable");
+      const runs = await response.json();
+      runs.sort((a, b) => (b.created_at || b.run_id).localeCompare(a.created_at || a.run_id));
+      const select = $("savedRunSelect");
+      select.replaceChildren(new Option("Choose a saved run", ""));
+      for (const run of runs) {
+        select.add(new Option(`${run.name || "WINGS run"} · ${run.status} · ${run.run_id}`, run.run_id));
+      }
+      select.value = state.runId || "";
+      $("savedRunsMessage").textContent = runs.length
+        ? "Saved on this computer. Opening a run shows its latest status."
+        : "No saved runs on this computer yet.";
+      if (restorePending) {
+        restorePending = false;
+        const recent = runs.find((run) => ["running", "stopping"].includes(run.status))
+          || runs.find((run) => run.status !== "created");
+        if (recent) openRun(recent.run_id);
+      }
+    } catch (error) {
+      $("savedRunsMessage").textContent = "Unable to load saved runs. Keep the local runner open and try Refresh runs.";
+    }
+  }
+
+  function openRun(runId) {
+    if (!localMode || !runId) return;
+    restorePending = false;
+    clearInterval(state.poller);
+    state.runId = runId;
+    const url = new URL(location.href);
+    url.searchParams.set("run", runId);
+    url.searchParams.delete("new");
+    history.replaceState(null, "", url);
+    $("savedRunSelect").value = runId;
+    $("setupView").hidden = true;
+    $("runStatus").hidden = false;
+    $("statusTitle").textContent = "WINGS run";
+    $("statusSubtitle").textContent = "Loading saved run status…";
+    $("metricRunId").textContent = runId;
+    for (const id of ["metricStatus", "metricSamples", "metricElapsed"]) $(id).textContent = "—";
+    $("statusActivity").classList.remove("running");
+    $("runLog").textContent = "Waiting for log output…";
+    $("stopRun").disabled = true;
+    $("resultsLink").hidden = true;
+    $("resultsLink").removeAttribute("href");
+    renderTimeline();
+    state.poller = setInterval(pollStatus, 3000);
+    pollStatus();
   }
 
   function parseMetadata(text) {
@@ -232,11 +287,8 @@
 
       const launch = await fetch(`${localOrigin}/api/runs/${encodeURIComponent(state.runId)}/start`, {method: "POST"});
       if (!launch.ok) throw new Error(await launch.text());
-      state.startedAt = Date.now();
-      $("setupView").hidden = true;
-      $("runStatus").hidden = false;
-      pollStatus();
-      state.poller = setInterval(pollStatus, 3000);
+      openRun(state.runId);
+      refreshRuns();
     } catch (error) {
       alert(`WINGS could not start the run.\n\n${error.message}`);
       $("startRun").disabled = false;
@@ -264,9 +316,10 @@
     }).join("");
   }
 
-  function elapsedText(started) {
+  function elapsedText(started, finished) {
     if (!started) return "—";
-    const seconds = Math.max(0, Math.round((Date.now() - new Date(started).getTime()) / 1000));
+    const end = finished ? new Date(finished).getTime() : Date.now();
+    const seconds = Math.max(0, Math.round((end - new Date(started).getTime()) / 1000));
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     return h ? `${h}h ${m}m` : `${m}m`;
@@ -274,10 +327,22 @@
 
   async function pollStatus() {
     if (!state.runId) return;
+    const runId = state.runId;
     try {
-      const response = await fetch(`${localOrigin}/api/runs/${encodeURIComponent(state.runId)}`, {cache: "no-store"});
+      const response = await fetch(`${localOrigin}/api/runs/${encodeURIComponent(runId)}`, {cache: "no-store"});
+      if (runId !== state.runId) return;
+      if (response.status === 404 || response.status === 400) {
+        clearInterval(state.poller);
+        $("statusActivity").classList.remove("running");
+        $("metricStatus").textContent = "unavailable";
+        $("statusSubtitle").textContent = "This run could not be found. Choose another saved run or check that the runner is using the same run directory.";
+        $("stopRun").disabled = true;
+        $("resultsLink").hidden = true;
+        return;
+      }
       if (!response.ok) throw new Error("status unavailable");
       const run = await response.json();
+      if (runId !== state.runId) return;
       $("statusTitle").textContent = run.name || "WINGS run";
       $("statusSubtitle").textContent =
         run.status === "running"
@@ -295,7 +360,7 @@
       $("metricStatus").textContent = statusLabel;
       $("statusActivity").classList.toggle("running", run.status === "running");
       $("metricSamples").textContent = run.sample_count ?? "—";
-      $("metricElapsed").textContent = elapsedText(run.started_at);
+      $("metricElapsed").textContent = elapsedText(run.started_at, run.finished_at);
       $("metricRunId").textContent = run.run_id;
       $("runLog").textContent = run.log_tail || "Waiting for log output…";
       $("runLog").scrollTop = $("runLog").scrollHeight;
@@ -314,7 +379,10 @@
         }
       }
     } catch (error) {
-      $("statusSubtitle").textContent = "Temporarily unable to read local run status.";
+      if (runId !== state.runId) return;
+      $("statusActivity").classList.remove("running");
+      $("stopRun").disabled = true;
+      $("statusSubtitle").textContent = "Connection lost. Displayed status may be out of date. Reconnecting to the local runner…";
     }
   }
 
@@ -348,11 +416,15 @@
   ["runName", "cores", "optGenoflu", "optVadr", "optPhylogeny", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
   $("startRun").addEventListener("click", startRun);
   $("stopRun").addEventListener("click", stopRun);
+  $("savedRunSelect").addEventListener("change", (event) => openRun(event.target.value));
+  $("refreshRuns").addEventListener("click", refreshRuns);
 
   renderReads();
   renderMetadata();
   renderTimeline();
   setStep(0);
   checkRunner();
+  if (localMode && initialParams.get("run")) openRun(initialParams.get("run"));
+  refreshRuns();
   setInterval(checkRunner, 10000);
 })();
