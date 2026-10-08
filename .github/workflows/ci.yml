@@ -87,3 +87,5 @@ jobs:
         run: node tests/test_linked_genome_explorer.cjs
       - name: Check completed-run results auto-open
         run: node tests/test_results_auto_open.cjs
+      - name: Check run status recovery after browser restart
+        run: node tests/test_run_recovery.cjs

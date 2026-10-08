@@ -37,6 +37,21 @@
     <strong>Local-first:</strong> sequencing files and metadata are sent only to the WINGS runner on this computer and stored under your local WINGS run directory. They are not uploaded to the WINGS website or a remote service.
   </div>
 
+  <section id="savedRuns" class="panel" aria-labelledby="savedRunsTitle" hidden>
+    <div class="panel-body">
+      <h2 id="savedRunsTitle">Saved runs</h2>
+      <p id="savedRunsMessage" role="status">Loading runs from this computer…</p>
+      <div class="field">
+        <label for="savedRunSelect">Return to a run</label>
+        <select id="savedRunSelect"><option value="">Choose a saved run</option></select>
+      </div>
+      <div class="actions">
+        <button id="refreshRuns" class="btn btn-secondary" type="button">Refresh runs</button>
+        <a class="btn btn-secondary" href="run.html?new=1">Set up a new run</a>
+      </div>
+    </div>
+  </section>
+
   <section id="setupView" class="wizard-layout">
     <nav class="wizard-nav" aria-label="Run setup steps">
       <ol class="step-list">
