@@ -691,6 +691,7 @@ h5_counts |>
 ### Historical Stability
 
 ```{r}
+#| results: asis
 if (is.null(stability_summary) || nrow(stability_summary) == 0) {
   cat(
     '<div class="alert alert-secondary" role="note">',

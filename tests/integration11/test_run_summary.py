@@ -106,7 +106,7 @@ def test_production_run_summary_integration():
     html = html_path.read_text(encoding="utf-8", errors="replace")
     assert "WINGS" in html
     assert "Wild-bird Influenza Genomics and Surveillance" in html
-    assert "Run Summary Report" in html
+    assert "Run Summary" in html
     assert "Complete" in html
     assert "Near-complete" in html
     assert "Partial" in html
@@ -115,3 +115,6 @@ def test_production_run_summary_integration():
     assert "Mallard" in html
     assert "Northern Pintail" in html
     assert "Green-winged Teal" in html
+    assert '<div class="alert alert-secondary" role="note">' in html
+    assert "No historical comparison is available yet." in html
+    assert '&lt;div class="alert alert-secondary"' not in html
