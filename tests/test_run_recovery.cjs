@@ -74,6 +74,10 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator("#setupView").isVisible(), false);
     assert.equal(await page.locator("#runStatus").isVisible(), true);
     assert.equal(await page.locator("#irmaProgress").isVisible(), true);
+    assert.equal(await page.locator("#irmaProgress").evaluate(el => el.open), false);
+    assert.equal(await page.locator("#irmaProgressSamples").isVisible(), false);
+    await page.locator("#irmaProgress > summary").click();
+    assert.equal(await page.locator("#irmaProgressSamples").isVisible(), true);
     assert.equal(await page.locator("#irmaProgressSamples h4").innerText(), "synthetic <b>sample</b>");
     assert.equal(await page.locator("#irmaProgressSamples img").count(), 0);
     await page.locator("#irmaProgressSamples summary").click();
@@ -84,6 +88,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator("#irmaProgressSamples details").evaluate(el => el.open), true);
     await page.reload();
     await status(page, "flying");
+    assert.equal(await page.locator("#irmaProgress").evaluate(el => el.open), false);
     assert.equal(await page.locator("#metricRunId").innerText(), run.run_id);
     // Lost connections retain the run and retry without creating/starting anything.
     offline = true;

@@ -167,17 +167,17 @@
           <div>
             <h3>Technical details</h3>
             <pre id="runLog" class="log-box">Waiting for log output…</pre>
+            <details id="irmaProgress" hidden>
+              <summary><strong>IRMA diagnostics</strong></summary>
+              <p class="help">Latest recorded milestones for each sample. Times between messages are elapsed wall time and may include parallel work. A quiet log alone does not mean the job has stalled.</p>
+              <div id="irmaProgressSamples"></div>
+            </details>
             <div class="actions">
               <a id="resultsLink" class="btn btn-primary" href="#" hidden>Open WINGS results</a>
               <button id="stopRun" class="btn btn-secondary" type="button">Stop run</button>
             </div>
           </div>
         </div>
-        <section id="irmaProgress" hidden aria-labelledby="irmaProgressTitle">
-          <h3 id="irmaProgressTitle">IRMA log progress</h3>
-          <p class="help">Latest recorded milestones for each sample. Times between messages are elapsed wall time and may include parallel work. A quiet log alone does not mean the job has stalled.</p>
-          <div id="irmaProgressSamples"></div>
-        </section>
       </div>
     </div>
   </section>
