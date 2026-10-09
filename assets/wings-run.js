@@ -143,6 +143,7 @@
     $("resultsLink").hidden = true;
     $("resultsLink").removeAttribute("href");
     renderTimeline();
+    renderIrmaProgress();
     state.poller = setInterval(pollStatus, 3000);
     pollStatus();
   }
@@ -325,6 +326,72 @@
     return h ? `${h}h ${m}m` : `${m}m`;
   }
 
+  function milestoneDuration(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "—";
+    const total = Math.floor(seconds);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return h ? `${h}h ${m}m ${s}s` : m ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  function renderIrmaProgress(samples = []) {
+    const section = $("irmaProgress");
+    const container = $("irmaProgressSamples");
+    if (!section || !container) return;
+    // Keep a user's expanded history open while status polling refreshes it.
+    const expanded = new Set([...container.querySelectorAll("details[open]")]
+      .map((node) => node.dataset.sampleId));
+    container.replaceChildren();
+    section.hidden = !samples.length;
+    for (const sample of samples) {
+      const card = document.createElement("article");
+      card.className = "summary-box";
+      card.style.marginBottom = "1rem";
+      card.style.whiteSpace = "normal";
+      card.style.overflowWrap = "anywhere";
+      const heading = document.createElement("h4");
+      heading.textContent = sample.sample_id;
+      const milestones = sample.recent_milestones || [];
+      const latest = milestones[milestones.length - 1];
+      const message = document.createElement("p");
+      message.textContent = latest
+        ? `Last recorded milestone: ${latest.message}`
+        : "No timestamped milestones have been recorded yet.";
+      const modified = new Date(sample.last_modified);
+      const freshness = document.createElement("p");
+      freshness.className = "help";
+      freshness.textContent = Number.isNaN(modified.getTime()) ? "Log update time unavailable."
+        : `Log last changed: ${modified.toLocaleString()} · ${formatBytes(sample.log_size_bytes)}`;
+      card.append(heading, message, freshness);
+      if (milestones.length) {
+        const details = document.createElement("details");
+        details.dataset.sampleId = sample.sample_id;
+        details.open = expanded.has(sample.sample_id);
+        const summary = document.createElement("summary");
+        summary.textContent = `Recorded milestones (${milestones.length})`;
+        const note = document.createElement("p");
+        note.className = "help";
+        note.textContent = "Timestamps use the log's clock; its time zone is not recorded. Durations are gaps between consecutive messages. A dash means the interval is unknown.";
+        const list = document.createElement("ol");
+        for (const event of milestones) {
+          const item = document.createElement("li");
+          item.textContent = `${event.timestamp} · ${event.message} · ${milestoneDuration(event.seconds_since_previous)} since previous message`;
+          list.append(item);
+        }
+        details.append(summary, note, list);
+        if (sample.earlier_milestones_omitted) {
+          const notice = document.createElement("p");
+          notice.className = "help";
+          notice.textContent = "Showing recent milestones. Earlier entries remain in the sample's IRMA log.";
+          details.append(notice);
+        }
+        card.append(details);
+      }
+      container.append(card);
+    }
+  }
+
   async function pollStatus() {
     if (!state.runId) return;
     const runId = state.runId;
@@ -365,6 +432,7 @@
       $("runLog").textContent = run.log_tail || "Waiting for log output…";
       $("runLog").scrollTop = $("runLog").scrollHeight;
       renderTimeline(run.stages);
+      renderIrmaProgress(run.irma_progress);
       $("stopRun").disabled = run.status !== "running";
       const resultsReady = run.status === "complete";
       $("resultsLink").hidden = !resultsReady;
