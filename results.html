@@ -235,6 +235,7 @@
 
   <input id="file-input" type="file" accept=".wings,application/json" hidden>
 
+  <script src="assets/wings-demo-loader.js"></script>
   <script>
     const fileInput = document.getElementById("file-input");
     const chooseFile = document.getElementById("choose-file");
@@ -368,9 +369,7 @@
 
     async function loadDemo() {
       status.textContent = "Loading demo data...";
-      const response = await fetch("demo/wings_demo.wings", { cache: "no-store" });
-      if (!response.ok) throw new Error("Demo bundle is not available yet.");
-      const bundle = await response.json();
+      const bundle = await globalThis.WINGS_DEMO_LOADER.load();
       const label = `Demo WINGS run · ${Object.keys(bundle.samples || {}).length} sample reports`;
       await openBundle(bundle, label);
     }

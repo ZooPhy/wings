@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
+const {gzipSync} = require("node:zlib");
 const {chromium} = require("playwright");
 
 const root = path.resolve(__dirname, "..");
@@ -34,9 +35,29 @@ const bundle = {
 };
 
 let bundleRequests = 0;
+let compressedRequests = 0;
+let fallbackRequests = 0;
 
 const server = http.createServer((request, response) => {
   const url = new URL(request.url, "http://127.0.0.1");
+
+  if (url.pathname === "/assets/wings-demo-loader.js") {
+    response.writeHead(200, {"Content-Type": "text/javascript"});
+    response.end(fs.readFileSync(path.join(root, "assets/wings-demo-loader.js")));
+    return;
+  }
+  if (url.pathname === "/demo/wings_demo.wings.gz") {
+    compressedRequests += 1;
+    response.writeHead(200, {"Content-Type": "application/gzip"});
+    response.end(gzipSync(JSON.stringify(bundle)));
+    return;
+  }
+  if (url.pathname === "/demo/wings_demo.wings") {
+    fallbackRequests += 1;
+    response.writeHead(200, {"Content-Type": "application/json"});
+    response.end(JSON.stringify(bundle));
+    return;
+  }
 
   if (url.pathname === "/results.html") {
     response.writeHead(200, {
@@ -100,10 +121,19 @@ const server = http.createServer((request, response) => {
       "AUTO_OPEN_RUN_SUMMARY"
     );
 
+    await page.goto(`${baseUrl}/results.html?demo=1`);
+    await page.frameLocator("#report-frame").locator("#auto-run-marker").waitFor();
+    assert.equal(compressedRequests, 1);
+    assert.equal(fallbackRequests, 0);
+    await page.addInitScript(() => { window.DecompressionStream = undefined; });
+    await page.goto(`${baseUrl}/results.html?demo=1`);
+    await page.frameLocator("#report-frame").locator("#auto-run-marker").waitFor();
+    assert.equal(compressedRequests, 1);
+    assert.equal(fallbackRequests, 1);
     assert.deepEqual(errors, []);
 
     console.log(
-      "Results auto-open browser check passed: run query fetched and rendered the WINGS bundle."
+      "Results auto-open browser check passed: run query, gzip demo, and compatibility fallback rendered."
     );
   } finally {
     await browser.close();
