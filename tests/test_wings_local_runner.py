@@ -96,6 +96,30 @@ def test_log_milestones_invalid_dates_and_clock_reversal():
     assert [event["seconds_since_previous"] for event in events] == [None, None, 10]
 
 
+def test_log_milestones_space_padded_hours_across_midnight():
+    runner = load_runner()
+    events = runner.log_milestones(
+        "[2026-10-08 23:59:50]\tTEST before midnight\n"
+        "[2026-10-09  0:00:10]\tTEST after midnight\n"
+        "[2026-10-09  1:02:03]\tTEST next milestone\n"
+    )
+    assert [event["seconds_since_previous"] for event in events] == [None, 20, 3713]
+    assert events[1]["timestamp"] == "2026-10-09 00:00:10"
+    assert events[2]["timestamp"] == "2026-10-09 01:02:03"
+
+
+def test_log_milestones_copied_whitespace_and_completion():
+    runner = load_runner()
+    events = runner.log_milestones(
+        "[2026-10-09\u00a0 1:55:47]\tTEST started\n"
+        "[2026-10-09\t9:00:00]\tTEST finished!\n"
+        "ESCAPE_STATUS=IRMA_COMPLETED\n"
+    )
+    assert len(events) == 2
+    assert events[-1]["message"] == "TEST finished!"
+    assert events[-1]["timestamp"] == "2026-10-09 09:00:00"
+
+
 def test_progress_is_read_only_and_ignores_partial_lines(tmp_path, monkeypatch):
     runner = load_runner()
     monkeypatch.setattr(runner, "RUNS_ROOT", tmp_path)

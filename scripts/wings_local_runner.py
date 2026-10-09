@@ -46,7 +46,7 @@ RULE_RE = re.compile(
     r"^(?:\[[^\n]+\]\s*)?\s*(?:(?:local)?rule|checkpoint)\s+([A-Za-z0-9_]+):\s*$",
     re.MULTILINE,
 )
-MILESTONE_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+(.+)$")
+MILESTONE_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}:\d{2})\]\s+(.+)$")
 PROGRESS_LOG_BYTES = 128 * 1024
 PROGRESS_MILESTONES = 20
 
@@ -61,12 +61,14 @@ def log_milestones(text: str) -> list[dict]:
             continue
         stamp, message = match.groups()
         try:
-            current = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+            # IRMA uses space-padded hours before 10:00. Normalize whitespace
+            # before parsing, including nonbreaking spaces in copied logs.
+            current = datetime.strptime(" ".join(stamp.split()), "%Y-%m-%d %H:%M:%S")
         except ValueError:
             continue
         gap = (current - previous).total_seconds() if previous is not None else None
         milestones.append({
-            "timestamp": stamp,
+            "timestamp": current.strftime("%Y-%m-%d %H:%M:%S"),
             "message": message,
             "seconds_since_previous": gap if gap is not None and gap >= 0 else None,
         })
