@@ -10,6 +10,16 @@ const context = vm.createContext({window:windowObj, globalThis:windowObj, consol
 vm.runInContext(source, context);
 const T = windowObj.WINGS_TREE_STUDIO._test;
 
+test('empty phylogeny keeps segment choices and explains missing trees', () => {
+  let popupHtml = '';
+  windowObj.open = () => ({document:{open(){},write(html){popupHtml = html;},close(){}},addEventListener(){}});
+  windowObj.WINGS_TREE_STUDIO.open({payload:{trees:{},segment_order:['HA','NA']},samples:[]}, {segment:'HA'});
+  assert.match(popupHtml, /"segment_order":\["HA","NA"\]/);
+  assert.match(popupHtml, /No \$\{segment\} tree was generated for this run/);
+  assert.match(popupHtml, /ready_segments\.tsv/);
+  assert.doesNotMatch(popupHtml, /No tree available for this segment/);
+});
+
 function tree() {
   return {children:[
     {length:1,children:[
