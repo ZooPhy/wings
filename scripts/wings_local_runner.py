@@ -46,6 +46,67 @@ RULE_RE = re.compile(
     r"^(?:\[[^\n]+\]\s*)?\s*(?:(?:local)?rule|checkpoint)\s+([A-Za-z0-9_]+):\s*$",
     re.MULTILINE,
 )
+MILESTONE_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}:\d{2})\]\s+(.+)$")
+PROGRESS_LOG_BYTES = 128 * 1024
+PROGRESS_MILESTONES = 20
+
+
+def log_milestones(text: str) -> list[dict]:
+    """Read recorded milestones; gaps are wall time, not per-task CPU time."""
+    milestones = []
+    previous = None
+    for line in text.splitlines():
+        match = MILESTONE_RE.fullmatch(line.strip())
+        if not match:
+            continue
+        stamp, message = match.groups()
+        try:
+            # IRMA uses space-padded hours before 10:00. Normalize whitespace
+            # before parsing, including nonbreaking spaces in copied logs.
+            current = datetime.strptime(" ".join(stamp.split()), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        gap = (current - previous).total_seconds() if previous is not None else None
+        milestones.append({
+            "timestamp": current.strftime("%Y-%m-%d %H:%M:%S"),
+            "message": message,
+            "seconds_since_previous": gap if gap is not None and gap >= 0 else None,
+        })
+        previous = current
+    return milestones
+
+
+def irma_log_progress(directory: Path) -> list[dict]:
+    """Report bounded log tails without invoking tools or modifying run outputs."""
+    progress = []
+    root = directory.resolve()
+    for path in sorted((directory / "results").glob("*/irma/irma.log")):
+        sample_id = path.parent.parent.name
+        try:
+            # A result-directory symlink must not expose files outside this run.
+            path = path.resolve()
+            path.relative_to(root)
+            with path.open("rb") as handle:
+                stat = os.fstat(handle.fileno())
+                offset = max(0, stat.st_size - PROGRESS_LOG_BYTES)
+                handle.seek(offset)
+                raw = handle.read(PROGRESS_LOG_BYTES)
+            if offset:
+                raw = raw.partition(b"\n")[2]
+            # A writer may still be emitting the last line.
+            if raw and not raw.endswith(b"\n"):
+                raw = raw.rpartition(b"\n")[0]
+            milestones = log_milestones(raw.decode("utf-8", errors="replace"))
+            progress.append({
+                "sample_id": sample_id,
+                "last_modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                "log_size_bytes": stat.st_size,
+                "recent_milestones": milestones[-PROGRESS_MILESTONES:],
+                "earlier_milestones_omitted": bool(offset) or len(milestones) > PROGRESS_MILESTONES,
+            })
+        except (OSError, ValueError):
+            continue
+    return progress
 
 
 def utc_now() -> str:
@@ -193,6 +254,7 @@ def enriched_state(run_id: str) -> dict:
             pass
     state["log_tail"] = "\n".join(log_text.splitlines()[-120:])
     state["stages"] = infer_stages(state, log_text)
+    state["irma_progress"] = irma_log_progress(run_dir(run_id))
     return state
 
 

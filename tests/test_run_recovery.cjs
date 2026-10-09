@@ -17,8 +17,15 @@ const run = {
   created_at: "2026-10-08T20:58:11Z", started_at: "2026-10-08T20:58:11Z",
   finished_at: null, sample_count: 2, log_tail: "rule irma:",
   stages: {inputs: "complete", read_qc: "complete", assembly: "running"},
+  irma_progress: [{sample_id: "synthetic <b>sample</b>",
+    last_modified: "2026-10-08T21:05:59Z", log_size_bytes: 512,
+    recent_milestones: [
+      {timestamp: "2026-10-08 21:00:00", message: "TEST started", seconds_since_previous: null},
+      {timestamp: "2026-10-08 21:05:59", message: "TEST milestone <img src=x onerror=alert(1)>", seconds_since_previous: 359},
+    ], earlier_milestones_omitted: false}],
 };
 const older = {...run, run_id: "older-run", name: "Older <b>run</b>",
+  irma_progress: [],
   status: "failed", created_at: "2026-10-07T20:58:11Z",
   finished_at: "2026-10-08T21:08:11Z"};
 let offline = false;
@@ -66,6 +73,15 @@ const server = http.createServer((req, res) => {
     assert.equal(new URL(savedUrl).searchParams.get("run"), run.run_id);
     assert.equal(await page.locator("#setupView").isVisible(), false);
     assert.equal(await page.locator("#runStatus").isVisible(), true);
+    assert.equal(await page.locator("#irmaProgress").isVisible(), true);
+    assert.equal(await page.locator("#irmaProgressSamples h4").innerText(), "synthetic <b>sample</b>");
+    assert.equal(await page.locator("#irmaProgressSamples img").count(), 0);
+    await page.locator("#irmaProgressSamples summary").click();
+    assert.match(await page.locator("#irmaProgressSamples li").last().innerText(), /5m 59s since previous message/);
+    // Polling refreshes progress without closing the history being read.
+    run.irma_progress[0].recent_milestones[1].message = "TEST next milestone";
+    await page.waitForFunction(() => document.getElementById("irmaProgressSamples").textContent.includes("TEST next milestone"));
+    assert.equal(await page.locator("#irmaProgressSamples details").evaluate(el => el.open), true);
     await page.reload();
     await status(page, "flying");
     assert.equal(await page.locator("#metricRunId").innerText(), run.run_id);
