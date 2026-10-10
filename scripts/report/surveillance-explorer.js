@@ -1952,7 +1952,23 @@
     if (data.migration_context) {
       const migration = comparisonSummary(models,"migration_vs_ecology");
       const descriptive = models.filter(row=>row.comparison === "migration_vs_ecology" && row.display_status === "DESCRIPTIVE").length;
-      finding("Migration context", migration.ready ? `${migration.below}/${migration.ready} analyzable segments showed added explanatory value beyond host and seasonal ecology. Weather is assessed separately.` : descriptive ? `Descriptive added fit is available for ${descriptive} segments; p/q values are withheld. ${readiness.distinct_migration_contexts || 0} distinct state–night contexts.` : `Not estimable in this run: ${readiness.samples_with_migration_context || 0} samples have completed-season context across ${readiness.distinct_migration_contexts || 0} distinct state–night settings. See segment diagnostics below.`);
+      const migrationSamples = readiness.samples_with_migration_context || 0;
+      const migrationSettings = readiness.distinct_migration_contexts || 0;
+      const minimumSettings = readiness.minimum_unique_samples ?? 8;
+      let explanation;
+      if (migration.ready) {
+        explanation = `${migration.below}/${migration.ready} analyzable segments showed added explanatory value beyond host and seasonal ecology. Weather is assessed separately.`;
+      } else if (descriptive) {
+        explanation = `Descriptive added fit is available for ${descriptive} segments; p/q values are withheld. ${migrationSettings} distinct state–night settings. See segment diagnostics below.`;
+      } else if (!migrationSamples) {
+        explanation = "No samples have both a matched BirdCast night and a complete spring/fall season for their state and year. Concordance analysis is unavailable; see segment diagnostics below.";
+      } else if (migrationSettings < minimumSettings) {
+        explanation = `Migration data available for ${migrationSamples} samples across ${migrationSettings} distinct settings; concordance analysis withheld because the configured minimum is ${minimumSettings}.`;
+      } else {
+        explanation = `Migration data available for ${migrationSamples} samples across ${migrationSettings} distinct settings; no segment comparison meets all analysis requirements. See segment diagnostics below.`;
+      }
+      finding("Migration context", explanation);
+      finding("Reading migration settings", "One setting is one state + matched night. Samples sharing it use the same BirdCast estimate. A complete spring/fall season for that state and year lets WINGS compare nightly activity and seasonal progress.");
     }
 
     box.append(
@@ -2073,11 +2089,11 @@
       metric("Seasonal ecology data", readiness.samples_with_phenology ?? "—", "samples with eBird seasonal profiles"),
       metric("Samples with weather data", readiness.samples_with_complete_environment_vector ?? "—", "temperature, precipitation, and wind from ERA5"),
       metric("Distinct weather settings", readiness.distinct_weather_contexts ?? readiness.distinct_environment_profiles ?? "—", "unique location-and-time weather profiles"),
-      metric("Minimum samples", readiness.minimum_unique_samples ?? "—", "required for analysis")
+      metric("Configured minimum", readiness.minimum_unique_samples ?? "—", "samples per comparison; migration also requires this many distinct settings")
     );
     if(data.migration_context) metrics.append(
-      metric("Migration context", readiness.samples_with_migration_context ?? "—", "samples with a matched night and complete source season"),
-      metric("Distinct migration settings", readiness.distinct_migration_contexts ?? "—", "unique state–night contexts; shared estimates count once")
+      metric("Samples with migration data", readiness.samples_with_migration_context ?? "—", "matched night and complete spring/fall season for the state and year"),
+      metric("Distinct migration settings", readiness.distinct_migration_contexts ?? "—", "unique state + night combinations; samples sharing a night count once")
     );
     panel.append(metrics);
 
