@@ -58,3 +58,28 @@ test('host filtering only changes displayed contexts and legacy reports remain u
   assert.equal(points(panel).length,0);assert.match(panel.textContent,/Genomic–Ecological Concordance/);
 });
 module.exports={Element,app,walk,points};
+
+test('migration summary separates available data from configured fit requirements',()=>{
+  const {a,panel,data}=app();
+  data.models.forEach(row=>{row.status=row.display_status='INSUFFICIENT_MIGRATION_CONTEXTS';});
+  Object.assign(data.readiness,{samples_with_migration_context:28,distinct_migration_contexts:5,minimum_unique_samples:8});
+  const summary=()=>walk(panel).find(n=>n.className==='wgec-summary-row' && n.children[0]?.textContent==='Migration context').textContent;
+  a.concordanceController.refresh();
+  assert.match(summary(),/Migration data available for 28 samples across 5 distinct settings/);
+  assert.match(summary(),/configured minimum is 8/);
+  assert.doesNotMatch(summary(),/Not estimable|No samples have both/);
+  data.readiness.minimum_unique_samples=3;
+  a.concordanceController.refresh();
+  assert.match(summary(),/no segment comparison meets all analysis requirements/);
+  assert.doesNotMatch(summary(),/configured minimum is/);
+});
+
+test('migration summary explains missing normalized context without calling it an estimated effect',()=>{
+  const {a,panel,data}=app();
+  data.models.forEach(row=>{row.status=row.display_status='INSUFFICIENT_MIGRATION_CONTEXTS';});
+  Object.assign(data.readiness,{samples_with_migration_context:0,distinct_migration_contexts:0,minimum_unique_samples:8});
+  a.concordanceController.refresh();
+  const summary=walk(panel).find(n=>n.className==='wgec-plain-summary').textContent;
+  assert.match(summary,/No samples have both a matched BirdCast night and a complete spring\/fall season/);
+  assert.doesNotMatch(summary,/Migration data available for|configured minimum is/);
+});
