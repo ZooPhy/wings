@@ -7,11 +7,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "wings.genomic_ecological_concordance.v2"
+SCHEMA = "wings.genomic_ecological_concordance.v3"
 
 
 def compact_concordance(data: dict[str, Any]) -> dict[str, Any]:
-    if data.get("schema_version") != SCHEMA:
+    if data.get("schema_version") not in (SCHEMA, "wings.genomic_ecological_concordance.v2"):
         raise ValueError(f"Unsupported concordance schema: {data.get('schema_version')!r}")
     models = data.get("models")
     if not isinstance(models, list):
@@ -32,6 +32,11 @@ def compact_concordance(data: dict[str, Any]) -> dict[str, Any]:
             "standardization_scope": (data.get("environmental_distance") or {}).get("standardization_scope"),
         },
         "seasonal_profile_metric": data.get("seasonal_profile_metric"),
+        "migration_context": data.get("migration_context"),
+        "migration_samples": [
+            {key:value for key,value in row.items() if key.startswith("migration_") or key in ("sample_id","host","collection_date")}
+            for row in data.get("sample_features", [])
+        ],
         "permutation_test": data.get("permutation_test"),
         "models": models,
         "caveats": data.get("caveats") or [],

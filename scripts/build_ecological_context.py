@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cache ecological context for display. No sequence data or browser-time requests.
 
-BirdCast pilot input is a documented WINGS CSV, not an official BirdCast export.
+BirdCast supports a WINGS CSV or metadata-driven dashboard acquisition.
 Weather requests send only coordinates and dates to Open-Meteo when requested.
 """
 import argparse
@@ -11,7 +11,7 @@ import json
 import math
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode, urlsplit, parse_qs
 from urllib.request import urlopen
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -26,6 +26,8 @@ STATES = dict(pair.split(":", 1) for pair in (
     "WV:West Virginia|WI:Wisconsin|WY:Wyoming").split("|"))
 WEATHER_URL = "https://archive-api.open-meteo.com/v1/archive"
 WEATHER_FIELDS = {"temperature_2m_mean": "°C", "precipitation_sum": "mm", "wind_speed_10m_max": "km/h"}
+WEATHER_EXTRA_FIELDS = {"temperature_2m_min": "°C", "temperature_2m_max": "°C", "weather_code": "wmo code"}
+ALL_WEATHER_FIELDS = {**WEATHER_FIELDS, **WEATHER_EXTRA_FIELDS}
 BIRDCAST_URL = "https://dashboard.birdcast.org/"
 
 
@@ -158,7 +160,7 @@ def birdcast_snapshot(csv_path=None, provenance_path=None):
             "source_file": Path(csv_path).name, **provenance}
 
 
-def weather_request(meta, days, today=None):
+def weather_request(meta, days, today=None, *, extended=True):
     lat, lon = meta["latitude"], meta["longitude"]
     when = iso_date(meta["collection_date"])
     if lat is None or lon is None or not -90 <= lat <= 90 or not -180 <= lon <= 180:
@@ -170,9 +172,26 @@ def weather_request(meta, days, today=None):
     if end < start:
         return None, "OUT_OF_RANGE", "The requested dates are outside the available historical ERA5 window (approximately five-day lag)."
     params = {"latitude": lat, "longitude": lon, "start_date": start.isoformat(), "end_date": end.isoformat(),
-              "daily": ",".join(WEATHER_FIELDS), "models": "era5", "timezone": "auto", "cell_selection": "nearest",
+              "daily": ",".join(ALL_WEATHER_FIELDS if extended else WEATHER_FIELDS), "models": "era5", "timezone": "auto", "cell_selection": "nearest",
               "elevation": "nan", "temperature_unit": "celsius", "precipitation_unit": "mm", "wind_speed_unit": "kmh"}
     return WEATHER_URL + "?" + urlencode(params), "READY", ""
+
+
+def validate_weather_row(row, fields):
+    for key in fields:
+        value = row.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError(f'Invalid weather value: {key}')
+        if not key.startswith('temperature_') and value < 0:
+            raise ValueError(f'Negative weather value: {key}')
+        if key == 'weather_code' and (value != int(value) or not 0 <= value <= 99):
+            raise ValueError('Invalid weather condition code')
+    temperatures = [row.get(k) for k in ('temperature_2m_min', 'temperature_2m_mean', 'temperature_2m_max')]
+    known = [v for v in temperatures if v is not None]
+    if known != sorted(known):
+        raise ValueError('Weather temperature minimum/mean/maximum are inconsistent')
 
 
 def normalize_weather(raw, request_url, retrieved_at):
@@ -188,26 +207,69 @@ def normalize_weather(raw, request_url, retrieved_at):
     if not dates or len(set(dates)) != len(dates) or any(iso_date(d) is None for d in dates):
         raise ValueError("Weather daily dates are empty, invalid, or repeated")
     units = data.get("daily_units", {})
-    for key, expected in WEATHER_FIELDS.items():
+    requested = set(parse_qs(urlsplit(request_url).query).get('daily', [''])[0].split(','))
+    fields = {**WEATHER_FIELDS, **{k: v for k, v in WEATHER_EXTRA_FIELDS.items() if k in daily or k in requested}}
+    for key, expected in fields.items():
         if units.get(key) != expected or len(daily.get(key, [])) != len(dates):
             raise ValueError(f"Weather field {key}: units or array length mismatch")
+    query = parse_qs(urlsplit(request_url).query)
+    if query.get('start_date') and query.get('end_date'):
+        if any(not query['start_date'][0] <= d <= query['end_date'][0] for d in dates):
+            raise ValueError('Weather response has dates outside the requested interval')
     rows = []
     for i, day in enumerate(dates):
         row = {"date": day}
-        for key in WEATHER_FIELDS:
+        for key in fields:
             value = daily[key][i]
             if value is not None and (number(value) is None or isinstance(value, bool)):
                 raise ValueError(f"Invalid weather value: {key} on {day}")
             row[key] = number(value)
-            if key != "temperature_2m_mean" and row[key] is not None and row[key] < 0:
-                raise ValueError(f"Negative weather value: {key}")
+        validate_weather_row(row, fields)
         rows.append(row)
     return {"status": "READY", "dataset": "ERA5", "provider": "Open-Meteo / Copernicus Climate Change Service",
             "resolution": "0.25° grid (approximately 25 km)", "timezone": data["timezone"],
             "grid_latitude": grid_lat, "grid_longitude": grid_lon, "date_basis": "Local calendar day",
             "source_url": "https://open-meteo.com/en/docs/historical-weather-api", "request_url": request_url,
-            "retrieved_at": retrieved_at, "raw_sha256": digest(raw), "units": WEATHER_FIELDS,
+            "retrieved_at": retrieved_at, "raw_sha256": digest(raw), "units": fields,
+            "condition_basis": "Most severe condition during the local calendar day; source-derived WMO code",
             "rows": sorted(rows, key=lambda r: r["date"]), "license": "CC BY 4.0; ERA5 attribution applies"}
+
+
+def read_weather_cache(path, expected_url=None):
+    cached = strict_json(path.read_text())
+    url, raw = cached['request_url'], cached['raw'].encode('utf-8')
+    if (expected_url is not None and url != expected_url) or path.stem != digest(url.encode()) or cached['raw_sha256'] != digest(raw):
+        raise ValueError(f'Weather cache checksum/request mismatch: {path}')
+    return normalize_weather(raw, url, cached['retrieved_at'])
+
+
+def fallback_weather(cache_dir, request_url):
+    """Reuse one compatible source response, never merge different locations."""
+    wanted = parse_qs(urlsplit(request_url).query)
+    signature = lambda q: {k: v for k, v in q.items() if k not in ('daily', 'start_date', 'end_date')}
+    choices = []
+    for path in sorted((Path(cache_dir) / 'weather').glob('*.json')):
+        try:
+            cached = strict_json(path.read_text())
+            url = cached['request_url']
+            if urlsplit(url)[:2] != urlsplit(request_url)[:2] or urlsplit(url).path != urlsplit(request_url).path:
+                continue
+            query = parse_qs(urlsplit(url).query)
+            if signature(query) != signature(wanted):
+                continue
+            if query['end_date'][0] < wanted['start_date'][0] or query['start_date'][0] > wanted['end_date'][0]:
+                continue
+            context = read_weather_cache(path)
+            overlap = sum(wanted['start_date'][0] <= r['date'] <= wanted['end_date'][0] for r in context['rows'])
+            if overlap:
+                choices.append(((overlap, len(context['units']), context.get('retrieved_at', '')), digest(url.encode()), context))
+        except (ValueError, KeyError, TypeError, OSError):
+            # Unrelated/invalid cache entries are never borrowed as a fallback.
+            continue
+    if not choices:
+        return None
+    _, key, context = max(choices, key=lambda item: item[0])
+    return key, context
 
 
 def read_metadata(path):
@@ -226,14 +288,27 @@ def read_metadata(path):
 
 
 def build_snapshot(metadata, cache_dir, days=30, fetch_weather=False, refresh=False,
-                   birdcast_csv=None, birdcast_provenance=None, opener=urlopen):
+                   birdcast_csv=None, birdcast_provenance=None, opener=urlopen,
+                   fetch_birdcast=False, refresh_birdcast=False, birdcast_night_offset=-1,
+                   birdcast_cache=False):
     if not 1 <= days <= 365:
         raise ValueError("days must be between 1 and 365")
     if refresh and not fetch_weather:
         raise ValueError("--refresh-weather requires --fetch-weather")
-    birdcast = birdcast_snapshot(birdcast_csv, birdcast_provenance)
-    bindings, weather = {}, {}
-    for row in read_metadata(metadata):
+    if refresh_birdcast and not fetch_birdcast:
+        raise ValueError('--refresh-birdcast requires --fetch-birdcast')
+    if (fetch_birdcast or birdcast_cache) and (birdcast_csv or birdcast_provenance):
+        raise ValueError('Choose BirdCast acquisition or CSV import, not both')
+    rows = read_metadata(metadata)
+    if fetch_birdcast or birdcast_cache:
+        import runpy
+        acquire = runpy.run_path(str(Path(__file__).with_name('birdcast_data.py')))['acquire']
+        birdcast = acquire(rows, cache_dir, helpers=globals(), fetch=fetch_birdcast,
+                           refresh=refresh_birdcast, night_offset=birdcast_night_offset, opener=opener)
+    else:
+        birdcast = birdcast_snapshot(birdcast_csv, birdcast_provenance)
+    bindings, weather, resolved = {}, {}, {}
+    for row in rows:
         sid, meta = row["sample_id"], sample_metadata(row)
         url, status, reason = weather_request(meta, days)
         binding = {"metadata": meta, "status": status, "reason": reason, "weather_key": None}
@@ -242,11 +317,12 @@ def build_snapshot(metadata, cache_dir, days=30, fetch_weather=False, refresh=Fa
             continue
         key = digest(url.encode())
         target = Path(cache_dir) / "weather" / (key + ".json")
-        if key in weather:
-            binding["weather_key"] = key
+        if key in resolved:
+            binding.update(resolved[key])
             continue
-        cached = strict_json(target.read_text()) if target.exists() and not refresh else None
-        if cached is None and fetch_weather:
+        context = read_weather_cache(target, url) if target.exists() and not refresh else None
+        failure = ''
+        if context is None and fetch_weather:
             try:
                 with opener(url, timeout=60) as response:
                     raw = response.read()
@@ -255,18 +331,22 @@ def build_snapshot(metadata, cache_dir, days=30, fetch_weather=False, refresh=Fa
                 cached = {"request_url": url, "retrieved_at": retrieved, "raw_sha256": digest(raw), "raw": raw.decode("utf-8")}
                 write_json(target, cached)
             except Exception as exc:
-                binding.update(status="FETCH_FAILED", reason=f"Weather retrieval failed ({type(exc).__name__}); rerun the cache command to retry.")
-                print(f"{sid}: {binding['reason']}")
-                continue
-        if cached is None:
-            binding.update(status="NOT_LOADED", reason="Weather snapshot not loaded; build the cache with --fetch-weather.")
-            continue
-        raw = cached["raw"].encode("utf-8")
-        if cached["request_url"] != url or cached["raw_sha256"] != digest(raw):
-            raise ValueError(f"Weather cache checksum/request mismatch: {target}")
-        context = normalize_weather(raw, url, cached["retrieved_at"])
-        weather[key] = context
-        binding["weather_key"] = key
+                context = None
+                failure = f"Weather retrieval failed ({type(exc).__name__}); rerun the cache command to retry."
+                print(f"{sid}: {failure}")
+        source_key = key
+        if context is None:
+            fallback = fallback_weather(cache_dir, url)
+            if fallback:
+                source_key, context = fallback
+                binding['reason'] = 'Using a compatible cached weather response; dates or extended fields may be incomplete.'
+        if context is None:
+            binding.update(status='FETCH_FAILED' if failure else 'NOT_LOADED',
+                           reason=failure or 'Weather snapshot not loaded; build the cache with --fetch-weather.')
+        else:
+            weather[source_key] = context
+            binding['weather_key'] = source_key
+        resolved[key] = {k: binding[k] for k in ('status', 'reason', 'weather_key')}
     return {"schema_version": 1, "created_at": stamp(), "window_days": days, "states": STATES,
             "metadata_sha256": digest(Path(metadata).read_bytes()), "bindings": bindings,
             "weather": weather, "birdcast": birdcast}
@@ -287,7 +367,8 @@ def load_snapshot(path, samples):
         if key[0] not in STATES or key[0] in {"AK", "HI"} or iso_date(key[1]) is None or key in seen:
             raise ValueError("Invalid or duplicate BirdCast state/night in ecological snapshot")
         seen.add(key)
-        timezone_name(row.get("timezone"))
+        if row.get('timezone') is not None or row.get('status') == 'AVAILABLE':
+            timezone_name(row.get("timezone"))
         value = row.get("birds_crossed")
         if row.get("status") == "AVAILABLE":
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
@@ -296,20 +377,29 @@ def load_snapshot(path, samples):
             raise ValueError("Invalid BirdCast missing-data status in ecological snapshot")
     if bird["status"] == "READY" and not seen:
         raise ValueError("READY BirdCast snapshot has no records")
+    if bird.get('seasons'):
+        import runpy
+        validate_season = runpy.run_path(str(Path(__file__).with_name('birdcast_data.py')))['validate_season']
+        season_keys = set()
+        for context in bird['seasons']:
+            validate_season(context)
+            state = context.get('state_code')
+            expected_key = f'US-{state}_{context["start_date"]}_{context["end_date"]}'
+            if state not in STATES or state in {'AK', 'HI'} or context.get('key') != expected_key or expected_key in season_keys:
+                raise ValueError('Invalid or duplicate BirdCast season in ecological snapshot')
+            season_keys.add(expected_key)
     for context in data["weather"].values():
-        if context.get("dataset") != "ERA5" or context.get("units") != WEATHER_FIELDS:
+        units = context.get('units', {})
+        if context.get("dataset") != "ERA5" or not isinstance(units, dict) or any(units.get(k) != v for k, v in WEATHER_FIELDS.items()) or any(ALL_WEATHER_FIELDS.get(k) != v for k, v in units.items()):
             raise ValueError("Unexpected weather dataset/units in ecological snapshot")
         timezone_name(context.get("timezone"))
         dates = [r.get("date") for r in context.get("rows", [])]
         if any(iso_date(d) is None for d in dates) or len(set(dates)) != len(dates):
             raise ValueError("Invalid or duplicate weather dates in ecological snapshot")
         for row in context["rows"]:
-            for field in WEATHER_FIELDS:
-                value = row.get(field)
-                if value is not None and (not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value)):
-                    raise ValueError("Invalid weather value in ecological snapshot")
-                if field != "temperature_2m_mean" and value is not None and value < 0:
-                    raise ValueError("Negative precipitation or wind in ecological snapshot")
+            if any(row.get(k) is not None and k not in units for k in WEATHER_EXTRA_FIELDS):
+                raise ValueError('Weather field has no declared units')
+            validate_weather_row(row, units)
     bindings = {}
     for sample in samples:
         sid = sample["sample_id"]
@@ -323,6 +413,10 @@ def load_snapshot(path, samples):
                 raise ValueError("Ecological snapshot references a missing weather context")
             bindings[sid] = binding
     data["bindings"] = bindings
+    for sample in samples:
+        binding = bird.get('bindings', {}).get(sample['sample_id'])
+        if binding and binding.get('metadata') != sample_metadata(sample):
+            binding.update(status='STALE_METADATA', reason='Sample date or location changed; rebuild the ecological snapshot.', night=None)
     data["snapshot_sha256"] = digest(raw)
     data["source_file"] = Path(path).name
     return data
@@ -333,20 +427,35 @@ def main():
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("resources/ecology/ecological-context.json"))
     parser.add_argument("--cache-dir", type=Path, default=Path("resources/ecology/cache"))
+    parser.add_argument('--base-snapshot', type=Path, help='Retain valid weather bindings from an existing snapshot')
     parser.add_argument("--days", type=int, default=30)
     parser.add_argument("--fetch-weather", action="store_true")
     parser.add_argument("--refresh-weather", action="store_true")
+    parser.add_argument('--fetch-birdcast', action='store_true', help='Fetch one state/night per unique metadata match')
+    parser.add_argument('--birdcast-cache', action='store_true', help='Bind metadata to cached BirdCast records without network access')
+    parser.add_argument('--refresh-birdcast', action='store_true')
+    parser.add_argument('--birdcast-night-offset', type=int, choices=(-1, 0), default=-1,
+                        help='-1: preceding night (default); 0: collection-date evening')
     parser.add_argument("--birdcast-csv", type=Path)
     parser.add_argument("--birdcast-provenance", type=Path)
     parser.add_argument("--clear-birdcast", action="store_true", help="Explicitly remove a previously imported BirdCast snapshot")
     args = parser.parse_args()
-    if args.clear_birdcast and (args.birdcast_csv or args.birdcast_provenance):
+    if args.clear_birdcast and (args.birdcast_csv or args.birdcast_provenance or args.fetch_birdcast or args.birdcast_cache):
         parser.error("--clear-birdcast cannot be combined with BirdCast input files")
     previous_birdcast = None
-    if not args.birdcast_csv and not args.clear_birdcast and args.output.exists():
+    if not args.birdcast_csv and not args.clear_birdcast and not args.fetch_birdcast and not args.birdcast_cache and args.output.exists():
         previous_birdcast = load_snapshot(args.output, read_metadata(args.metadata))["birdcast"]
     snapshot = build_snapshot(args.metadata, args.cache_dir, args.days, args.fetch_weather,
-                              args.refresh_weather, args.birdcast_csv, args.birdcast_provenance)
+                              args.refresh_weather, args.birdcast_csv, args.birdcast_provenance,
+                              fetch_birdcast=args.fetch_birdcast, refresh_birdcast=args.refresh_birdcast,
+                              birdcast_night_offset=args.birdcast_night_offset, birdcast_cache=args.birdcast_cache)
+    if args.base_snapshot:
+        base = load_snapshot(args.base_snapshot, read_metadata(args.metadata))
+        for sid, binding in base['bindings'].items():
+            if binding.get('status') == 'READY' and snapshot['bindings'][sid].get('status') != 'READY':
+                key = binding['weather_key']
+                snapshot['bindings'][sid] = binding
+                snapshot['weather'][key] = base['weather'][key]
     if previous_birdcast is not None:
         snapshot["birdcast"] = previous_birdcast
     write_json(args.output, snapshot)

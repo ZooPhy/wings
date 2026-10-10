@@ -35,6 +35,7 @@ BASELINE = ("temporal_days", "geographic_km")
 HOST = BASELINE + ("same_host",)
 ECOLOGY = HOST + ("seasonal_profile_distance",)
 ENVIRONMENT = ECOLOGY + ("environmental_distance",)
+MIGRATION = ECOLOGY + ("migration_context_distance",)
 COMPARISONS = (
     ("host_vs_baseline", BASELINE, HOST),
     ("ecology_vs_host", HOST, ECOLOGY),
@@ -275,6 +276,107 @@ def overlay_external_context(
     return out
 
 
+def migration_features(explorer: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Match dates to validated source seasons; normalize against completed seasons.
+
+    Intensity is a midrank percentile of the coherent seasonal daily increments.
+    Progress is cumulative passage / full-season passage. No raw state totals
+    enter the model, and incomplete seasons never receive a completed denominator.
+    """
+    context = explorer.get("ecological_context") or {}
+    bird = context.get("birdcast") or {}
+    states = context.get("states") or {}
+    offset = bird.get("night_offset_days", -1)
+    if isinstance(offset, bool) or offset not in (-1, 0):
+        offset = None
+    records: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for record in bird.get("records") or []:
+        records.setdefault((record.get("state_code"), record.get("date")), []).append(record)
+    seasons = []
+    for source in bird.get("seasons") or []:
+        start, end = iso_date(source.get("start_date")), iso_date(source.get("end_date"))
+        if not start or not end or not 0 <= (end-start).days <= 200 or source.get("metric") != "cumulative_birds_crossed":
+            continue
+        rows, previous_day, previous_count, valid = {}, None, 0.0, True
+        for row in source.get("rows") or []:
+            day, value = iso_date(row.get("date")), number(row.get("cumulative_birds"))
+            if not day or not start <= day <= end or (previous_day and day <= previous_day) or value is None or value < previous_count:
+                valid = False
+                break
+            rows[day] = value
+            previous_day, previous_count = day, value
+        if not valid:
+            continue
+        complete = len(rows) == (end-start).days+1 and end in rows and rows[end] > 0
+        increments = {}
+        if complete:
+            prior = 0.0
+            for day, cumulative in rows.items():
+                increments[day] = cumulative-prior
+                prior = cumulative
+        seasons.append({"source":source,"start":start,"end":end,"rows":rows,"increments":increments,"complete":complete})
+    out = {}
+    for sample in explorer.get("samples") or []:
+        sid = clean(sample.get("sample_id"))
+        if not sid:
+            continue
+        row = {"migration_status":"NOT_LOADED","migration_reason":"No matched BirdCast context is loaded.",
+               "migration_night":None,"migration_state":None,"migration_context_key":None,
+               "migration_season_key":None,"migration_season_label":None,"migration_birds_crossed":None,
+               "migration_intensity_percentile":None,"migration_progress":None,"migration_available":False}
+        out[sid] = row
+        collected = iso_date(sample.get("collection_date"))
+        if not collected or offset is None:
+            row.update(migration_status="INVALID_DATE",migration_reason="An exact collection date and valid night offset are required.")
+            continue
+        night = collected+timedelta(days=offset)
+        row["migration_night"] = night.isoformat()
+        binding = (bird.get("bindings") or {}).get(sid) or {}
+        country = clean(sample.get("country")).upper()
+        state_text = clean(sample.get("state")).upper().removeprefix("US-")
+        state = next((code for code,name in states.items() if code == state_text or str(name).upper() == state_text), None)
+        row["migration_state"] = state
+        if country not in ("US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA") or not state or state in ("AK", "HI"):
+            row.update(migration_status="UNSUPPORTED_LOCATION",migration_reason="A recognized contiguous-U.S. state is required.")
+            continue
+        meta = binding.get("metadata") or {}
+        if binding and (binding.get("state_code") != state or binding.get("night") != night.isoformat() or (meta and (clean(meta.get("collection_date")) != collected.isoformat() or clean(meta.get("state")) != state or clean(meta.get("country")) != "US"))):
+            row.update(migration_status="STALE_METADATA",migration_reason="BirdCast state/date binding does not match current collection metadata; rebuild the snapshot.")
+            continue
+        if not binding or binding.get("status") != "AVAILABLE":
+            in_coverage = "03-01" <= night.strftime("%m-%d") <= "06-15" or "08-01" <= night.strftime("%m-%d") <= "11-15"
+            row.update(migration_status="UNAVAILABLE" if in_coverage else "OUTSIDE_COVERAGE",migration_reason=binding.get("reason") or ("Matched-night estimate unavailable." if in_coverage else "Matched night is outside BirdCast's reporting seasons; no season is substituted."))
+            continue
+        matches = records.get((state,night.isoformat()), [])
+        if len(matches) != 1 or matches[0].get("status") != "AVAILABLE" or number(matches[0].get("birds_crossed")) is None or number(matches[0].get("birds_crossed")) < 0:
+            row.update(migration_status="INVALID_SNAPSHOT",migration_reason="A single validated matched-night estimate is required.")
+            continue
+        row["migration_birds_crossed"] = number(matches[0]["birds_crossed"])
+        row["migration_context_key"] = f"US-{state}|{night.isoformat()}"
+        matching = [s for s in seasons if s["source"].get("state_code") == state and s["start"] <= night <= s["end"]]
+        if len(matching) != 1:
+            row.update(migration_status="SEASON_UNAVAILABLE",migration_reason="One coherent source season containing the matched night is required.")
+            continue
+        season = matching[0]
+        row.update(migration_season_key=season["source"].get("key"),migration_season_label=season["source"].get("label"))
+        if not season["complete"]:
+            row.update(migration_status="INCOMPLETE_SEASON",migration_reason="Season-relative analytical features require a complete nonzero season; the nightly estimate remains available.")
+            continue
+        value = season["increments"][night]
+        values = list(season["increments"].values())
+        percentile = (sum(v < value for v in values)+0.5*sum(v == value for v in values))/len(values)
+        row.update(migration_status="AVAILABLE",migration_reason="",migration_available=True,
+                   migration_intensity_percentile=percentile,migration_progress=season["rows"][night]/season["rows"][season["end"]])
+    return out
+
+
+def migration_distance(a: dict[str, Any], b: dict[str, Any]) -> float | None:
+    if not a.get("migration_available") or not b.get("migration_available"):
+        return None
+    return math.hypot(a["migration_intensity_percentile"]-b["migration_intensity_percentile"],
+                      a["migration_progress"]-b["migration_progress"])/math.sqrt(2)
+
+
 def sample_features(explorer: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Create sample-level weather summaries and standardized environmental vectors."""
     samples = {s["sample_id"]: s for s in explorer.get("samples", []) if clean(s.get("sample_id"))}
@@ -284,6 +386,7 @@ def sample_features(explorer: dict[str, Any]) -> tuple[dict[str, dict[str, Any]]
         if clean(p.get("sample_id"))
     }
     features: dict[str, dict[str, Any]] = {}
+    migration = migration_features(explorer)
     for sid, sample in samples.items():
         w = weather_summary(explorer, sample)
         features[sid] = {
@@ -294,6 +397,7 @@ def sample_features(explorer: dict[str, Any]) -> tuple[dict[str, dict[str, Any]]
             "longitude": number(sample.get("longitude")),
             "phenology_available": sid in profiles,
             **w,
+            **migration[sid],
             "environment_vector_available": False,
             "temperature_z": None,
             "precipitation_z": None,
@@ -372,6 +476,7 @@ def build_pairs(explorer: dict[str, Any]) -> tuple[list[dict[str, Any]], list[di
                     "precipitation_difference_mm": precip,
                     "wind_difference_kmh": wind,
                     "environmental_distance": environmental_distance(fa, fb),
+                    "migration_context_distance": migration_distance(fa, fb),
                 })
     return output, list(feature_map.values()), scaling
 
@@ -494,7 +599,7 @@ def _permutation_p(
 
 def _bh_adjust(records: list[dict[str, Any]]) -> None:
     """Benjamini-Hochberg FDR within each pre-specified comparison family."""
-    for comparison, _, _ in COMPARISONS:
+    for comparison in dict.fromkeys(row["comparison"] for row in records):
         indexed = [
             (idx, float(row["permutation_p"]))
             for idx, row in enumerate(records)
@@ -601,6 +706,49 @@ def compare_models(
     return out
 
 
+def compare_migration_models(pairs, samples, permutations=999, seed=20261001, min_unique_samples=8):
+    """Separate addition to M2; weather availability does not gate migration.
+
+    Repeated state-night contexts receive a descriptive fit only. The existing
+    sample-label test is used only when every eligible sample has its own
+    state-night context; it is not presented as a clustered permutation test.
+    """
+    features = {row["sample_id"]:row for row in samples}
+    rng = np.random.default_rng(seed+719)
+    output = []
+    for segment in SEGMENTS:
+        rows = _complete([r for r in pairs if r["segment"] == segment], MIGRATION)
+        ids = {sid for row in rows for sid in (row["sample_a"],row["sample_b"])}
+        contexts = {features[sid]["migration_context_key"] for sid in ids}
+        reduced, full = _fit(rows,ECOLOGY,min_unique_samples=min_unique_samples), _fit(rows,MIGRATION,min_unique_samples=min_unique_samples)
+        status, diagnostic = _display_status(reduced,full,min_unique_samples)
+        record = {"segment":segment,"comparison":"migration_vs_ecology","status":status,"display_status":status,"diagnostic":diagnostic,
+                  "reduced_status":reduced.get("status"),"full_status":full.get("status"),"n_samples":len(ids),"n_pairs":len(rows),
+                  "n_migration_contexts":len(contexts),"minimum_migration_contexts":min_unique_samples,
+                  "eligible_sample_ids":sorted(ids),
+                  "reduced_predictors":",".join(ECOLOGY),"full_predictors":",".join(MIGRATION),
+                  "reduced_r2":reduced.get("r2"),"full_r2":full.get("r2"),"delta_r2":None,
+                  "reduced_adjusted_r2":reduced.get("adjusted_r2"),"full_adjusted_r2":full.get("adjusted_r2"),"delta_adjusted_r2":None,
+                  "permutation_p":None,"fdr_q":None,"permutations_requested":permutations,"permutations_valid":0}
+        if len(contexts) < min_unique_samples:
+            record.update(status="INSUFFICIENT_MIGRATION_CONTEXTS",display_status="INSUFFICIENT_MIGRATION_CONTEXTS",
+                          diagnostic=f"{len(contexts)} distinct state-night migration contexts among {len(ids)} eligible samples; at least {min_unique_samples} contexts are required. Shared contexts are counted once.")
+        elif status == "READY":
+            record["delta_r2"] = full["r2"]-reduced["r2"]
+            record["delta_adjusted_r2"] = full["adjusted_r2"]-reduced["adjusted_r2"]
+            if len(contexts) != len(ids) or permutations == 0:
+                reason = "Samples share state-night migration estimates; a context-aware inferential test is not implemented." if len(contexts) != len(ids) else "No permutations were requested."
+                record.update(status="DESCRIPTIVE",display_status="DESCRIPTIVE",diagnostic=reason+" Added fit is descriptive; p and q values are withheld.")
+            else:
+                pvalue, valid = _permutation_p(rows,ECOLOGY,MIGRATION,record["delta_r2"],permutations,rng,min_unique_samples)
+                record.update(permutation_p=pvalue,permutations_valid=valid)
+                if pvalue is None:
+                    record.update(status="DESCRIPTIVE",display_status="DESCRIPTIVE",diagnostic="No valid complete-case label permutations; p and q values are withheld.")
+        output.append(record)
+    _bh_adjust(output)
+    return output
+
+
 def write_tsv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -620,9 +768,10 @@ def build(
     models = compare_models(
         pairs, permutations=permutations, seed=seed, min_unique_samples=min_unique_samples
     )
+    models.extend(compare_migration_models(pairs,samples,permutations,seed,min_unique_samples))
     ready_by_comparison = {
         label: sum(1 for row in models if row["comparison"] == label and row["status"] == "READY")
-        for label, _, _ in COMPARISONS
+        for label in [*[label for label,_,_ in COMPARISONS],"migration_vs_ecology"]
     }
     environment_vectors = {
         tuple(round(float(row[name]), 12) for name in ("temperature_z", "precipitation_z", "wind_z"))
@@ -636,7 +785,7 @@ def build(
         if binding.get("status") == "READY" and binding.get("weather_key")
     }
     return {
-        "schema_version": "wings.genomic_ecological_concordance.v2",
+        "schema_version": "wings.genomic_ecological_concordance.v3",
         "analysis_kind": "exploratory_dyadic_model_comparison",
         "response": "segment-specific patristic distance among unambiguous WINGS sample tips",
         "model_tiers": {
@@ -644,8 +793,9 @@ def build(
             "M1_host": list(HOST),
             "M2_ecology": list(ECOLOGY),
             "M3_environment": list(ENVIRONMENT),
+            "M2_plus_migration": list(MIGRATION),
         },
-        "comparisons": [label for label, _, _ in COMPARISONS],
+        "comparisons": [*[label for label, _, _ in COMPARISONS],"migration_vs_ecology"],
         "readiness": {
             "minimum_unique_samples": min_unique_samples,
             "ready_comparisons_by_family": ready_by_comparison,
@@ -655,6 +805,10 @@ def build(
             "distinct_weather_contexts": len(weather_keys),
             "samples_with_phenology": sum(1 for row in samples if row["phenology_available"]),
             "total_samples": len(samples),
+            "samples_with_matched_migration_night": sum(row["migration_birds_crossed"] is not None for row in samples),
+            "samples_with_migration_context": sum(row["migration_available"] for row in samples),
+            "distinct_migration_contexts": len({row["migration_context_key"] for row in samples if row["migration_available"]}),
+            "migration_status_counts": {status:sum(row["migration_status"] == status for row in samples) for status in sorted({row["migration_status"] for row in samples})},
         },
         "weather_summary": "7-day window centered on collection date (collection date +/- 3 calendar days): mean temperature, total precipitation, mean daily maximum wind speed",
         "environmental_distance": {
@@ -663,6 +817,15 @@ def build(
             "scaling": environment_scaling,
         },
         "seasonal_profile_metric": "1 - Pearson correlation across jointly available eBird Status & Trends weekly relative-abundance values; lower values indicate more similar annual shape",
+        "migration_context": {
+            "source":"BirdCast Migration Dashboard",
+            "night_offset_days":((explorer.get("ecological_context") or {}).get("birdcast") or {}).get("night_offset_days",-1),
+            "method":"Euclidean distance / sqrt(2) between within-state-season nightly crossing midrank percentile and full-season cumulative passage share; both features lie in [0,1].",
+            "comparison":"Separate addition to M2 (time, geography, host, eBird seasonal ecology), on identical complete-case pairs; weather is not required.",
+            "coverage":"Complete, coherent, nonzero source seasons only. Summer/winter gaps and missing estimates stay unavailable; no nearest season or zero is substituted.",
+            "inference":"At least the configured minimum number of distinct state-night contexts. Repeated contexts receive descriptive added fit only, without p or q values. Sample-label permutations require one distinct context per eligible sample.",
+            "window":"Fixed matched night from collection metadata. Interactive date brushing never changes the analytical inputs.",
+        },
         "permutation_test": {
             "permutations": permutations,
             "seed": seed,
@@ -679,6 +842,8 @@ def build(
             "Missing coordinates, phenology profiles, or weather remain missing and are not replaced with centroids or zeros.",
             "Model comparisons use the same complete-case pair set within each nested comparison.",
             "The environmental tier uses one pre-specified multivariate distance rather than selecting weather variables opportunistically for each dataset.",
+            "BirdCast is aggregate nocturnal movement across species. The migration measure does not establish movement of the sampled host or any individual bird.",
+            "Completed-season normalization is retrospective; it is not a real-time prediction and is unavailable for incomplete seasons.",
         ],
     }
 
@@ -721,17 +886,22 @@ def main() -> None:
         "segment", "sample_a", "sample_b", "patristic_distance", "temporal_days", "geographic_km",
         "same_host", "seasonal_profile_distance", "temperature_difference_c",
         "precipitation_difference_mm", "wind_difference_kmh", "environmental_distance",
+        "migration_context_distance",
     ]
     sample_fields = [
         "sample_id", "host", "collection_date", "latitude", "longitude", "phenology_available",
         "temperature_7d_mean_c", "precipitation_7d_total_mm", "wind_7d_mean_max_kmh",
         "environment_vector_available", "temperature_z", "precipitation_z", "wind_z",
+        "migration_status", "migration_reason", "migration_night", "migration_state", "migration_context_key",
+        "migration_season_key", "migration_season_label", "migration_birds_crossed",
+        "migration_intensity_percentile", "migration_progress", "migration_available",
     ]
     model_fields = [
         "segment", "comparison", "status", "display_status", "diagnostic", "reduced_status", "full_status",
         "n_samples", "n_pairs", "reduced_predictors", "full_predictors",
         "reduced_r2", "full_r2", "delta_r2", "reduced_adjusted_r2", "full_adjusted_r2",
         "delta_adjusted_r2", "permutation_p", "fdr_q", "permutations_requested", "permutations_valid",
+        "n_migration_contexts", "minimum_migration_contexts",
     ]
     write_tsv(args.output_dir / "sample_features.tsv", result["sample_features"], sample_fields)
     write_tsv(args.output_dir / "pairs.tsv", result["pairs"], pair_fields)

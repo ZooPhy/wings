@@ -407,12 +407,22 @@ else:
     )
     REFERENCE_TREE_DIR = REFERENCE_CONFIG.get("tree_dir")
 
-# Ecological context uses an explicitly refreshed offline snapshot.
+# Ecological context can use a supplied snapshot or run-specific acquisition.
 ECOLOGY_CONFIG = config.get("ecological_context", {}) or {}
 if not isinstance(ECOLOGY_CONFIG, dict):
     raise ValueError("ecological_context must be a mapping")
-ECOLOGY_JSON = str(ECOLOGY_CONFIG.get("snapshot", "resources/ecology/ecological-context.json"))
-ECOLOGY_ENABLED = as_bool(ECOLOGY_CONFIG.get("enabled", Path(ECOLOGY_JSON).is_file()))
+ECOLOGY_SOURCE_JSON = str(ECOLOGY_CONFIG.get("snapshot", "resources/ecology/ecological-context.json"))
+ECOLOGY_AUTO_BIRDCAST = as_bool(ECOLOGY_CONFIG.get("auto_birdcast", False))
+ECOLOGY_AUTO_JSON = f"{RESULTS}/run_summary/ecology/ecological-context.json"
+ECOLOGY_JSON = ECOLOGY_AUTO_JSON if ECOLOGY_AUTO_BIRDCAST else ECOLOGY_SOURCE_JSON
+ECOLOGY_ENABLED = as_bool(ECOLOGY_CONFIG.get("enabled", ECOLOGY_AUTO_BIRDCAST or Path(ECOLOGY_SOURCE_JSON).is_file()))
+ECOLOGY_CACHE = str(Path(str(ECOLOGY_CONFIG.get("cache_dir", "~/.cache/wings/ecology"))).expanduser())
+ECOLOGY_NIGHT_OFFSET = int(ECOLOGY_CONFIG.get("birdcast_night_offset", -1))
+ECOLOGY_WEATHER_DAYS = int(ECOLOGY_CONFIG.get("weather_days", 30))
+if not 1 <= ECOLOGY_WEATHER_DAYS <= 365:
+    raise ValueError("ecological_context.weather_days must be between 1 and 365")
+if ECOLOGY_NIGHT_OFFSET not in (-1, 0):
+    raise ValueError("ecological_context.birdcast_night_offset must be -1 or 0")
 
 # WINGS_DYNAMIC_PHENOLOGY_CONFIG_BEGIN
 # Metadata-driven eBird Status & Trends reference annual cycle.
@@ -906,7 +916,10 @@ if RUN_CONCORDANCE:
 INTERPRETATION_ARCHIVE_INPUTS = list(FINAL_TARGETS)
 
 if RUN_SUMMARY:
-    FINAL_TARGETS.append(INTERPRETATION_ARCHIVE_CURRENT)
+    FINAL_TARGETS.extend([
+        INTERPRETATION_ARCHIVE_CURRENT,
+        f"{RESULTS}/wings_report_bundle.wings",
+    ])
 
 
 rule all:
@@ -2708,6 +2721,36 @@ rule ebirdst_phenology:
         """
 # WINGS_DYNAMIC_PHENOLOGY_RULE_END
 
+rule metadata_ecological_context:
+    input:
+        metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        script="scripts/build_ecological_context.py",
+        birdcast_parser="scripts/birdcast_data.py",
+        base=([ECOLOGY_SOURCE_JSON] if Path(ECOLOGY_SOURCE_JSON).is_file() or "snapshot" in ECOLOGY_CONFIG else [])
+    output:
+        json=ECOLOGY_AUTO_JSON
+    log:
+        f"{RESULTS}/run_summary/ecology/ecological-context.log"
+    conda:
+        "envs/py-tools.yaml"
+    params:
+        cache=ECOLOGY_CACHE,
+        offset=ECOLOGY_NIGHT_OFFSET,
+        days=ECOLOGY_WEATHER_DAYS,
+        birdcast=("--birdcast-cache" if as_bool(ECOLOGY_CONFIG.get("offline", False)) else "--fetch-birdcast"),
+        weather=("--fetch-weather" if as_bool(ECOLOGY_CONFIG.get("auto_weather", True)) and not as_bool(ECOLOGY_CONFIG.get("offline", False)) else ""),
+        base=("--base-snapshot " + shlex.quote(ECOLOGY_SOURCE_JSON) if Path(ECOLOGY_SOURCE_JSON).is_file() or "snapshot" in ECOLOGY_CONFIG else "")
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.json:q})"
+        python {input.script:q} --metadata {input.metadata:q} \
+          --output {output.json:q} --cache-dir {params.cache:q} --days {params.days} \
+          {params.birdcast} --birdcast-night-offset {params.offset} \
+          {params.weather} {params.base} > {log:q} 2>&1
+        """
+
+
 rule surveillance_explorer_data:
     input:
         reference_manifest=([REFERENCE_MANIFEST] if REFERENCE_ENABLED else []),
@@ -2893,7 +2936,7 @@ rule select_historical_baseline:
         json=HISTORICAL_BASELINE_JSON
     params:
         archive_root=HISTORICAL_STABILITY_ARCHIVE_ROOT,
-        snapshot_id=HISTORICAL_BASELINE_SNAPSHOT_ID
+        snapshot_arg=("--snapshot-id " + shlex.quote(str(HISTORICAL_BASELINE_SNAPSHOT_ID)) if HISTORICAL_BASELINE_SNAPSHOT_ID else "")
     conda:
         "envs/py-tools.yaml"
     shell:
@@ -2902,7 +2945,7 @@ rule select_historical_baseline:
         python {input.script:q} \
           --provenance {input.provenance:q} \
           --archive-root {params.archive_root:q} \
-          --snapshot-id {params.snapshot_id:q} \
+          {params.snapshot_arg} \
           --output {output.json:q}
         """
 

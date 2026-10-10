@@ -19,12 +19,17 @@ builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
-def weather():
-    return {"latitude": 33.5, "longitude": -112.0, "timezone": "America/Phoenix",
+def weather(extended=False):
+    result = {"latitude": 33.5, "longitude": -112.0, "timezone": "America/Phoenix",
             "daily_units": eco.WEATHER_FIELDS,
             "daily": {"time": ["2025-04-01", "2025-04-02", "2025-04-03"],
                       "temperature_2m_mean": [-2, None, 20], "precipitation_sum": [0, None, 3],
                       "wind_speed_10m_max": [12, None, 18]}}
+
+    if extended:
+        result["daily_units"] = dict(eco.ALL_WEATHER_FIELDS)
+        result["daily"].update(temperature_2m_min=[-5, None, 16], temperature_2m_max=[1, None, 24], weather_code=[0, None, 63])
+    return result
 
 
 class EcologyTests(unittest.TestCase):
@@ -40,7 +45,7 @@ class EcologyTests(unittest.TestCase):
 
     def fake_opener(self, url, timeout):
         self.calls.append(url)
-        return io.BytesIO(json.dumps(weather()).encode())
+        return io.BytesIO(json.dumps(weather(extended=True)).encode())
 
     def cached(self):
         self.calls = []
