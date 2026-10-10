@@ -13,6 +13,7 @@
 configfile: "config.yaml"
 
 import csv
+import json
 import os
 import re
 import shlex
@@ -73,6 +74,40 @@ def config_path(key, default):
     return os.path.normpath(str(config.get(key, default)))
 
 
+# Historical re-execution may pin selected contextual artifacts to archived
+# copies while the analytical workflow itself runs under the current code.
+HISTORICAL_REEXECUTION_CONFIG = (
+    config.get("historical_reexecution", {}) or {}
+)
+if not isinstance(HISTORICAL_REEXECUTION_CONFIG, dict):
+    raise ValueError("historical_reexecution must be a mapping")
+
+HISTORICAL_REEXECUTION_ENABLED = as_bool(
+    HISTORICAL_REEXECUTION_CONFIG.get("enabled", False)
+)
+
+HISTORICAL_FROZEN_INPUTS = (
+    HISTORICAL_REEXECUTION_CONFIG.get("frozen_inputs", {}) or {}
+)
+if not isinstance(HISTORICAL_FROZEN_INPUTS, dict):
+    raise ValueError(
+        "historical_reexecution.frozen_inputs must be a mapping"
+    )
+
+
+def frozen_reexecution_input(label):
+    """Return an explicitly frozen historical input, when configured."""
+    if not HISTORICAL_REEXECUTION_ENABLED:
+        return ""
+    return str(HISTORICAL_FROZEN_INPUTS.get(label, "") or "").strip()
+
+
+FROZEN_PHENOLOGY = frozen_reexecution_input("phenology")
+FROZEN_EBIRD_CONTEXT = frozen_reexecution_input("ebird_context")
+FROZEN_EBIRD_TERMS = frozen_reexecution_input("ebird_terms")
+FROZEN_EBIRD_CITATION = frozen_reexecution_input("ebird_citation")
+
+
 READS = config_path("reads_dir", "data")
 RESULTS = config_path("results_dir", "results")
 REPLAY_ARCHIVE_DIR = f"{RESULTS}/replay_archive"
@@ -80,6 +115,31 @@ REPLAY_ARCHIVE_CURRENT = f"{REPLAY_ARCHIVE_DIR}/current.json"
 INTERPRETATION_ARCHIVE_CURRENT = (
     f"{REPLAY_ARCHIVE_DIR}/interpretations/current.json"
 )
+
+# Historical re-execution writes its new archive inside RESULTS, but may read
+# the comparison baseline from the original archive that produced the frozen
+# historical snapshot.
+HISTORICAL_BASELINE_ARCHIVE_ROOT = str(
+    HISTORICAL_REEXECUTION_CONFIG.get(
+        "baseline_archive_root",
+        "",
+    )
+    or ""
+).strip()
+
+HISTORICAL_BASELINE_SNAPSHOT_ID = str(
+    HISTORICAL_REEXECUTION_CONFIG.get(
+        "baseline_snapshot_id",
+        "",
+    )
+    or ""
+).strip()
+
+HISTORICAL_STABILITY_ARCHIVE_ROOT = (
+    HISTORICAL_BASELINE_ARCHIVE_ROOT
+    or REPLAY_ARCHIVE_DIR
+)
+
 HISTORICAL_BASELINE_JSON = (
     f"{RESULTS}/run_summary/historical_baseline.json"
 )
@@ -91,6 +151,9 @@ INTERPRETATION_STABILITY_TSV = (
 )
 VARIANT_STABILITY_TSV = (
     f"{RESULTS}/run_summary/variant_stability.tsv"
+)
+EFFECTIVE_CONFIG_JSON = (
+    f"{RESULTS}/run_summary/effective_config.json"
 )
 METADATA_FILE = config_path("metadata_file", "metadata.tsv")
 METADATA_REQUIRE_ALL = as_bool(config.get("metadata_require_all_samples", True))
@@ -344,12 +407,22 @@ else:
     )
     REFERENCE_TREE_DIR = REFERENCE_CONFIG.get("tree_dir")
 
-# Ecological context uses an explicitly refreshed offline snapshot.
+# Ecological context can use a supplied snapshot or run-specific acquisition.
 ECOLOGY_CONFIG = config.get("ecological_context", {}) or {}
 if not isinstance(ECOLOGY_CONFIG, dict):
     raise ValueError("ecological_context must be a mapping")
-ECOLOGY_JSON = str(ECOLOGY_CONFIG.get("snapshot", "resources/ecology/ecological-context.json"))
-ECOLOGY_ENABLED = as_bool(ECOLOGY_CONFIG.get("enabled", Path(ECOLOGY_JSON).is_file()))
+ECOLOGY_SOURCE_JSON = str(ECOLOGY_CONFIG.get("snapshot", "resources/ecology/ecological-context.json"))
+ECOLOGY_AUTO_BIRDCAST = as_bool(ECOLOGY_CONFIG.get("auto_birdcast", False))
+ECOLOGY_AUTO_JSON = f"{RESULTS}/run_summary/ecology/ecological-context.json"
+ECOLOGY_JSON = ECOLOGY_AUTO_JSON if ECOLOGY_AUTO_BIRDCAST else ECOLOGY_SOURCE_JSON
+ECOLOGY_ENABLED = as_bool(ECOLOGY_CONFIG.get("enabled", ECOLOGY_AUTO_BIRDCAST or Path(ECOLOGY_SOURCE_JSON).is_file()))
+ECOLOGY_CACHE = str(Path(str(ECOLOGY_CONFIG.get("cache_dir", "~/.cache/wings/ecology"))).expanduser())
+ECOLOGY_NIGHT_OFFSET = int(ECOLOGY_CONFIG.get("birdcast_night_offset", -1))
+ECOLOGY_WEATHER_DAYS = int(ECOLOGY_CONFIG.get("weather_days", 30))
+if not 1 <= ECOLOGY_WEATHER_DAYS <= 365:
+    raise ValueError("ecological_context.weather_days must be between 1 and 365")
+if ECOLOGY_NIGHT_OFFSET not in (-1, 0):
+    raise ValueError("ecological_context.birdcast_night_offset must be -1 or 0")
 
 # WINGS_DYNAMIC_PHENOLOGY_CONFIG_BEGIN
 # Metadata-driven eBird Status & Trends reference annual cycle.
@@ -452,11 +525,16 @@ CONCORDANCE_ECOLOGY_INPUT = (
 # phenology output automatically using the existing phenology rule/defaults.
 CONCORDANCE_AUTO_PHENOLOGY = as_bool(CONCORDANCE_CONFIG.get("auto_phenology", True))
 CONCORDANCE_PHENOLOGY_INPUT = (
-    [PHENOLOGY_OUTPUT]
+    [FROZEN_PHENOLOGY]
+    if RUN_CONCORDANCE and FROZEN_PHENOLOGY
+    else [PHENOLOGY_OUTPUT]
     if RUN_CONCORDANCE and (
         PHENOLOGY_ENABLED
         or Path(PHENOLOGY_OUTPUT).is_file()
-        or (CONCORDANCE_AUTO_PHENOLOGY and bool(os.environ.get("EBIRDST_ACCESS_KEY")))
+        or (
+            CONCORDANCE_AUTO_PHENOLOGY
+            and bool(os.environ.get("EBIRDST_ACCESS_KEY"))
+        )
     )
     else []
 )
@@ -2685,6 +2763,36 @@ rule ebirdst_phenology:
         """
 # WINGS_DYNAMIC_PHENOLOGY_RULE_END
 
+rule metadata_ecological_context:
+    input:
+        metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        script="scripts/build_ecological_context.py",
+        birdcast_parser="scripts/birdcast_data.py",
+        base=([ECOLOGY_SOURCE_JSON] if Path(ECOLOGY_SOURCE_JSON).is_file() or "snapshot" in ECOLOGY_CONFIG else [])
+    output:
+        json=ECOLOGY_AUTO_JSON
+    log:
+        f"{RESULTS}/run_summary/ecology/ecological-context.log"
+    conda:
+        "envs/py-tools.yaml"
+    params:
+        cache=ECOLOGY_CACHE,
+        offset=ECOLOGY_NIGHT_OFFSET,
+        days=ECOLOGY_WEATHER_DAYS,
+        birdcast=("--birdcast-cache" if as_bool(ECOLOGY_CONFIG.get("offline", False)) else "--fetch-birdcast"),
+        weather=("--fetch-weather" if as_bool(ECOLOGY_CONFIG.get("auto_weather", True)) and not as_bool(ECOLOGY_CONFIG.get("offline", False)) else ""),
+        base=("--base-snapshot " + shlex.quote(ECOLOGY_SOURCE_JSON) if Path(ECOLOGY_SOURCE_JSON).is_file() or "snapshot" in ECOLOGY_CONFIG else "")
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.json:q})"
+        python {input.script:q} --metadata {input.metadata:q} \
+          --output {output.json:q} --cache-dir {params.cache:q} --days {params.days} \
+          {params.birdcast} --birdcast-night-offset {params.offset} \
+          {params.weather} {params.base} > {log:q} 2>&1
+        """
+
+
 rule surveillance_explorer_data:
     input:
         reference_manifest=([REFERENCE_MANIFEST] if REFERENCE_ENABLED else []),
@@ -2692,7 +2800,11 @@ rule surveillance_explorer_data:
         reference_loader="scripts/public_reference_context.py",
         ecological_context=([ECOLOGY_JSON] if ECOLOGY_ENABLED else []),
         ecological_loader="scripts/build_ecological_context.py",
-        phenology=([PHENOLOGY_OUTPUT] if PHENOLOGY_ENABLED else []),
+        phenology=(
+            [FROZEN_PHENOLOGY]
+            if FROZEN_PHENOLOGY
+            else ([PHENOLOGY_OUTPUT] if PHENOLOGY_ENABLED else [])
+        ),
         surveillance_effort=([SURVEILLANCE_EFFORT_FILE] if SURVEILLANCE_EFFORT_ENABLED else []),
         aphis_csv=([APHIS_CSV] if OUTBREAK_ENABLED else []),
         aphis_provenance=([APHIS_PROVENANCE] if OUTBREAK_ENABLED and ("provenance" in OUTBREAK_CONFIG or Path(APHIS_PROVENANCE).is_file()) else []),
@@ -2711,19 +2823,50 @@ rule surveillance_explorer_data:
             if RUN_GENOFLU else []
         ),
         ebird_samples=(
-            [f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"]
-            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/ebird_samples.tsv").is_file())
-            else []
+            [FROZEN_EBIRD_CONTEXT]
+            if FROZEN_EBIRD_CONTEXT
+            else (
+                [f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"]
+                if EBIRD_ENABLED or (
+                    not EBIRD_DECLARED
+                    and Path(
+                        f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+                    ).is_file()
+                )
+                else []
+            )
         ),
         ebird_terms=(
-            [f"{RESULTS}/run_summary/ebird/terms_of_use.txt"]
-            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/terms_of_use.txt").is_file())
-            else []
+            [FROZEN_EBIRD_TERMS]
+            if FROZEN_EBIRD_TERMS
+            else (
+                [f"{RESULTS}/run_summary/ebird/terms_of_use.txt"]
+                if EBIRD_ENABLED or (
+                    not EBIRD_DECLARED
+                    and Path(
+                        f"{RESULTS}/run_summary/ebird/terms_of_use.txt"
+                    ).is_file()
+                )
+                else []
+            )
         ),
         ebird_citation=(
-            [f"{RESULTS}/run_summary/ebird/recommended_citation.txt"]
-            if EBIRD_ENABLED or (not EBIRD_DECLARED and Path(f"{RESULTS}/run_summary/ebird/recommended_citation.txt").is_file())
-            else []
+            [FROZEN_EBIRD_CITATION]
+            if FROZEN_EBIRD_CITATION
+            else (
+                [
+                    f"{RESULTS}/run_summary/ebird/"
+                    "recommended_citation.txt"
+                ]
+                if EBIRD_ENABLED or (
+                    not EBIRD_DECLARED
+                    and Path(
+                        f"{RESULTS}/run_summary/ebird/"
+                        "recommended_citation.txt"
+                    ).is_file()
+                )
+                else []
+            )
         )
     output:
         json=f"{RESULTS}/run_summary/surveillance_explorer.json"
@@ -2834,7 +2977,8 @@ rule select_historical_baseline:
     output:
         json=HISTORICAL_BASELINE_JSON
     params:
-        archive_root=REPLAY_ARCHIVE_DIR
+        archive_root=HISTORICAL_STABILITY_ARCHIVE_ROOT,
+        snapshot_arg=("--snapshot-id " + shlex.quote(str(HISTORICAL_BASELINE_SNAPSHOT_ID)) if HISTORICAL_BASELINE_SNAPSHOT_ID else "")
     conda:
         "envs/py-tools.yaml"
     shell:
@@ -2843,6 +2987,7 @@ rule select_historical_baseline:
         python {input.script:q} \
           --provenance {input.provenance:q} \
           --archive-root {params.archive_root:q} \
+          {params.snapshot_arg} \
           --output {output.json:q}
         """
 
@@ -2893,7 +3038,7 @@ rule historical_stability:
         variants=VARIANT_STABILITY_TSV,
         summary=INTERPRETATION_STABILITY_TSV
     params:
-        archive_root=REPLAY_ARCHIVE_DIR,
+        archive_root=HISTORICAL_STABILITY_ARCHIVE_ROOT,
         results_root=RESULTS
     conda:
         "envs/py-tools.yaml"
@@ -2916,6 +3061,7 @@ rule historical_stability:
 rule run_summary_html:
     input:
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
+        stability_summary=INTERPRETATION_STABILITY_TSV,
         summaries=expand(
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.tsv",
             sample=SAMPLES,
@@ -3087,6 +3233,14 @@ rule genoflu:
 # Run-level provenance
 # -----------------------------------------------------------------------------
 
+# Primary sequencing inputs used to generate the genomic result.
+# These are recorded by path, size, and SHA-256 but are not copied into the
+# replay archive because raw-read files may be very large.
+PRIMARY_INPUT_SPECS = [
+    (sample, SAMPLE_FASTQ[sample])
+    for sample in SAMPLES
+]
+
 # Replay-sensitive scientific inputs used to interpret a WINGS run.
 # These are recorded by path and SHA-256 in run_provenance.json so that a
 # historical interpretation can be tied to the exact contextual snapshots
@@ -3102,6 +3256,23 @@ if REFERENCE_ENABLED:
         ("public_reference_provenance", REFERENCE_PROVENANCE),
     ])
 
+    # Preserve the exact contextual trees used by the historical run.
+    # Generated contextual-reference trees are required dependencies; for
+    # externally supplied trees, archive each segment that actually exists.
+    if REFERENCE_TREE_DIR:
+        for segment in SEGMENT_SEQUENCE:
+            tree_path = str(
+                Path(REFERENCE_TREE_DIR)
+                / REFERENCE_TREE_PATTERN.format(segment=segment)
+            )
+            if REFERENCE_BUILD_CONTEXTUAL or Path(tree_path).is_file():
+                REPLAY_INPUT_SPECS.append(
+                    (
+                        f"public_reference_tree_{segment}",
+                        tree_path,
+                    )
+                )
+
 if RUN_CONCORDANCE and CONCORDANCE_ECOLOGY_INPUT:
     REPLAY_INPUT_SPECS.append(
         ("ecological_context", CONCORDANCE_ECOLOGY_INPUT[0])
@@ -3111,11 +3282,15 @@ elif ECOLOGY_ENABLED:
         ("ecological_context", ECOLOGY_JSON)
     )
 
-if PHENOLOGY_ENABLED or (
+REPLAY_PHENOLOGY_INPUT = (
+    FROZEN_PHENOLOGY or PHENOLOGY_OUTPUT
+)
+
+if FROZEN_PHENOLOGY or PHENOLOGY_ENABLED or (
     RUN_CONCORDANCE and bool(CONCORDANCE_PHENOLOGY_INPUT)
 ):
     REPLAY_INPUT_SPECS.append(
-        ("phenology", PHENOLOGY_OUTPUT)
+        ("phenology", REPLAY_PHENOLOGY_INPUT)
     )
 
 if SURVEILLANCE_EFFORT_ENABLED:
@@ -3132,21 +3307,70 @@ if OUTBREAK_ENABLED:
             ("aphis_provenance", APHIS_PROVENANCE)
         )
 
-REPLAY_EBIRD_CONTEXT = f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
-if EBIRD_ENABLED or (
+REPLAY_EBIRD_CONTEXT = (
+    FROZEN_EBIRD_CONTEXT
+    or f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
+)
+REPLAY_EBIRD_TERMS = (
+    FROZEN_EBIRD_TERMS
+    or f"{RESULTS}/run_summary/ebird/terms_of_use.txt"
+)
+REPLAY_EBIRD_CITATION = (
+    FROZEN_EBIRD_CITATION
+    or f"{RESULTS}/run_summary/ebird/recommended_citation.txt"
+)
+
+if FROZEN_EBIRD_CONTEXT or EBIRD_ENABLED or (
     not EBIRD_DECLARED and Path(REPLAY_EBIRD_CONTEXT).is_file()
 ):
     REPLAY_INPUT_SPECS.append(
         ("ebird_context", REPLAY_EBIRD_CONTEXT)
     )
 
+    if (
+        FROZEN_EBIRD_TERMS
+        or EBIRD_ENABLED
+        or Path(REPLAY_EBIRD_TERMS).is_file()
+    ):
+        REPLAY_INPUT_SPECS.append(
+            ("ebird_terms", REPLAY_EBIRD_TERMS)
+        )
+
+    if (
+        FROZEN_EBIRD_CITATION
+        or EBIRD_ENABLED
+        or Path(REPLAY_EBIRD_CITATION).is_file()
+    ):
+        REPLAY_INPUT_SPECS.append(
+            ("ebird_citation", REPLAY_EBIRD_CITATION)
+        )
+
+
+rule effective_run_config:
+    output:
+        json=EFFECTIVE_CONFIG_JSON
+    run:
+        path = Path(output.json)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                dict(config),
+                indent=2,
+                sort_keys=True,
+            ) + "\n",
+            encoding="utf-8",
+        )
+
 
 rule run_provenance:
     input:
-        config="config.yaml",
+        config=EFFECTIVE_CONFIG_JSON,
         snakefile="Snakefile",
         blast_manifest="resources/flu_db/database_manifest.tsv",
         script="scripts/write_run_provenance.py",
+        primary_inputs=[
+            path for _, path in PRIMARY_INPUT_SPECS
+        ],
         replay_inputs=[path for _, path in REPLAY_INPUT_SPECS],
         envs=[
             "envs/blast.yaml",
@@ -3188,6 +3412,10 @@ rule run_provenance:
         replay_args=" ".join(
             "--replay-input " + shlex.quote(f"{label}={path}")
             for label, path in REPLAY_INPUT_SPECS
+        ),
+        primary_args=" ".join(
+            "--primary-input " + shlex.quote(f"{label}={path}")
+            for label, path in PRIMARY_INPUT_SPECS
         )
     conda:
         "envs/py-tools.yaml"
@@ -3201,6 +3429,7 @@ rule run_provenance:
           --config {input.config:q} \
           --snakefile {input.snakefile:q} \
           --blast-manifest {input.blast_manifest:q} \
+          {params.primary_args} \
           {params.replay_args} \
           --sample-count {params.sample_count} \
           --snakemake-version {params.snakemake_version:q} \

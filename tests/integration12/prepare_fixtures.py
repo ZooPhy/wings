@@ -44,6 +44,7 @@ def main() -> None:
 
     run_dir = RESULTS / "run_summary"
     run_dir.mkdir(parents=True)
+
     (run_dir / "run_summary.html").write_text(
         """<!doctype html>
 <html>

@@ -1,5 +1,12 @@
 # Merge this block into config.yaml if you want explicit control.
-# By default, the standard snapshot is discovered when it exists.
+# Fetch once per unique metadata state/night; reuse validated cached records.
 ecological_context:
   enabled: true
-  snapshot: resources/ecology/ecological-context.json
+  auto_birdcast: true
+  birdcast_night_offset: -1  # preceding night; 0 selects collection-date evening
+  auto_weather: true
+  weather_days: 30  # cache ±30 days per collection; set 90 for wider views
+  cache_dir: ~/.cache/wings/ecology
+  offline: false
+  # Optional existing weather snapshot to retain:
+  # snapshot: resources/ecology/ecological-context.json
