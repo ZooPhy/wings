@@ -1012,7 +1012,7 @@ rule porechop:
     conda:
         "envs/porechop.yaml"
     threads:
-        1
+        max(1, int(config.get("porechop_threads", 1)))
     resources:
         mem_mb=int(config.get("porechop_mem_mb", 64000)),
         time_min=int(config.get("porechop_time_min", 240))
@@ -1021,7 +1021,7 @@ rule porechop:
         set -euo pipefail
         mkdir -p "$(dirname {output.trimmed:q})"
         exec > >(tee -a {log:q}) 2>&1
-        {PORECHOP_CMD} -abi -i {input.fastq} -o {output.trimmed}
+        {PORECHOP_CMD} -abi --threads {threads} -i {input.fastq:q} -o {output.trimmed:q}
         """
 
 

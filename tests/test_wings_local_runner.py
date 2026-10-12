@@ -281,3 +281,119 @@ def test_bundle_endpoint_rejects_path_traversal(tmp_path, monkeypatch):
 
     assert status == 400
     assert json.loads(body)["error"] == "Invalid run ID"
+
+
+def test_execution_limits_default_to_serial_and_keep_core_capacity_separate():
+    runner = load_runner()
+    assert runner.execution_limits({}) == (1, 1)
+    assert runner.execution_limits({"cores": 8}) == (8, 1)
+    assert runner.execution_limits({"cores": 8, "max_parallel_jobs": 2}) == (8, 2)
+    assert runner.execution_limits({"cores": 0, "max_parallel_jobs": 999}) == (1, 64)
+
+
+def test_workflow_command_keeps_legacy_runs_serial_without_dropping_resume_flags():
+    runner = load_runner()
+    config_path = Path("/tmp/run config.yaml")
+    command = runner.workflow_command("/tools/snakemake", config_path, {"cores": 8})
+    assert command[command.index("--cores") + 1] == "8"
+    assert command[command.index("--resources") + 1] == "wings_task_slots=1"
+    assert command[command.index("--default-resources") + 1] == "wings_task_slots=1"
+    assert command[command.index("--set-resource-scopes") + 1] == "wings_task_slots=global"
+    assert command[command.index("--configfile") + 1] == str(config_path)
+    assert "--rerun-incomplete" in command
+    assert "--use-conda" in command
+    parallel = runner.workflow_command("snakemake", config_path, {"cores": 8, "max_parallel_jobs": 3})
+    assert parallel[parallel.index("--resources") + 1] == "wings_task_slots=3"
+
+
+def test_created_run_persists_separate_cpu_and_task_limits(tmp_path, monkeypatch):
+    from urllib.request import Request
+
+    runner = load_runner()
+    monkeypatch.setattr(runner, "RUNS_ROOT", (tmp_path / "runs").resolve())
+    with running_server(runner) as base_url:
+        for payload, expected in [({}, (1, 1)), ({"cores": 8}, (8, 1)),
+                                  ({"cores": 8, "max_parallel_jobs": 2}, (8, 2))]:
+            request = Request(base_url + "/api/runs", data=json.dumps(payload).encode(),
+                              headers={"Content-Type": "application/json"}, method="POST")
+            with urlopen(request, timeout=5) as response:
+                assert response.status == 201
+                created = json.loads(response.read())
+            state = runner.read_state(created["run_id"])
+            assert (state["cores"], state["max_parallel_jobs"]) == expected
+
+
+def test_start_uses_persisted_task_limit_for_the_subprocess(tmp_path, monkeypatch):
+    from urllib.request import Request
+
+    runner = load_runner()
+    monkeypatch.setattr(runner, "RUNS_ROOT", (tmp_path / "runs").resolve())
+    make_run(runner, "serial-run", "failed")
+    state = runner.read_state("serial-run")
+    state.update(cores=8, max_parallel_jobs=1)
+    runner.write_state("serial-run", state)
+    config_path = tmp_path / "execution_config.yaml"
+    captured = []
+
+    class Process:
+        pid = 123
+
+    def popen(command, **kwargs):
+        captured.append(command)
+        return Process()
+
+    def wait(run_id, process, handle):
+        handle.close()
+
+    monkeypatch.setattr(runner.shutil, "which", lambda _: "/tools/snakemake")
+    monkeypatch.setattr(runner, "build_config", lambda _: (config_path, 5))
+    monkeypatch.setattr(runner.subprocess, "Popen", popen)
+    monkeypatch.setattr(runner, "wait_for_process", wait)
+    with running_server(runner) as base_url:
+        with urlopen(Request(base_url + "/api/runs/serial-run/start", data=b"", method="POST"), timeout=5) as response:
+            assert response.status == 200
+    assert len(captured) == 1
+    assert captured[0][captured[0].index("--cores") + 1] == "8"
+    assert captured[0][captured[0].index("--resources") + 1] == "wings_task_slots=1"
+    saved = runner.read_state("serial-run")
+    assert saved["sample_count"] == 5
+    assert saved["command"] == captured[0]
+
+
+def test_serial_task_resource_prevents_overlapping_single_core_jobs(tmp_path, monkeypatch):
+    import shutil
+    import subprocess
+    from unittest import SkipTest
+
+    executable = shutil.which("snakemake")
+    if executable is None:
+        raise SkipTest("Snakemake is required for the scheduling integration check")
+    runner = load_runner()
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    config_path = tmp_path / "execution_config.yaml"
+    config_path.write_text("{}\n")
+    (tmp_path / "Snakefile").write_text('''
+import os
+import time
+from pathlib import Path
+
+rule all:
+    input: "a.done", "b.done", "c.done"
+
+rule work:
+    output: "{item}.done"
+    threads: 1
+    run:
+        descriptor = os.open("active-task.lock", os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+        try:
+            time.sleep(0.5)
+            Path(output[0]).touch()
+        finally:
+            os.close(descriptor)
+            Path("active-task.lock").unlink()
+''')
+    command = runner.workflow_command(executable, config_path, {"cores": 4, "max_parallel_jobs": 1})
+    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert all((tmp_path / f"{name}.done").is_file() for name in "abc")
+    assert not (tmp_path / "active-task.lock").exists()

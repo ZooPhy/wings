@@ -216,6 +216,29 @@ def build_config(run_id: str) -> tuple[Path, int]:
     return config_path, len(sample_ids)
 
 
+def execution_limits(payload: dict) -> tuple[int, int]:
+    """Keep CPU capacity separate from the number of simultaneous tasks."""
+    cores = max(1, min(64, int(payload.get("cores", 1))))
+    jobs = max(1, min(64, int(payload.get("max_parallel_jobs", 1))))
+    return cores, jobs
+
+
+def workflow_command(executable: str, config_path: Path, state: dict) -> list[str]:
+    cores, jobs = execution_limits(state)
+    return [
+        executable,
+        "--snakefile", str(REPO_ROOT / "Snakefile"),
+        "--configfile", str(config_path),
+        "--use-conda",
+        "--cores", str(cores),
+        "--resources", f"wings_task_slots={jobs}",
+        "--default-resources", "wings_task_slots=1",
+        "--set-resource-scopes", "wings_task_slots=global",
+        "--rerun-incomplete",
+        "--printshellcmds",
+    ]
+
+
 def infer_stages(state: dict, log_text: str) -> dict[str, str]:
     stages = {stage: "waiting" for stage in STAGE_ORDER}
     stages["inputs"] = "complete"
@@ -417,7 +440,7 @@ class Handler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/runs":
                 payload = self.read_json()
                 name = str(payload.get("name", "")).strip() or "WINGS run"
-                cores = max(1, min(64, int(payload.get("cores", 4))))
+                cores, max_parallel_jobs = execution_limits(payload)
                 run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
                 directory = run_dir(run_id)
                 (directory / "inputs" / "reads").mkdir(parents=True, exist_ok=False)
@@ -431,6 +454,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "started_at": None,
                     "finished_at": None,
                     "cores": cores,
+                    "max_parallel_jobs": max_parallel_jobs,
                     "options": payload.get("options") or {},
                     "sample_count": 0,
                     "results_dir": str(directory / "results"),
@@ -462,15 +486,7 @@ class Handler(SimpleHTTPRequestHandler):
                 directory = run_dir(run_id)
                 log_path = directory / "snakemake.log"
                 log_handle = log_path.open("w", encoding="utf-8")
-                command = [
-                    snakemake,
-                    "--snakefile", str(REPO_ROOT / "Snakefile"),
-                    "--configfile", str(config_path),
-                    "--use-conda",
-                    "--cores", str(state["cores"]),
-                    "--rerun-incomplete",
-                    "--printshellcmds",
-                ]
+                command = workflow_command(snakemake, config_path, state)
                 process = subprocess.Popen(
                     command,
                     cwd=REPO_ROOT,

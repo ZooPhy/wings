@@ -246,6 +246,7 @@
       `Run: ${$("runName").value.trim() || "—"}`,
       `Samples: ${state.reads.length}`,
       `Cores: ${$("cores").value}`,
+      `Parallel tasks: ${$("maxParallelJobs").value}`,
       `Analysis: ${enabled.join(", ") || "core workflow only"}`
     ].join("\n");
     $("startRun").disabled = !rows.every((row) => row[0]);
@@ -266,7 +267,8 @@
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           name: $("runName").value.trim(),
-          cores: Number($("cores").value || 4),
+          cores: Number($("cores").value || 1),
+          max_parallel_jobs: Number($("maxParallelJobs").value || 1),
           options: {
             genoflu: $("optGenoflu").checked,
             vadr: $("optVadr").checked,
@@ -481,7 +483,7 @@
     }
     renderMetadata();
   });
-  ["runName", "cores", "optGenoflu", "optVadr", "optPhylogeny", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
+  ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
   $("startRun").addEventListener("click", startRun);
   $("stopRun").addEventListener("click", stopRun);
   $("savedRunSelect").addEventListener("change", (event) => openRun(event.target.value));
