@@ -241,6 +241,10 @@ if BLAST_MAX_TARGET_SEQS < 1:
 if BLAST_MAX_HSPS < 1:
     raise ValueError("blast_max_hsps must be at least 1")
 PORECHOP_CMD = config.get("porechop_command", "porechop_abi")
+PORECHOP_COUNTER_BUILD = str(config.get("porechop_counter_build", "") or "").strip()
+PORECHOP_COUNTER_BUILD = str(Path(PORECHOP_COUNTER_BUILD).expanduser().resolve()) if PORECHOP_COUNTER_BUILD else ""
+if PORECHOP_COUNTER_BUILD and PORECHOP_CMD != "porechop_abi":
+    raise ValueError("porechop_counter_build requires porechop_command: porechop_abi")
 
 FASTPLONG_MEAN_QUAL = int(config.get("fastplong_mean_quality", 10))
 FASTPLONG_MIN_LENGTH = int(config.get("fastplong_min_length", 500))
@@ -1004,7 +1008,9 @@ PY
 # -----------------------------------------------------------------------------
 rule porechop:
     input:
-        fastq=lambda wildcards: SAMPLE_FASTQ[wildcards.sample]
+        fastq=lambda wildcards: SAMPLE_FASTQ[wildcards.sample],
+        runner="scripts/run_porechop_accelerated.py",
+        counter_build=([PORECHOP_COUNTER_BUILD] if PORECHOP_COUNTER_BUILD else [])
     output:
         trimmed=f"{RESULTS}/{{sample}}/porechop/trimmed.fastq"
     log:
@@ -1016,12 +1022,24 @@ rule porechop:
     resources:
         mem_mb=int(config.get("porechop_mem_mb", 64000)),
         time_min=int(config.get("porechop_time_min", 240))
+    params:
+        accelerated=int(bool(PORECHOP_COUNTER_BUILD)),
+        adapter_search_threads=max(1, int(config.get("porechop_adapter_search_threads", 1)))
     shell:
         r"""
         set -euo pipefail
         mkdir -p "$(dirname {output.trimmed:q})"
         exec > >(tee -a {log:q}) 2>&1
-        {PORECHOP_CMD} -abi --threads {threads} -i {input.fastq:q} -o {output.trimmed:q}
+        if [ {params.accelerated} -eq 1 ]; then
+            python {input.runner:q} \
+              --counter-build {input.counter_build:q} \
+              --threads {threads} \
+              --adapter-search-threads {params.adapter_search_threads} \
+              --input {input.fastq:q} \
+              --output {output.trimmed:q}
+        else
+            {PORECHOP_CMD} -abi --threads {threads} -i {input.fastq:q} -o {output.trimmed:q}
+        fi
         """
 
 

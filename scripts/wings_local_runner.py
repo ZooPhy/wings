@@ -197,6 +197,15 @@ def build_config(run_id: str) -> tuple[Path, int]:
 
     example = REPO_ROOT / "config" / "config.example.yaml"
     config = yaml.safe_load(example.read_text(encoding="utf-8")) or {}
+    # Share the opt-in Porechop backend with terminal runs without copying other settings.
+    local_config_path = REPO_ROOT / "config.yaml"
+    if local_config_path.is_file():
+        local_config = yaml.safe_load(local_config_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(local_config, dict):
+            raise ValueError("Local config.yaml must contain a YAML mapping")
+        for key in ("porechop_counter_build", "porechop_threads", "porechop_adapter_search_threads"):
+            if key in local_config:
+                config[key] = local_config[key]
     results = directory / "results"
     config["reads_dir"] = str(reads_dir)
     config["reads_pattern"] = "{sample}" + next(iter(extensions))
