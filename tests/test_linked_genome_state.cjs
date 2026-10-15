@@ -18,7 +18,8 @@ const document = {readyState: "complete", querySelectorAll: () => [],
   createElementNS: () => new Element()};
 const context = vm.createContext({document});
 const source = fs.readFileSync(path.join(__dirname, "../scripts/report/surveillance-explorer.js"), "utf8");
-vm.runInContext(source.replace("  const initialize = () => {",
+vm.runInContext(source.replace('return {VERSION,SEGMENTS',
+  'return {DashboardForTest:Dashboard,VERSION,SEGMENTS').replace("  const initialize = () => {",
   "  globalThis.ExplorerForTest = Explorer;\n  const initialize = () => {"), context);
 const Explorer = context.ExplorerForTest;
 // Keep constructor state initialization, but leave DOM mounting to browser tests.
@@ -95,28 +96,62 @@ test("missing segment evidence remains distinct from tree presence", () => {
   assert.equal(app.segmentEvidence(app.samples[0], "NA").tree_status, "NO_TREE");
 });
 
-test("clearing a sample removes stale evidence and tree-presence text", () => {
+test("clearing a sample removes tree-presence text and stale braid genotype", () => {
   const app = explorer();
-  app.evidenceNode = new Element();
-  const presence = {textContent: "Sample present"};
-  app.treeGridNode = {querySelectorAll: () => [presence]};
-  app.renderGenomeEvidence();
-  assert.match(app.evidenceNode.innerHTML, /Select a sample/);
+  app.payload.trees.HA = {root: {children: [{name: 'a__HA', sample_id: 'a', length: 0.1}]}};
+  app.samples[0].genotype = {call: 'FIXTURE'};
+  const presence = {textContent: ''};
+  const card = {dataset: {segment: 'HA'}, querySelector: selector => {
+    assert.equal(selector, '.wse-tree-presence');
+    return presence;
+  }};
+  app.treeGridNode = {querySelectorAll: selector => {
+    assert.equal(selector, '.wse-segment-tree');
+    return [card];
+  }};
+  app.updateSelection = () => app.renderGenomeEvidence();
+  app.selectSample('a');
+  assert.match(presence.textContent, /Sample present/);
+  assert.match(braidEvidence(app), /FIXTURE/);
+  app.selectSample('a');
   assert.equal(presence.textContent, "");
+  const cleared = braidEvidence(app);
+  assert.match(cleared, /Follow one record/);
+  assert.doesNotMatch(cleared, /FIXTURE|wbc-recorded-genotype/);
 });
 
-test("genotype summary escapes recorded values without rendering a segment table", () => {
+function braidEvidence(app) {
+  const api = context.WINGS_BRAID_CLOCK;
+  const dashboard = Object.create(api.DashboardForTest.prototype);
+  const target = new Element();
+  dashboard.root = {querySelector: selector => {
+    assert.equal(selector, '.wbc-evidence');
+    return target;
+  }};
+  dashboard.m = api.model(app.payload);
+  dashboard.selected = app.selectedSampleId ? `s:${app.selectedSampleId}` : null;
+  dashboard.selectedReference = null;
+  dashboard.phenology = null;
+  dashboard.profile = id => api.neighborhoodProfile(dashboard.m, id);
+  dashboard.renderEvidence();
+  return target.innerHTML;
+}
+
+test("braid genotype details escape recorded values without restoring the old tree panel", () => {
   const app = explorer();
   app.selectedSampleId = "a";
-  app.evidenceNode = new Element();
-  app.treeGridNode = {querySelectorAll: () => []};
-  app.samples[0].genotype = {call: "<img src=x>", reason: "fixture"};
+  app.samples[0].genotype = {call: "<img src=x>", reason: "<script>fixture</script>"};
   app.samples[0].segments = {HA: {record_status: "AVAILABLE", overall_status: "FAIL",
     median_depth: 0, breadth_covered: 0, tree_status: "ABSENT_FROM_TREE", tips: []}};
-  app.renderGenomeEvidence();
-  assert.doesNotMatch(app.evidenceNode.innerHTML, /<table|Segment evidence for|Median depth|Coverage breadth/);
-  assert.match(app.evidenceNode.innerHTML, /&lt;img src=x&gt;/);
-  assert.doesNotMatch(app.evidenceNode.innerHTML, /<img/);
+  const html = braidEvidence(app);
+  const primary = html.split('<details class="wbc-technical-comparisons">')[0];
+  assert.match(primary, /wbc-recorded-genotype/);
+  assert.match(primary, /Genotype assignment details/);
+  assert.doesNotMatch(primary, /<table|Segment evidence for|Median depth|Coverage breadth/);
+  assert.match(primary, /&lt;img src=x&gt;/);
+  assert.match(primary, /&lt;script&gt;fixture&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<img|<script>/);
+  assert.doesNotMatch(source, /<div class="wse-genome-evidence"><\/div>/);
 });
 
 test("eBird citation and terms remain visible even for an unmatched host filter", () => {
