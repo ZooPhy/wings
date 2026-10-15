@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 class Element {
-  constructor(name) { this.name = name; this.attributes = {}; this.children = []; this.events = {}; this.flags = new Set(); this.classList = {toggle: (key, on) => on ? this.flags.add(key) : this.flags.delete(key), contains: key => (this.attributes.class || '').split(' ').includes(key)}; }
+  constructor(name) { this.name = name; this.value = ''; this.attributes = {}; this.children = []; this.events = {}; this.flags = new Set(); this.classList = {toggle: (key, on) => on ? this.flags.add(key) : this.flags.delete(key), contains: key => (this.attributes.class || '').split(' ').includes(key)}; }
   setAttribute(k, v) { this.attributes[k] = String(v); }
   getAttribute(k) { return this.attributes[k]; }
   appendChild(child) { this.children.push(child); }
@@ -46,7 +46,10 @@ test('details escape metadata, preserve date precision and support, and provide 
   const e = app(); e.referenceNode = new Element('div'); e.selectReference('ref1'); e.renderReferenceDetails();
   const html = e.referenceNode.innerHTML;
   assert.match(html, /&lt;script&gt;fixture/); assert.doesNotMatch(html, /<script>/);
-  assert.match(html, /Collection date: 2024 · Precision: year/);
+  assert.match(html, /class="wse-reference-summary-meta"[^>]*>[^<]*Collection date: 2024<\/p>/);
+  assert.match(html, /Reference ID: ref1 · Date precision: year/);
+  assert.match(html, /<details class="wse-reference-extra"><summary>Reference details<\/summary>/);
+  assert.doesNotMatch(html, /<details[^>]*\sopen(?:\s|>|=)/);
   assert.match(html, /95\/99/); assert.match(html, /Tree unavailable/);
   assert.match(html, /https:\/\/www.ncbi.nlm.nih.gov\/nuccore\/ZZ999991.1/);
   assert.match(html, /raw-read QC and coverage are not available/);
@@ -65,12 +68,16 @@ test('one reference highlights all matching segment tips without removing local 
 });
 test('clear resets both selections and restores all segments', () => {
   const e = app(), controls = new Map();
-  for (const name of ['sample-select','reference-select','view-select','clear-selection']) controls.set('.wse-' + name, new Element('select'));
+  for (const name of ['taxon-search','taxon-search-results','taxon-search-status','view-select','clear-selection']) controls.set('.wse-' + name, new Element('div'));
   e.genomeControlsNode = {querySelector: sel => controls.get(sel)};
   e.renderSegmentTabs = e.renderTrees = () => {};
-  e.renderGenomeControls(); e.selectedSampleId = 'local'; e.selectedReferenceId = 'ref1'; e.treeMode = 'single';
+  e.renderGenomeControls(); e.selectedSampleId = 'local'; e.selectedReferenceId = 'ref1'; e.selectedTreeTip = {segment:'HA', name:'unknown'}; e.treeMode = 'single';
+  controls.get('.wse-taxon-search').value = 'old query';
   controls.get('.wse-clear-selection').events.click();
   assert.equal(e.selectedSampleId, null); assert.equal(e.selectedReferenceId, null); assert.equal(e.treeMode, 'all');
+  assert.equal(e.selectedTreeTip, null);
+  assert.equal(controls.get('.wse-taxon-search').value, '');
+  assert.equal(controls.get('.wse-view-select').value, 'all');
 });
 test('no manifest has an explicit empty explanation', () => {
   const e = app(); e.referenceContext = null; e.referenceNode = new Element('div'); e.renderReferenceDetails();

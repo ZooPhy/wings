@@ -43,7 +43,15 @@ const payload = JSON.parse(fixture.stdout);
     assert.equal(await page.locator(".wse-selected").isVisible(), false);
     await page.selectOption(".wse-app-sample", "complete");
     assert.equal(await selected(), 8);
-    assert.match(await page.locator(".wse-genotype").innerText(), /DEMO/);
+    assert.match(await page.locator(".wbc-recorded-genotype").innerText(), /DEMO/);
+    assert.equal(await page.locator('.wse-genome-evidence').count(), 0);
+    const searchBox = await page.locator('.wse-taxon-search').boundingBox();
+    const viewBox = await page.locator('.wse-view-select').boundingBox();
+    const statusBox = await page.locator('.wse-taxon-search-status').boundingBox();
+    assert.ok(searchBox && viewBox && statusBox);
+    assert.ok(Math.abs(searchBox.y - viewBox.y) <= 1, 'Search and Tree view must align');
+    assert.ok(Math.abs(searchBox.height - viewBox.height) <= 1, 'Controls must have equal height');
+    assert.ok(statusBox.y >= Math.max(searchBox.y + searchBox.height, viewBox.y + viewBox.height), 'Selection status must sit below both controls');
     assert.equal(await page.locator(".wse-genome-panel table").count(), 0);
 
     await page.selectOption(".wse-app-sample", "partial");
@@ -104,15 +112,47 @@ const payload = JSON.parse(fixture.stdout);
     await load(legacy);
     await page.selectOption(".wse-app-sample", "complete");
     assert.equal(await selected(), 8);
-    assert.match(await page.locator(".wse-genotype").innerText(), /NOT RECORDED/);
+    assert.match(await page.locator(".wbc-recorded-genotype").innerText(), /Not recorded/);
 
     const escaped = structuredClone(payload);
     escaped.samples[0].genotype.call = '<img src=x onerror="window.injected=true">';
     escaped.samples[0].segments.HA.qc_reason = "</script><script>window.injected=true</script>";
     await load(escaped);
     await page.selectOption(".wse-app-sample", "complete");
-    assert.equal(await page.locator(".wse-genotype img").count(), 0);
+    assert.equal(await page.locator(".wbc-recorded-genotype img").count(), 0);
+    assert.match(await page.locator('.wbc-genotype-value').innerText(), /<img src=x/);
     assert.equal(await page.evaluate(() => window.injected), undefined);
+
+    const searchable = structuredClone(payload);
+    searchable.public_reference_context = {references:[{
+      reference_id:'ci-public', isolate:'A/Synthetic public bird/CI/2025', host:'Synthetic host',
+      collection_date:'2025', collection_date_precision:'year',
+      segments:{HA:{status:'PRESENT',accession_version:'ZZ999991.1',tips:[{name:'reference',parent_support:null}]}}
+    }],record_count:1};
+    const pending = [searchable.trees.HA.root];
+    while (pending.length) {
+      const node = pending.pop();
+      if (node.children?.length) pending.push(...node.children);
+      else if (node.name === 'reference') {
+        node.reference_id = 'ci-public'; node.accession_version = 'ZZ999991.1';
+      }
+    }
+    await load(searchable);
+    const search = page.locator('.wse-taxon-search');
+    await search.fill('comple');
+    assert.equal(await page.locator('.wse-app-sample').inputValue(), '');
+    await page.locator('.wse-taxon-search-results button[data-taxon-key="s:complete"]').click();
+    assert.equal(await page.locator('.wse-app-sample').inputValue(), 'complete');
+    assert.equal(await selected(), 8);
+    await search.fill('ZZ999991.1');
+    await page.locator('.wse-taxon-search-results button[data-taxon-key="r:ci-public"]').click();
+    assert.equal(await page.locator('.wse-app-sample').inputValue(), 'complete', 'Public selection retains the WINGS comparison');
+    assert.equal(await page.locator('.wse-tree-grid .wse-tree-tip[data-reference-id="ci-public"].is-selected').count(), 1);
+    assert.match(await page.locator('.wse-taxon-search-status').innerText(), /Public reference selected/);
+    await page.locator('.wse-app-clear').click();
+    assert.equal(await search.inputValue(), '');
+    assert.equal(await selected(), 0);
+    assert.equal(await page.locator('.wse-taxon-search-results').isVisible(), false);
 
     await load(payload);
     await page.selectOption(".wse-app-sample", "complete");
