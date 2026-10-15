@@ -3123,6 +3123,8 @@ rule run_summary_html:
             sample=SAMPLES,
             segment=SEGMENT_SEQUENCE,
         ),
+        # WINGS_STAGED_REPORT_LOGO_V1
+        report_logo="assets/wings_logo.jpg",
         template="scripts/run_summary.qmd",
         css="scripts/report/sample-report.css",
         report_html="scripts/report/escape-report.html",
@@ -3164,10 +3166,13 @@ rule run_summary_html:
         explorer_js_abs="$(cd "$(dirname {input.explorer_js:q})" && pwd)/$(basename {input.explorer_js:q})"
         map_boundaries_js_abs="$(cd "$(dirname {input.map_boundaries_js:q})" && pwd)/$(basename {input.map_boundaries_js:q})"
 
+        report_logo_abs="$(cd "$(dirname {input.report_logo:q})" && pwd)/$(basename {input.report_logo:q})"
+
         temp_qmd="$output_dir/.run_summary.qmd"
         temp_report_dir="$output_dir/report"
 
         mkdir -p "$temp_report_dir"
+        cp "$report_logo_abs" "$temp_report_dir/wings_logo.jpg"
         cp "$template_abs" "$temp_qmd"
         cp "$css_abs" "$temp_report_dir/sample-report.css"
         cp "$report_html_abs" "$temp_report_dir/escape-report.html"

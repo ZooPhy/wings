@@ -38,6 +38,13 @@ library(gt)
 
 find_wings_logo <- function() {
   current <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  # WINGS_STAGED_LOGO_LOOKUP_V1
+  # run_summary_html copies the original asset beside the staged template.
+  staged_logo <- file.path(current, "report", "wings_logo.jpg")
+  if (file.exists(staged_logo) && file.info(staged_logo)$size > 0) {
+    return(staged_logo)
+  }
+
 
   repeat {
     candidate <- file.path(current, "assets/wings_logo.jpg")
