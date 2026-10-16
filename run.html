@@ -151,7 +151,7 @@
       <div class="panel-body">
         <div class="metric-grid">
           <div class="metric">
-            <span>Status</span>
+            <span>Launcher status</span>
             <div id="statusActivity" class="status-activity">
               <img src="assets/wings-flying.png"
                    class="wings-flying-status"
@@ -161,12 +161,13 @@
             </div>
           </div>
           <div class="metric"><span>Samples</span><strong id="metricSamples">—</strong></div>
-          <div class="metric"><span>Elapsed</span><strong id="metricElapsed">—</strong></div>
+          <div class="metric"><span>Launcher elapsed</span><strong id="metricElapsed">—</strong></div>
           <div class="metric"><span>Run ID</span><strong id="metricRunId" style="font-size:.9rem">—</strong></div>
         </div>
         <div class="run-status-grid">
           <div>
-            <h3>Pipeline history</h3>
+            <h3>Stage progress</h3>
+            <p class="help">Stages can overlap across samples. Counts refer to this launcher attempt. Checkpoint-dependent totals remain provisional until completion is verified.</p>
             <ol id="timeline" class="timeline"></ol>
           </div>
           <div>
@@ -179,6 +180,7 @@
             </details>
             <div class="actions">
               <a id="resultsLink" class="btn btn-primary" href="#" hidden>Open WINGS results</a>
+              <button id="resumeRun" class="btn btn-primary" type="button" hidden>Resume run</button>
               <button id="stopRun" class="btn btn-secondary" type="button">Stop run</button>
             </div>
           </div>
@@ -188,6 +190,6 @@
   </section>
 </main>
 
-<script src="assets/wings-run.js"></script>
+<script src="assets/wings-run.js?v=20261014-resume-1"></script>
 </body>
 </html>

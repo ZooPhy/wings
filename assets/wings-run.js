@@ -26,10 +26,17 @@
     metadataIds: [],
     metadataError: "",
     runId: null,
-    poller: null
+    poller: null,
+    resumePending: false,
+    statusRequest: 0,
+    pollPending: false
   };
 
   const $ = (id) => document.getElementById(id);
+  // A cached page may predate the optional activity indicator.
+  function setActivity(running) {
+    $("statusActivity")?.classList.toggle("running", running);
+  }
   const stepMeta = [
     ["Run details", "Name the run and choose local compute settings."],
     ["Sequences", "Select the FASTQ files that will remain on this computer."],
@@ -126,6 +133,8 @@
     restorePending = false;
     clearInterval(state.poller);
     state.runId = runId;
+    state.statusRequest += 1;
+    state.pollPending = false;
     const url = new URL(location.href);
     url.searchParams.set("run", runId);
     url.searchParams.delete("new");
@@ -137,13 +146,16 @@
     $("statusSubtitle").textContent = "Loading saved run status…";
     $("metricRunId").textContent = runId;
     for (const id of ["metricStatus", "metricSamples", "metricElapsed"]) $(id).textContent = "—";
-    $("statusActivity").classList.remove("running");
+    setActivity(false);
     $("runLog").textContent = "Waiting for log output…";
     $("stopRun").disabled = true;
+    $("resumeRun").hidden = true;
     $("resultsLink").hidden = true;
     $("resultsLink").removeAttribute("href");
     renderTimeline();
     renderIrmaProgress();
+    renderFailures();
+    renderAttempts();
     state.poller = setInterval(pollStatus, 3000);
     pollStatus();
   }
@@ -304,19 +316,66 @@
     if (status === "running") return ["◉", "status-running"];
     if (status === "failed") return ["×", "status-error"];
     if (status === "warning") return ["!", "status-warning"];
+    if (status === "partial") return ["◐", "status-warning"];
+    if (status === "interrupted") return ["!", "status-warning"];
     return ["○", "status-waiting"];
   }
 
-  function renderTimeline(stages) {
-    $("timeline").innerHTML = stageDefinitions.map(([key, label]) => {
+  function renderTimeline(stages, progress = {}) {
+    const timeline = $("timeline");
+    timeline.replaceChildren();
+    for (const [key, label] of stageDefinitions) {
       const status = (stages && stages[key]) || "waiting";
       const [icon, cls] = timelineIcon(status);
-      return `<li class="timeline-item ${status === "running" ? "current" : ""}">
-        <span class="status-icon ${cls}" aria-hidden="true">${icon}</span>
-        <div><strong>${label}</strong><div class="timeline-meta">${status.charAt(0).toUpperCase() + status.slice(1)}</div></div>
-        <span></span>
-      </li>`;
-    }).join("");
+      const item = document.createElement("li");
+      item.className = `timeline-item${status === "running" ? " current" : ""}`;
+      item.dataset.stage = key;
+      const symbol = document.createElement("span");
+      symbol.className = `status-icon ${cls}`;
+      symbol.setAttribute("aria-hidden", "true");
+      symbol.textContent = icon;
+      const body = document.createElement("div");
+      const heading = document.createElement("strong");
+      heading.textContent = label;
+      const meta = document.createElement("div");
+      meta.className = "timeline-meta";
+      const labels = {partial: "Partially complete", interrupted: "Interrupted", skipped: "Not required"};
+      meta.textContent = labels[status] || status.charAt(0).toUpperCase() + status.slice(1);
+      body.append(heading, meta);
+      const detail = progress[key];
+      if (detail) {
+        const counts = document.createElement("div");
+        counts.className = "timeline-meta";
+        const count = detail.completed ?? 0;
+        counts.textContent = Number.isInteger(detail.expected)
+          ? `${count} of ${detail.expected} scheduled jobs completed`
+          : `${count} jobs completed; total ${detail.totals_provisional ? "provisional" : "unavailable"}`;
+        if (detail.active > 0) counts.textContent += ` · ${detail.active} running`;
+        body.append(counts);
+        if (key === "assembly" && Number.isInteger(detail.irma_completed)) {
+          const irma = document.createElement("div");
+          irma.className = "timeline-meta";
+          irma.textContent = Number.isInteger(detail.irma_expected)
+            ? `${detail.irma_completed} of ${detail.irma_expected} scheduled IRMA jobs completed`
+            : `${detail.irma_completed} IRMA jobs completed in this attempt`;
+          body.append(irma);
+        }
+        if (detail.failed_rules?.length) {
+          const failed = document.createElement("div");
+          failed.className = "timeline-meta";
+          failed.textContent = `Failed task: ${detail.failed_rules.join(", ")}`;
+          body.append(failed);
+        }
+        if (detail.cached_work_possible && status === "complete") {
+          const verified = document.createElement("div");
+          verified.className = "timeline-meta";
+          verified.textContent = "Workflow completed successfully; counts may exclude reused outputs.";
+          body.append(verified);
+        }
+      }
+      item.append(symbol, body, document.createElement("span"));
+      timeline.append(item);
+    }
   }
 
   function elapsedText(started, finished) {
@@ -395,14 +454,22 @@
   }
 
   async function pollStatus() {
-    if (!state.runId) return;
+    if (!state.runId || state.pollPending) return;
+    state.pollPending = true;
     const runId = state.runId;
+    const request = ++state.statusRequest;
+    const isCurrent = () => runId === state.runId && request === state.statusRequest;
+    let rendering = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const response = await fetch(`${localOrigin}/api/runs/${encodeURIComponent(runId)}`, {cache: "no-store"});
-      if (runId !== state.runId) return;
+      const response = await fetch(`${localOrigin}/api/runs/${encodeURIComponent(runId)}`, {
+        cache: "no-store", signal: controller.signal
+      });
+      if (!isCurrent()) return;
       if (response.status === 404 || response.status === 400) {
         clearInterval(state.poller);
-        $("statusActivity").classList.remove("running");
+        setActivity(false);
         $("metricStatus").textContent = "unavailable";
         $("statusSubtitle").textContent = "This run could not be found. Choose another saved run or check that the runner is using the same run directory.";
         $("stopRun").disabled = true;
@@ -411,14 +478,20 @@
       }
       if (!response.ok) throw new Error("status unavailable");
       const run = await response.json();
-      if (runId !== state.runId) return;
+      if (!isCurrent()) return;
+      if (!run || typeof run !== "object" || typeof run.status !== "string") {
+        throw new Error("The runner returned an invalid status response.");
+      }
+      rendering = true;
       $("statusTitle").textContent = run.name || "WINGS run";
       $("statusSubtitle").textContent =
         run.status === "running"
           ? "WINGS is flying through this run locally."
           : run.status === "complete"
             ? "WINGS has landed successfully."
-            : `Run ${run.status}.`;
+            : ["failed", "stopped"].includes(run.status)
+              ? `The launcher attempt ${run.status}. Processing started separately in Terminal is not tracked here. Completed outputs remain on disk.`
+              : `Launcher attempt ${run.status}.`;
       const statusLabel = {
         running: "flying",
         complete: "landed",
@@ -427,14 +500,18 @@
       }[run.status] || run.status;
 
       $("metricStatus").textContent = statusLabel;
-      $("statusActivity").classList.toggle("running", run.status === "running");
+      setActivity(run.status === "running");
       $("metricSamples").textContent = run.sample_count ?? "—";
       $("metricElapsed").textContent = elapsedText(run.started_at, run.finished_at);
       $("metricRunId").textContent = run.run_id;
       $("runLog").textContent = run.log_tail || "Waiting for log output…";
       $("runLog").scrollTop = $("runLog").scrollHeight;
-      renderTimeline(run.stages);
+      renderTimeline(run.stages, run.stage_progress);
       renderIrmaProgress(run.irma_progress);
+      renderFailures(run.failures);
+      renderAttempts(run.attempts);
+      $("resumeRun").hidden = !run.can_resume;
+      $("resumeRun").disabled = state.resumePending;
       $("stopRun").disabled = run.status !== "running";
       const resultsReady = run.status === "complete";
       $("resultsLink").hidden = !resultsReady;
@@ -449,10 +526,111 @@
         }
       }
     } catch (error) {
-      if (runId !== state.runId) return;
-      $("statusActivity").classList.remove("running");
+      if (!isCurrent()) return;
+      setActivity(false);
       $("stopRun").disabled = true;
-      $("statusSubtitle").textContent = "Connection lost. Displayed status may be out of date. Reconnecting to the local runner…";
+      $("statusSubtitle").textContent = rendering
+        ? `Run status was received, but the page could not display it: ${error.message}. Reload the page to load the current interface.`
+        : error.name === "AbortError"
+          ? "The status request timed out. Displayed status may be out of date. Retrying…"
+          : `Unable to load run status: ${error.message}. Displayed status may be out of date. Retrying…`;
+    } finally {
+      clearTimeout(timeout);
+      if (isCurrent()) state.pollPending = false;
+    }
+  }
+
+  function renderFailures(failures = []) {
+    let panel = $("runFailures");
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "runFailures";
+      panel.className = "summary-box";
+      panel.setAttribute("aria-label", "Recorded launcher failures");
+      panel.setAttribute("aria-live", "polite");
+      $("runLog").before(panel);
+    }
+    panel.replaceChildren();
+    panel.hidden = !Array.isArray(failures) || !failures.length;
+    if (panel.hidden) return;
+    const heading = document.createElement("h4");
+    heading.textContent = "Recorded launcher failures";
+    panel.append(heading);
+    for (const failure of failures) {
+      const item = document.createElement("p");
+      item.textContent = `${failure.sample_id ? `Sample ${failure.sample_id}: ` : ""}${failure.message || `Task ${failure.rule || "unknown"} failed.`}`;
+      panel.append(item);
+      for (const [index, href] of (failure.log_urls || []).entries()) {
+        // Accept only this run's log endpoint, never external URLs from data.
+        const url = new URL(href, localOrigin);
+        if (url.origin !== localOrigin || url.pathname !== `/api/runs/${encodeURIComponent(state.runId)}/failure-log`) continue;
+        const link = document.createElement("a");
+        link.href = url.href;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = `Open failure log ${index + 1}`;
+        const row = document.createElement("p");
+        row.append(link);
+        panel.append(row);
+      }
+    }
+  }
+
+  function renderAttempts(attempts = []) {
+    let panel = $("runAttempts");
+    if (!panel) {
+      panel = document.createElement("details");
+      panel.id = "runAttempts";
+      $("runLog").before(panel);
+    }
+    panel.replaceChildren();
+    panel.hidden = !attempts.length;
+    if (panel.hidden) return;
+    const heading = document.createElement("summary");
+    heading.textContent = `Launcher attempts (${attempts.length})`;
+    panel.append(heading);
+    for (const [index, attempt] of attempts.entries()) {
+      const row = document.createElement("p");
+      row.textContent = `Attempt ${index + 1}: ${attempt.status} · ${attempt.started_at || "start time unavailable"} `;
+      if (attempt.log_url) {
+        const url = new URL(attempt.log_url, localOrigin);
+        if (url.origin === localOrigin && url.pathname === `/api/runs/${encodeURIComponent(state.runId)}/attempt-log`) {
+          const link = document.createElement("a");
+          link.href = url.href;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = "Open attempt log";
+          row.append(link);
+        }
+      }
+      panel.append(row);
+    }
+  }
+
+  async function resumeRun() {
+    if (!state.runId || state.resumePending) return;
+    const runId = state.runId;
+    state.statusRequest += 1;
+    clearInterval(state.poller);
+    state.resumePending = true;
+    $("resumeRun").disabled = true;
+    $("resumeRun").textContent = "Resuming…";
+    try {
+      const response = await fetch(`${localOrigin}/api/runs/${encodeURIComponent(runId)}/resume`, {method: "POST"});
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "The runner could not resume this run.");
+      }
+      if (runId === state.runId) {
+        openRun(runId);
+        refreshRuns();
+      }
+    } catch (error) {
+      if (runId === state.runId) $("statusSubtitle").textContent = `Resume failed: ${error.message}`;
+    } finally {
+      state.resumePending = false;
+      $("resumeRun").disabled = false;
+      $("resumeRun").textContent = "Resume run";
     }
   }
 
@@ -486,6 +664,17 @@
   ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
   $("startRun").addEventListener("click", startRun);
   $("stopRun").addEventListener("click", stopRun);
+  // Keep updated JavaScript compatible with an older cached run page.
+  if (!$("resumeRun")) {
+    const button = document.createElement("button");
+    button.id = "resumeRun";
+    button.className = "btn btn-primary";
+    button.type = "button";
+    button.hidden = true;
+    button.textContent = "Resume run";
+    $("stopRun").before(button);
+  }
+  $("resumeRun").addEventListener("click", resumeRun);
   $("savedRunSelect").addEventListener("change", (event) => openRun(event.target.value));
   $("refreshRuns").addEventListener("click", refreshRuns);
 
