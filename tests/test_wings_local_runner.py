@@ -431,6 +431,7 @@ def test_start_uses_persisted_task_limit_for_the_subprocess(tmp_path, monkeypatc
     state.update(cores=8, max_parallel_jobs=1)
     runner.write_state("serial-run", state)
     config_path = tmp_path / "execution_config.yaml"
+    config_path.write_text("synthetic: true\n")
     captured = []
 
     class Process:
@@ -446,6 +447,10 @@ def test_start_uses_persisted_task_limit_for_the_subprocess(tmp_path, monkeypatc
     monkeypatch.setattr(runner.shutil, "which", lambda _: "/tools/snakemake")
     monkeypatch.setattr(runner, "build_config", lambda _: (config_path, 5))
     monkeypatch.setattr(runner.subprocess, "Popen", popen)
+    monkeypatch.setattr(
+        runner, "capture_attempt_provenance",
+        lambda attempt_dir, *_: attempt_dir / "attempt-provenance.json",
+    )
     monkeypatch.setattr(runner, "wait_for_process", wait)
     with running_server(runner) as base_url:
         with urlopen(Request(base_url + "/api/runs/serial-run/start", data=b"", method="POST"), timeout=5) as response:

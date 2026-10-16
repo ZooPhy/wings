@@ -3388,6 +3388,11 @@ rule effective_run_config:
 rule run_provenance:
     input:
         config=EFFECTIVE_CONFIG_JSON,
+        attempt_provenance=(
+            [os.environ["WINGS_ATTEMPT_PROVENANCE"]]
+            if os.environ.get("WINGS_ATTEMPT_PROVENANCE")
+            else []
+        ),
         snakefile="Snakefile",
         blast_manifest="resources/flu_db/database_manifest.tsv",
         script="scripts/write_run_provenance.py",
