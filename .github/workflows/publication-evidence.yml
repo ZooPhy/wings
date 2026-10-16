@@ -1,0 +1,36 @@
+name: Publication evidence checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/check_publication_evidence.py
+      - tests/test_publication_evidence.py
+      - .github/workflows/publication-evidence.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/check_publication_evidence.py
+      - tests/test_publication_evidence.py
+      - .github/workflows/publication-evidence.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: Evidence inventory / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test inventory validation
+        run: python -m unittest discover -s tests -p test_publication_evidence.py -v

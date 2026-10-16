@@ -225,6 +225,85 @@ docker run --rm alpine sh -c 'free -h'
 
 WINGS now checks the IRMA log and expected outputs after execution. Internal failures such as a killed process, an out-of-memory condition, or `found no QC'd data` cause the workflow to stop instead of continuing to downstream reports.
 
+### Windows: WSL2 setup (validation pending)
+
+Windows users need a Linux environment for the Bash-based workflow and its
+Linux dependencies. The proposed Windows route is **Ubuntu on WSL2**, with Docker
+Desktop's Linux-container backend. End-to-end WINGS execution on Windows/WSL2
+has not yet been validated. Native PowerShell, Command Prompt, and Git Bash are
+not documented execution environments. Windows on ARM also remains unvalidated.
+
+#### 1. Install Ubuntu on WSL2
+
+In **PowerShell as Administrator**, follow
+[Microsoft's WSL installation guide](https://learn.microsoft.com/en-us/windows/wsl/install):
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Restart if prompted, then open Ubuntu and create its Linux user account.
+In PowerShell, confirm that Ubuntu uses version 2:
+
+```powershell
+wsl --list --verbose
+```
+
+If an existing Ubuntu installation shows version 1, use
+`wsl --set-version Ubuntu 2`; substitute the exact distribution name displayed
+by the list command. Check current Docker Desktop system requirements separately;
+the minimum Windows version for WSL installation is not necessarily sufficient
+for a current Docker Desktop release.
+
+#### 2. Enable Docker Desktop integration
+
+Install and start [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/).
+Use the WSL2 engine and enable Ubuntu under **Settings → Resources → WSL Integration**.
+Docker must be using Linux containers. Follow
+[Docker's WSL2 setup guide](https://docs.docker.com/desktop/features/wsl/)
+if that setting is absent. Avoid maintaining a second Docker Engine installation
+inside Ubuntu alongside Docker Desktop.
+
+In the **Ubuntu terminal**, check connectivity:
+
+```bash
+docker info
+```
+
+A working Docker client in PowerShell alone does not establish that Ubuntu can
+reach the daemon.
+
+#### 3. Use Linux tools and paths inside Ubuntu
+
+Run the README's Bash commands inside Ubuntu. Install the Linux edition of
+[Miniforge](https://github.com/conda-forge/miniforge#install) inside Ubuntu,
+matching the architecture reported by `uname -m`. A Windows Conda installation
+does not supply Linux environments; the macOS Miniforge installer below also
+does not apply.
+
+Keep the checkout and working files in Ubuntu's Linux filesystem, for example
+`~/projects/wings`, and use Linux paths in configuration files. A Windows path
+such as `C:\\Users\\name\\data` is not a Linux path. Use a fresh Linux checkout
+to preserve executable permissions and LF line endings. For filesystem guidance,
+see [Microsoft's WSL environment guide](https://learn.microsoft.com/en-us/windows/wsl/setup/environment).
+
+The existing platform-neutral Snakemake environment instructions are the starting
+point for dependency setup. Platform-specific sections labeled macOS or Linux
+ARM64 should not be applied to an x86-64 WSL2 installation.
+
+#### Validation status
+
+Before listing Windows as a validated platform, record the Windows build,
+WSL version, Ubuntu release, CPU architecture, Docker Desktop version, dependency
+versions, evaluated WINGS commit, and available resources. An independent tester
+must document installation, report viewing, reproduction results, and failures
+against agreed acceptance criteria. No Windows success or performance result is
+claimed here.
+
+The Windows job in `publication-evidence.yml` tests only the publication evidence
+utility. It does not install or validate the WINGS workflow under Windows or WSL2.
+See the [publication evaluation plan](docs/publication-evaluation.md).
+
 ### Linux ARM64 cluster
 
 The validated cluster configuration uses:
