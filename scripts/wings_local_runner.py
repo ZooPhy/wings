@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -528,6 +529,79 @@ def wait_for_process(run_id: str, process: subprocess.Popen[str], log_handle) ->
         write_state(run_id, state)
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def capture_attempt_provenance(attempt_dir: Path, command: list[str], config_path: Path,
+                               started_at: str, resumed: bool) -> Path:
+    """Freeze launcher state before starting Snakemake without modifying the repository."""
+    def run(args: list[str]) -> tuple[int, str]:
+        try:
+            result = subprocess.run(args, cwd=REPO_ROOT, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, timeout=30)
+            return result.returncode, result.stdout
+        except (OSError, subprocess.SubprocessError) as error:
+            return 127, f"NOT_CAPTURED: {error}"
+
+    git = {}
+    for key, args in {
+        "commit": ["git", "rev-parse", "HEAD"],
+        "branch": ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        "describe": ["git", "describe", "--tags", "--always", "--dirty"],
+        "status_porcelain": ["git", "status", "--porcelain", "--untracked-files=all"],
+    }.items():
+        code, output = run(args)
+        git[key] = output.strip() if code == 0 else "NOT_CAPTURED"
+
+    diff_path = attempt_dir / "tracked-source.diff"
+    code, diff = run(["git", "diff", "--binary", "HEAD", "--"])
+    diff_path.write_text(diff if code == 0 else "", encoding="utf-8")
+
+    packages = {}
+    conda = shutil.which("conda")
+    if conda:
+        for filename, args in {
+            "conda-list.json": [conda, "list", "--json"],
+            "conda-explicit.txt": [conda, "list", "--explicit"],
+        }.items():
+            result_code, output = run(args)
+            path = attempt_dir / filename
+            path.write_text(output if result_code == 0 else "", encoding="utf-8")
+            packages[filename] = {"sha256": sha256_file(path), "captured": result_code == 0,
+                                  "content": output if result_code == 0 else None}
+    else:
+        packages["status"] = "conda not found on PATH"
+
+    record = {
+        "schema_version": 1,
+        "captured_at_utc": started_at,
+        "resumed": resumed,
+        "command": command,
+        "working_directory": str(REPO_ROOT),
+        "effective_config": {
+            "path": str(config_path),
+            "sha256": sha256_file(config_path),
+            "content": config_path.read_text(encoding="utf-8"),
+        },
+        "git": {
+            **git,
+            "dirty": git.get("status_porcelain") not in {"", "NOT_CAPTURED"},
+            "tracked_diff": {"path": diff_path.name, "sha256": sha256_file(diff_path),
+                             "size_bytes": diff_path.stat().st_size,
+                             "content": diff if code == 0 else None},
+        },
+        "launcher_environment": packages,
+    }
+    path = attempt_dir / "attempt-provenance.json"
+    path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
 def launch_attempt(run_id: str, resume: bool = False) -> dict:
     """Launch one browser-owned attempt, preserving existing configuration and logs."""
     with LOCK:
@@ -565,18 +639,25 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
         attempt_dir.mkdir(parents=True, exist_ok=False)
         log_path = attempt_dir / "snakemake.log"
         command = workflow_command(executable, config_path, state)
+        started = utc_now()
+        attempt_provenance = capture_attempt_provenance(
+            attempt_dir, command, config_path, started, resume
+        )
+        environment = os.environ.copy()
+        environment["WINGS_ATTEMPT_PROVENANCE"] = str(attempt_provenance)
         log_handle = log_path.open("x", encoding="utf-8")
         try:
             process = subprocess.Popen(command, cwd=REPO_ROOT, stdout=log_handle,
-                                       stderr=subprocess.STDOUT, text=True, start_new_session=True)
+                                       stderr=subprocess.STDOUT, text=True, start_new_session=True,
+                                       env=environment)
         except BaseException:
             log_handle.close()
             raise
-        started = utc_now()
         relative_log = log_path.relative_to(directory).as_posix()
+        relative_provenance = attempt_provenance.relative_to(directory).as_posix()
         attempts.append({"attempt_id": attempt_id, "status": "running", "started_at": started,
                          "finished_at": None, "exit_code": None, "log_path": relative_log,
-                         "resumed": resume})
+                         "provenance_path": relative_provenance, "resumed": resume})
         state.update({"status": "running", "started_at": started, "finished_at": None,
                       "exit_code": None, "pid": process.pid, "sample_count": sample_count,
                       "command": command, "execution_config": str(config_path),

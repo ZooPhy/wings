@@ -43,6 +43,22 @@ def load_single_row_tsv(path: Path) -> dict[str, str]:
     return rows[0] if rows else {}
 
 
+def load_attempt_provenance() -> dict | None:
+    value = os.environ.get('WINGS_ATTEMPT_PROVENANCE', '').strip()
+    if not value:
+        return None
+    path = Path(value).resolve()
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as error:
+        return {'status': 'NOT_CAPTURED', 'path': str(path), 'error': str(error)}
+    if not isinstance(data, dict):
+        return {'status': 'NOT_CAPTURED', 'path': str(path), 'error': 'expected JSON object'}
+    data['record_path'] = str(path)
+    data['record_sha256'] = sha256_file(path)
+    return data
+
+
 def parse_labeled_path(item: str, option: str) -> tuple[str, Path]:
     if '=' not in item:
         raise ValueError(f"{option} must be LABEL=PATH, got: {item}")
@@ -157,7 +173,7 @@ def main() -> None:
         }
 
     provenance = {
-        'schema_version': 3,
+        'schema_version': 4,
         'created_at_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'workflow': {
             'name': 'WINGS',
@@ -212,6 +228,7 @@ def main() -> None:
         'conda_environment_files': envs,
         'primary_inputs': primary_inputs,
         'replay_inputs': replay_inputs,
+        'launcher_attempt': load_attempt_provenance(),
     }
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
