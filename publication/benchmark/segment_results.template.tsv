@@ -1,0 +1,2 @@
+attempt_id	dataset_id	sample_id	segment	tool	truth_available	truth_callable_bases	consensus_callable_bases	complete_qc_segment	exact_match	substitutions	insertions	deletions	errors_per_10000_callable_bases	identity_fraction	n_fraction	subtype_call	subtype_truth	subtype_correct	result_status	notes
+REPLACE	REPLACE	REPLACE	PB2	wings	false	NA	NA	false	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA	missing	REPLACE

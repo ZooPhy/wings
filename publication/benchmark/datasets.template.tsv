@@ -1,0 +1,4 @@
+dataset_id	cohort_role	source_accession	selection_rule	truth_type	truth_uri	platform	library_protocol	basecaller	basecaller_model	sample_count	input_manifest_path	input_manifest_sha256	frozen_before_analysis	access_conditions
+truth-cohort	analytical_truth	REPLACE	REPLACE	matched_illumina_consensus	REPLACE	Oxford Nanopore	REPLACE	REPLACE	REPLACE	0	manifests/truth-cohort-inputs.tsv	REPLACE_WITH_SHA256	true	REPLACE
+external-cohort	external_validation	REPLACE	REPLACE	none_or_independent_reference	REPLACE	Oxford Nanopore	REPLACE	REPLACE	REPLACE	0	manifests/external-cohort-inputs.tsv	REPLACE_WITH_SHA256	true	REPLACE
+wild-bird-case	real_world_case	local-controlled-data	Existing WINGS wild-bird run; record complete inclusion criteria	none	NA	Oxford Nanopore	REPLACE	REPLACE	REPLACE	12	manifests/wild-bird-case-inputs.tsv	REPLACE_WITH_SHA256	false	restricted
