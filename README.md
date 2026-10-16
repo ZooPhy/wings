@@ -341,9 +341,13 @@ software/quarto-1.9.38/
 
 WINGS automatically uses `software/quarto-1.9.38/bin/quarto` on Linux ARM64 when that executable is present. Otherwise, it falls back to `quarto` found on `PATH`.
 
-### 2. Install Miniforge on Apple Silicon macOS
+### 2. Install Miniforge
 
-Users who already have a working Conda or Mamba installation may skip this step.
+Users who already have a working Conda or Mamba installation in the target
+Linux or macOS environment may skip this step. On managed clusters, use the
+site-provided Conda/Mamba module when available.
+
+#### Apple Silicon macOS (zsh)
 
 ```bash
 curl -fsSLo Miniforge3.sh \
@@ -353,6 +357,36 @@ bash Miniforge3.sh -b -p "$HOME/miniforge3"
 "$HOME/miniforge3/bin/conda" init zsh
 exec zsh
 ```
+
+#### Linux and Windows via WSL2 (Bash)
+
+On Windows, complete the WSL2 setup above and open the **Ubuntu terminal**.
+Install Linux Miniforge inside Ubuntu; a native Windows Conda installation
+cannot supply the Linux environments used here. On Linux, use a Bash terminal.
+The command selects the Linux installer for the architecture reported by
+`uname -m`, including `x86_64` or `aarch64`.
+
+Skip installation if a suitable Conda/Mamba installation already exists. The
+installer below creates a new installation at `~/miniforge3`.
+
+```bash
+curl -fsSLo Miniforge3.sh \
+  "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(uname -m).sh"
+
+bash Miniforge3.sh -b -p "$HOME/miniforge3"
+"$HOME/miniforge3/bin/conda" init bash
+```
+
+Close and reopen the Bash/Ubuntu terminal before continuing. If you use zsh
+on Linux, initialize it with `conda init zsh` using the same full Conda path,
+then reopen zsh.
+
+Installing Miniforge does not establish full workflow compatibility. WINGS
+Windows/WSL2 validation remains pending. See the
+[Miniforge installation documentation](https://github.com/conda-forge/miniforge#install)
+for installer requirements.
+
+#### All platforms
 
 Configure strict channel priority:
 
