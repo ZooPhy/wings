@@ -1,0 +1,41 @@
+{
+  "schema_version": "wings.publication-evidence.v1",
+  "release_commit": "REPLACE_WITH_EVALUATED_COMMIT_SHA",
+  "artifacts": [
+    {
+      "id": "comparison-results",
+      "role": "comparison",
+      "path": "comparison/results.tsv",
+      "sha256": "REPLACE_WITH_SHA256",
+      "description": "Same-input comparison results with defined endpoints, comparator versions, and all attempted runs accounted for."
+    },
+    {
+      "id": "real-data-manifest",
+      "role": "real_data",
+      "path": "datasets/manifest.tsv",
+      "sha256": "REPLACE_WITH_SHA256",
+      "description": "Dataset identifiers, source versions, input checksums, access conditions, and inclusion/exclusion criteria."
+    },
+    {
+      "id": "independent-reproduction",
+      "role": "reproduction",
+      "path": "reproduction/record.md",
+      "sha256": "REPLACE_WITH_SHA256",
+      "description": "Independent reproduction record, expected versus observed outputs, reviewer environment, and unresolved discrepancies."
+    },
+    {
+      "id": "environment-record",
+      "role": "environment",
+      "path": "environment/record.json",
+      "sha256": "REPLACE_WITH_SHA256",
+      "description": "Evaluated release, dependencies, source snapshots, platform, resource settings, and measurement scope."
+    },
+    {
+      "id": "claims-and-limitations",
+      "role": "limitations",
+      "path": "claims/limitations.md",
+      "sha256": "REPLACE_WITH_SHA256",
+      "description": "Claim-to-evidence mapping, unsupported claims, missing data, and limits on interpretation and generalization."
+    }
+  ]
+}
