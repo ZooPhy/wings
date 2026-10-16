@@ -16,7 +16,13 @@ const run = {
   run_id: "20261008-135811-be5742", name: "Test Run", status: "running",
   created_at: "2026-10-08T20:58:11Z", started_at: "2026-10-08T20:58:11Z",
   finished_at: null, sample_count: 2, log_tail: "rule irma:",
-  stages: {inputs: "complete", read_qc: "complete", assembly: "running"},
+  stages: {inputs: "complete", read_qc: "complete", assembly: "running", polishing: "partial"},
+  stage_progress: {
+    assembly: {status: "running", completed: 3, expected: null,
+      active: 1, totals_provisional: true, irma_completed: 3, irma_expected: 12},
+    polishing: {status: "partial", completed: 2, expected: null,
+      active: 0, totals_provisional: true},
+  },
   irma_progress: [{sample_id: "synthetic <b>sample</b>",
     last_modified: "2026-10-08T21:05:59Z", log_size_bytes: 512,
     recent_milestones: [
@@ -73,6 +79,10 @@ const server = http.createServer((req, res) => {
     assert.equal(new URL(savedUrl).searchParams.get("run"), run.run_id);
     assert.equal(await page.locator("#setupView").isVisible(), false);
     assert.equal(await page.locator("#runStatus").isVisible(), true);
+    const assembly = page.locator('[data-stage="assembly"]');
+    assert.match(await assembly.innerText(), /3 of 12 scheduled IRMA jobs completed/);
+    assert.match(await assembly.innerText(), /1 running/);
+    assert.match(await page.locator('[data-stage="polishing"]').innerText(), /Partially complete/);
     assert.equal(await page.locator("#irmaProgress").isVisible(), true);
     assert.equal(await page.locator("#irmaProgress").evaluate(el => el.open), false);
     assert.equal(await page.locator("#irmaProgressSamples").isVisible(), false);
@@ -92,7 +102,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator("#metricRunId").innerText(), run.run_id);
     // Lost connections retain the run and retry without creating/starting anything.
     offline = true;
-    await page.waitForFunction(() => document.getElementById("statusSubtitle").textContent.includes("Reconnecting"));
+    await page.waitForFunction(() => document.getElementById("statusSubtitle").textContent.includes("Retrying"));
     assert.equal(await page.locator("#stopRun").isDisabled(), true);
     offline = false;
     run.log_tail = "rule medaka_inference:";
@@ -116,7 +126,17 @@ const server = http.createServer((req, res) => {
     await page.locator("#savedRunSelect").selectOption("older-run");
     await status(page, "failed");
     assert.equal(await page.locator("#statusTitle").innerText(), "Older <b>run</b>");
+    assert.match(await page.locator("#statusSubtitle").innerText(), /launcher attempt failed/);
+    assert.match(await page.locator("#statusSubtitle").innerText(), /Terminal is not tracked here/);
     assert.equal(await page.locator("#resultsLink").isVisible(), false);
+    // Counts and failed task names stay text, including untrusted saved strings.
+    older.stages = {surveillance: "failed"};
+    older.stage_progress = {surveillance: {completed: 1, expected: null,
+      failed_rules: ['synthetic <img src=x onerror=alert(1)>']}};
+    await page.reload();
+    await status(page, "failed");
+    assert.equal(await page.locator("#timeline img").count(), 0);
+    assert.match(await page.locator('[data-stage="surveillance"]').innerText(), /Failed task: synthetic <img/);
     // Explicit selection wins over the latest run; missing IDs never launch a replacement.
     await page.reload();
     await status(page, "failed");

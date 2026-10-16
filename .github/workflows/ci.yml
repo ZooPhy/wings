@@ -65,6 +65,10 @@ jobs:
           tests/test_replay_archive.py \
           tests/test_wings_local_runner.py
 
+      - name: Check runner status regressions
+        shell: bash -el {0}
+        run: python -m pytest -q tests/test_runner_status_regressions.py
+
   explorer-browser:
     name: Linked explorer / Chromium
     runs-on: ubuntu-latest
@@ -91,5 +95,9 @@ jobs:
           python scripts/compress_demo_bundle.py --check
       - name: Check completed-run results auto-open
         run: node tests/test_results_auto_open.cjs
+      - name: Check stage display and status polling
+        run: |
+          node tests/test_stage_status_display.cjs
+          node tests/test_status_polling.cjs
       - name: Check run status recovery after browser restart
         run: node tests/test_run_recovery.cjs

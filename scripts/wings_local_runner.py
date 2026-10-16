@@ -41,14 +41,27 @@ RULE_STAGE = {
     "phylogeny_align": "phylogeny", "phylogeny_segment_input": "phylogeny", "phylogeny_tree": "phylogeny",
     "surveillance_explorer_data": "surveillance", "genomic_ecological_concordance": "surveillance", "attach_genomic_ecological_concordance": "surveillance",
     "sample_summary": "reporting", "sample_summary_html": "reporting", "run_summary_html": "reporting", "archive_interpretation_outputs": "reporting",
+    "effective_run_config": "inputs", "sample_metadata": "inputs",
+    "seqtk_rename": "read_qc", "resolve_medaka_model": "read_qc",
+    "prepare_vadr_input": "characterization",
+    "contextual_phylogeny_inputs": "phylogeny", "contextual_phylogeny_align": "phylogeny",
+    "contextual_phylogeny_tree": "phylogeny", "phylogeny_complete": "phylogeny",
+    "phylogeny_ready_segments": "phylogeny", "select_contextual_references": "phylogeny",
+    "finalize_contextual_references": "phylogeny",
+    "ebirdst_phenology": "surveillance", "metadata_ecological_context": "surveillance",
+    "run_provenance": "reporting", "archive_replay_inputs": "reporting",
+    "select_historical_baseline": "reporting", "historical_stability": "reporting",
+    "wings_report_bundle": "reporting",
 }
 RULE_RE = re.compile(
-    r"^(?:\[[^\n]+\]\s*)?\s*(?:(?:local)?rule|checkpoint)\s+([A-Za-z0-9_]+):\s*$",
+    r"^(?:\[[^\n]+\]\s*)?\s*(?:(?:local)?rule|(?:local)?checkpoint)\s+([A-Za-z0-9_]+):\s*$",
     re.MULTILINE,
 )
 MILESTONE_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}:\d{2})\]\s+(.+)$")
 PROGRESS_LOG_BYTES = 128 * 1024
 PROGRESS_MILESTONES = 20
+STATUS_LOG_CACHE = {}
+STATUS_LOG_LOCK = threading.Lock()
 
 
 def log_milestones(text: str) -> list[dict]:
@@ -248,45 +261,250 @@ def workflow_command(executable: str, config_path: Path, state: dict) -> list[st
     ]
 
 
+def stage_progress(state: dict, log_text: str) -> dict[str, dict]:
+    """Count recorded jobs, without assuming that samples advance together.
+
+    Checkpoints can introduce or remove downstream jobs. Their stage totals
+    remain unknown until the workflow finishes; observed counts are exact.
+    Counts describe this launcher attempt, not cached work from an earlier one.
+    """
+    expected = {}
+    table = re.search(r"^Job stats:\s*\n(.*?)(?:\n\s*\n|\Z)", log_text, re.MULTILINE | re.DOTALL)
+    if table:
+        for rule, count in re.findall(r"^\s*([A-Za-z0-9_]+)\s+(\d+)\s*$", table[1], re.MULTILINE):
+            if rule != "total":
+                expected[rule] = int(count)
+
+    jobs = {}
+    anonymous = set()
+    errors = set()
+    events = []
+    for match in RULE_RE.finditer(log_text):
+        # A rule's metadata ends before its shell command or the next rule.
+        following = log_text[match.end():match.end() + 16384]
+        following = following.split("Shell command:", 1)[0]
+        next_rule = RULE_RE.search(following)
+        if next_rule:
+            following = following[:next_rule.start()]
+        job = re.search(r"^\s*jobid:\s*(\d+)\s*$", following, re.MULTILINE)
+        events.append((match.start(), "start", job[1] if job else None, match[1]))
+    for match in re.finditer(r"^Finished jobid:\s*(\d+)\s*\(Rule:\s*([A-Za-z0-9_]+)\)", log_text, re.MULTILINE):
+        events.append((match.start(), "complete", match[1], match[2]))
+    for match in re.finditer(r"^Error in (?:rule|checkpoint)\s+([A-Za-z0-9_]+):", log_text, re.MULTILINE):
+        following = log_text[match.end():match.end() + 16384]
+        boundary = re.search(r"^(?:\s*(?:local)?(?:rule|checkpoint) |Finished jobid:|Error in )", following, re.MULTILINE)
+        if boundary:
+            following = following[:boundary.start()]
+        job = re.search(r"^\s*jobid:\s*(\d+)\s*$", following, re.MULTILINE)
+        events.append((match.start(), "error", job[1] if job else None, match[1]))
+    for _, event, job_id, rule in sorted(events):
+        if event == "error" and job_id is None:
+            errors.add(rule)
+        elif job_id is None:
+            anonymous.add(rule)
+        else:
+            jobs[job_id] = (rule, event)
+
+    dynamic = "normalize_irma_outputs" in expected or bool(re.search(r"^\s*(?:local)?checkpoint\s", log_text, re.MULTILINE))
+    provisional_stages = set(STAGE_ORDER[2:]) if dynamic else set()
+    finished = state.get("status") == "complete"
+    terminal = state.get("status") in {"failed", "stopped"}
+    details = {}
+    for stage in STAGE_ORDER:
+        rules = {rule for rule in expected if RULE_STAGE.get(rule) == stage}
+        rules.update(rule for rule, _ in jobs.values() if RULE_STAGE.get(rule) == stage)
+        rules.update(rule for rule in anonymous | errors if RULE_STAGE.get(rule) == stage)
+        completed = sum(event == "complete" for rule, event in jobs.values() if RULE_STAGE.get(rule) == stage)
+        active = sum(event == "start" for rule, event in jobs.values() if RULE_STAGE.get(rule) == stage)
+        active += sum(RULE_STAGE.get(rule) == stage for rule in anonymous)
+        failed_rules = sorted(
+            {rule for rule in errors if RULE_STAGE.get(rule) == stage}
+            | {rule for rule, event in jobs.values() if event == "error" and RULE_STAGE.get(rule) == stage}
+        )
+        counts_known = bool(table) and all(rule in expected for rule in rules) and stage not in provisional_stages
+        total = sum(expected.get(rule, 0) for rule in rules) if counts_known else None
+        if finished:
+            options = state.get("options") or {}
+            disabled = (stage == "phylogeny" and options.get("phylogeny") is False) or (
+                stage == "surveillance" and options.get("explorer") is False
+            )
+            status = "skipped" if disabled and not rules else "complete"
+        elif failed_rules:
+            status = "failed"
+        elif terminal and active:
+            status = "interrupted"
+        elif active:
+            status = "running"
+        elif total is not None and total > 0 and completed == total:
+            status = "complete"
+        elif completed:
+            status = "partial"
+        else:
+            status = "waiting"
+        if stage == "inputs" and not rules and state.get("sample_count", 0) > 0:
+            status = "complete"  # Input validation performed before launch.
+        detail = {"status": status, "completed": completed, "expected": total,
+                  "active": 0 if terminal or finished else active,
+                  "totals_provisional": stage in provisional_stages,
+                  "failed_rules": failed_rules}
+        if finished:
+            # Scheduling may omit cached jobs; a successful attempt verifies
+            # the workflow but does not give a fresh count for those jobs.
+            detail["cached_work_possible"] = True
+        if stage == "assembly":
+            detail["irma_completed"] = sum(rule == "irma" and event == "complete" for rule, event in jobs.values())
+            detail["irma_expected"] = expected.get("irma")
+        details[stage] = detail
+    return details
+
+
 def infer_stages(state: dict, log_text: str) -> dict[str, str]:
-    stages = {stage: "waiting" for stage in STAGE_ORDER}
-    stages["inputs"] = "complete"
-    seen = []
-    for rule in RULE_RE.findall(log_text):
-        stage = RULE_STAGE.get(rule)
-        if stage and stage not in seen:
-            seen.append(stage)
-    if state.get("status") == "complete":
-        return {stage: "complete" for stage in STAGE_ORDER}
-    if state.get("status") in {"failed", "stopped"}:
-        if seen:
-            current = max(seen, key=STAGE_ORDER.index)
-            for stage in STAGE_ORDER:
-                if STAGE_ORDER.index(stage) < STAGE_ORDER.index(current):
-                    stages[stage] = "complete"
-            stages[current] = "failed" if state.get("status") == "failed" else "warning"
-        return stages
-    if seen:
-        current = max(seen, key=STAGE_ORDER.index)
-        for stage in STAGE_ORDER:
-            if STAGE_ORDER.index(stage) < STAGE_ORDER.index(current):
-                stages[stage] = "complete"
-        stages[current] = "running"
-    return stages
+    return {stage: detail["status"] for stage, detail in stage_progress(state, log_text).items()}
+
+
+def failure_details(directory: Path, log_text: str) -> list[dict]:
+    """Describe recorded failures without reading sequence inputs or changing outputs."""
+    failures = []
+    root = directory.resolve()
+    blocks = list(re.finditer(
+        r"^Error in (?:rule|checkpoint)\s+([A-Za-z0-9_]+):", log_text, re.MULTILINE
+    ))
+    for index, match in enumerate(blocks):
+        end = blocks[index + 1].start() if index + 1 < len(blocks) else len(log_text)
+        block = log_text[match.end():end].split("Shell command:", 1)[0]
+        block = block[:16384]
+        rule = match[1]
+        job = re.search(r"^\s*jobid:\s*(\d+)\s*$", block, re.MULTILINE)
+        sample = re.search(r"^\s*wildcards:.*?\bsample=([^,\s]+)", block, re.MULTILINE)
+        detail = {"rule": rule, "stage": RULE_STAGE.get(rule),
+                  "job_id": job[1] if job else None,
+                  "sample_id": sample[1] if sample else None,
+                  "message": f"Task {rule} failed.", "logs": []}
+        log_line = re.search(r"^\s*log:\s*(.+)$", block, re.MULTILINE)
+        if log_line:
+            for name in log_line[1].split(","):
+                # Snakemake may append '(check log file(s) for error details)'.
+                name = name.strip().split(" (check log", 1)[0]
+                try:
+                    path = Path(name)
+                    path = (path if path.is_absolute() else directory / path).resolve()
+                    relative = path.relative_to(root)
+                    if not path.is_file():
+                        continue
+                    with path.open("rb") as handle:
+                        handle.seek(max(0, path.stat().st_size - PROGRESS_LOG_BYTES))
+                        tail = handle.read(PROGRESS_LOG_BYTES).decode("utf-8", errors="replace")
+                    invalid = re.search(r"^\s*Line\s+(\d+):\s*illegal character\s+(\S+)", tail, re.MULTILINE)
+                    if invalid:
+                        detail["category"] = "input_validation"
+                        detail["message"] = (
+                            f"Task {rule}: input validation failed on line {invalid[1]} "
+                            f"(illegal character {invalid[2][:32]!r})."
+                        )
+                    detail["logs"].append(relative.as_posix())
+                except (OSError, ValueError):
+                    continue
+        failures.append(detail)
+    # Snakemake can repeat the same failed-job block during shutdown.
+    # Keep its latest details without merging different jobs or sample logs.
+    unique = {}
+    for detail in failures:
+        key = (detail["rule"], detail["job_id"], detail["sample_id"], tuple(detail["logs"]))
+        unique[key] = detail
+    return list(unique.values())
+
+
+def launcher_status_log(log_path: Path) -> tuple[str, str]:
+    """Read scheduler records and a bounded tail; skip verbose shell output.
+
+    Cache only an unchanged, fully read log. A bounded readline also prevents
+    a very long shell-output line from becoming an enormous temporary string.
+    """
+    try:
+        with STATUS_LOG_LOCK:
+            stat = log_path.stat()
+            signature = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+            cached = STATUS_LOG_CACHE.get(log_path)
+            if cached and cached[0] == signature:
+                return cached[1], cached[2]
+            records = []
+            table = False
+            metadata = False
+            with log_path.open("rb") as handle:
+                while True:
+                    raw = handle.readline(16384)
+                    if not raw:
+                        break
+                    long_line = not raw.endswith(b"\n") and len(raw) == 16384
+                    if long_line:
+                        while raw and not raw.endswith(b"\n"):
+                            raw = handle.readline(16384)
+                        continue
+                    if not raw.endswith(b"\n"):
+                        # A writer may still be appending this scheduler record.
+                        break
+                    line = raw.decode("utf-8", errors="replace")
+                    stripped = line.strip()
+                    if stripped == "Job stats:":
+                        table = True
+                        metadata = False
+                        records.append(line)
+                    elif table:
+                        records.append(line)
+                        if not stripped:
+                            table = False
+                    elif RULE_RE.fullmatch(line.rstrip("\r\n")) or re.match(
+                        r"^Error in (?:rule|checkpoint)\s+[A-Za-z0-9_]+:", line
+                    ):
+                        metadata = True
+                        records.append(line)
+                    elif line.startswith("Finished jobid:"):
+                        metadata = False
+                        records.append(line)
+                    elif metadata and stripped.startswith("Shell command:"):
+                        records.append("Shell command:\n")
+                        metadata = False
+                    elif metadata and re.match(r"^\s*(?:jobid|wildcards|log):", line):
+                        records.append(line)
+                handle.seek(max(0, stat.st_size - PROGRESS_LOG_BYTES))
+                raw_tail = handle.read(PROGRESS_LOG_BYTES)
+            if stat.st_size > PROGRESS_LOG_BYTES:
+                raw_tail = raw_tail.partition(b"\n")[2]
+            progress = "".join(records)
+            tail = "\n".join(raw_tail.decode("utf-8", errors="replace").splitlines()[-120:])
+            after = log_path.stat()
+            after_signature = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+            if after_signature == signature:
+                # Keep memory bounded when users open many saved runs.
+                if len(STATUS_LOG_CACHE) >= 16:
+                    STATUS_LOG_CACHE.pop(next(iter(STATUS_LOG_CACHE)))
+                STATUS_LOG_CACHE[log_path] = (signature, progress, tail)
+            return progress, tail
+    except OSError:
+        return "", ""
 
 
 def enriched_state(run_id: str) -> dict:
     state = read_state(run_id)
-    log_path = run_dir(run_id) / "snakemake.log"
-    log_text = ""
-    if log_path.is_file():
-        try:
-            log_text = log_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            pass
-    state["log_tail"] = "\n".join(log_text.splitlines()[-120:])
-    state["stages"] = infer_stages(state, log_text)
+    directory = run_dir(run_id)
+    log_path = (directory / state.get("launcher_log", "snakemake.log")).resolve()
+    log_path.relative_to(directory)
+    log_text, state["log_tail"] = launcher_status_log(log_path)
+    state["stage_progress"] = stage_progress(state, log_text)
+    state["stages"] = {stage: detail["status"] for stage, detail in state["stage_progress"].items()}
+    state["status_scope"] = "launcher_attempt"
+    state["failures"] = failure_details(run_dir(run_id), log_text)
+    for index, failure in enumerate(state["failures"]):
+        failure["log_urls"] = [
+            f"/api/runs/{run_id}/failure-log?failure={index}&log={log_index}"
+            for log_index in range(len(failure["logs"]))
+        ]
     state["irma_progress"] = irma_log_progress(run_dir(run_id))
+    state["can_resume"] = state.get("status") in {"failed", "stopped"} and (
+        directory / "execution_config.yaml"
+    ).is_file()
+    for attempt in state.get("attempts", []):
+        attempt["log_url"] = f"/api/runs/{run_id}/attempt-log?attempt={attempt['attempt_id']}"
     return state
 
 
@@ -294,15 +512,85 @@ def wait_for_process(run_id: str, process: subprocess.Popen[str], log_handle) ->
     code = process.wait()
     log_handle.close()
     with LOCK:
+        if PROCESSES.get(run_id) is not process:
+            return
         PROCESSES.pop(run_id, None)
-    state = read_state(run_id)
-    if state.get("status") == "stopping":
-        state["status"] = "stopped"
-    else:
-        state["status"] = "complete" if code == 0 else "failed"
-    state["exit_code"] = code
-    state["finished_at"] = utc_now()
-    write_state(run_id, state)
+        state = read_state(run_id)
+        if state.get("status") == "stopping":
+            state["status"] = "stopped"
+        else:
+            state["status"] = "complete" if code == 0 else "failed"
+        state["exit_code"] = code
+        state["finished_at"] = utc_now()
+        for attempt in state.get("attempts", []):
+            if attempt["attempt_id"] == state.get("active_attempt"):
+                attempt.update({"status": state["status"], "finished_at": state["finished_at"], "exit_code": code})
+        write_state(run_id, state)
+
+
+def launch_attempt(run_id: str, resume: bool = False) -> dict:
+    """Launch one browser-owned attempt, preserving existing configuration and logs."""
+    with LOCK:
+        state = read_state(run_id)
+        process = PROCESSES.get(run_id)
+        if process and process.poll() is None:
+            raise ValueError("This run already has an active launcher process")
+        if state.get("status") not in {"created", "failed", "stopped"}:
+            raise ValueError(f"Run cannot start from status {state.get('status')}")
+        if resume and state.get("status") not in {"failed", "stopped"}:
+            raise ValueError("Resume requires a failed or stopped run")
+        resume = resume or state.get("status") in {"failed", "stopped"}
+        executable = shutil.which("snakemake")
+        if not executable:
+            raise ValueError("snakemake was not found in PATH")
+        directory = run_dir(run_id)
+        if resume:
+            config_path = (directory / "execution_config.yaml").resolve()
+            config_path.relative_to(directory)
+            if not config_path.is_file():
+                raise ValueError("Saved execution_config.yaml is missing; this run cannot resume")
+            sample_count = state.get("sample_count", 0)
+        else:
+            config_path, sample_count = build_config(run_id)
+        attempts = list(state.get("attempts") or [])
+        if resume and not attempts:
+            attempts.append({
+                "attempt_id": "legacy", "status": state["status"],
+                "started_at": state.get("started_at"), "finished_at": state.get("finished_at"),
+                "exit_code": state.get("exit_code"),
+                "log_path": state.get("launcher_log", "snakemake.log"),
+            })
+        attempt_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
+        attempt_dir = directory / "attempts" / attempt_id
+        attempt_dir.mkdir(parents=True, exist_ok=False)
+        log_path = attempt_dir / "snakemake.log"
+        command = workflow_command(executable, config_path, state)
+        log_handle = log_path.open("x", encoding="utf-8")
+        try:
+            process = subprocess.Popen(command, cwd=REPO_ROOT, stdout=log_handle,
+                                       stderr=subprocess.STDOUT, text=True, start_new_session=True)
+        except BaseException:
+            log_handle.close()
+            raise
+        started = utc_now()
+        relative_log = log_path.relative_to(directory).as_posix()
+        attempts.append({"attempt_id": attempt_id, "status": "running", "started_at": started,
+                         "finished_at": None, "exit_code": None, "log_path": relative_log,
+                         "resumed": resume})
+        state.update({"status": "running", "started_at": started, "finished_at": None,
+                      "exit_code": None, "pid": process.pid, "sample_count": sample_count,
+                      "command": command, "execution_config": str(config_path),
+                      "launcher_log": relative_log, "active_attempt": attempt_id, "attempts": attempts})
+        try:
+            write_state(run_id, state)
+        except BaseException:
+            process.terminate()
+            process.wait()
+            log_handle.close()
+            raise
+        PROCESSES[run_id] = process
+    threading.Thread(target=wait_for_process, args=(run_id, process, log_handle), daemon=True).start()
+    return {"status": "running", "run_id": run_id, "attempt_id": attempt_id}
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -395,6 +683,41 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(body)
                 return
 
+            match = re.fullmatch(r"/api/runs/([^/]+)/(failure-log|attempt-log)", parsed.path)
+            if match:
+                run_id = unquote(match.group(1))
+                query = parse_qs(parsed.query)
+                directory = run_dir(run_id)
+                if match.group(2) == "attempt-log":
+                    attempt_id = query.get("attempt", [""])[0]
+                    attempt = next((a for a in read_state(run_id).get("attempts", [])
+                                    if a["attempt_id"] == attempt_id), None)
+                    if not attempt:
+                        raise ValueError("Unknown attempt")
+                    relative = attempt["log_path"]
+                else:
+                    failure_index = int(query.get("failure", ["0"])[0])
+                    log_index = int(query.get("log", ["0"])[0])
+                    failures = enriched_state(run_id)["failures"]
+                    if not 0 <= failure_index < len(failures):
+                        raise ValueError("Unknown failure")
+                    logs = failures[failure_index]["logs"]
+                    if not 0 <= log_index < len(logs):
+                        raise ValueError("Unknown failure log")
+                    relative = logs[log_index]
+                path = (directory / relative).resolve()
+                path.relative_to(directory)
+                with path.open("rb") as handle:
+                    handle.seek(max(0, path.stat().st_size - PROGRESS_LOG_BYTES))
+                    body = handle.read(PROGRESS_LOG_BYTES)
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             match = re.fullmatch(r"/api/runs/([^/]+)", parsed.path)
             if match:
                 self.json_response(enriched_state(unquote(match.group(1))))
@@ -472,7 +795,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self.json_response({"run_id": run_id}, HTTPStatus.CREATED)
                 return
 
-            match = re.fullmatch(r"/api/runs/([^/]+)/(start|stop)", parsed.path)
+            match = re.fullmatch(r"/api/runs/([^/]+)/(start|stop|resume)", parsed.path)
             if match:
                 run_id, action = unquote(match.group(1)), match.group(2)
                 state = read_state(run_id)
@@ -486,39 +809,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self.json_response({"status": "stopping"})
                     return
 
-                if state.get("status") not in {"created", "failed", "stopped"}:
-                    raise ValueError(f"Run cannot start from status {state.get('status')}")
-                snakemake = shutil.which("snakemake")
-                if not snakemake:
-                    raise ValueError("snakemake was not found in PATH")
-                config_path, sample_count = build_config(run_id)
-                directory = run_dir(run_id)
-                log_path = directory / "snakemake.log"
-                log_handle = log_path.open("w", encoding="utf-8")
-                command = workflow_command(snakemake, config_path, state)
-                process = subprocess.Popen(
-                    command,
-                    cwd=REPO_ROOT,
-                    stdout=log_handle,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    start_new_session=True,
-                )
-                with LOCK:
-                    PROCESSES[run_id] = process
-                state.update({
-                    "status": "running",
-                    "started_at": utc_now(),
-                    "finished_at": None,
-                    "exit_code": None,
-                    "pid": process.pid,
-                    "sample_count": sample_count,
-                    "command": command,
-                    "execution_config": str(config_path),
-                })
-                write_state(run_id, state)
-                threading.Thread(target=wait_for_process, args=(run_id, process, log_handle), daemon=True).start()
-                self.json_response({"status": "running", "run_id": run_id})
+                self.json_response(launch_attempt(run_id, resume=action == "resume"))
                 return
         except (OSError, ValueError, json.JSONDecodeError, subprocess.SubprocessError) as error:
             self.error_response(str(error), 400)

@@ -28,13 +28,13 @@ def test_strip_fastq_supported_extensions():
     assert runner.strip_fastq("sample.fq") == ("sample", ".fq")
 
 
-def test_stage_inference_marks_latest_stage_running():
+def test_stage_inference_does_not_complete_earlier_stages_on_later_activity():
     runner = load_runner()
     state = {"status": "running"}
     log = "rule porechop:\nrule irma:\nrule medaka_inference:\n"
     stages = runner.infer_stages(state, log)
-    assert stages["read_qc"] == "complete"
-    assert stages["assembly"] == "complete"
+    assert stages["read_qc"] == "running"
+    assert stages["assembly"] == "running"
     assert stages["polishing"] == "running"
     assert stages["reporting"] == "waiting"
 
@@ -50,12 +50,12 @@ def test_stage_inference_accepts_indented_and_timestamped_rules():
 
     stages = runner.infer_stages(state, log)
 
-    assert stages["read_qc"] == "complete"
+    assert stages["read_qc"] == "running"
     assert stages["assembly"] == "running"
     assert stages["polishing"] == "waiting"
 
 
-def test_setup_rules_do_not_advance_pipeline_stage():
+def test_setup_and_archival_rules_are_assigned_to_their_own_stages():
     runner = load_runner()
     state = {"status": "running"}
     log = (
@@ -67,9 +67,107 @@ def test_setup_rules_do_not_advance_pipeline_stage():
     stages = runner.infer_stages(state, log)
 
     assert stages["inputs"] == "running"
-    assert stages["read_qc"] == "waiting"
+    assert stages["read_qc"] == "running"
     assert stages["polishing"] == "waiting"
-    assert stages["reporting"] == "waiting"
+    assert stages["reporting"] == "running"
+
+
+def job_log(rule, job_id, complete=False, checkpoint=False):
+    kind = "localcheckpoint" if checkpoint else "localrule"
+    text = f"{kind} {rule}:\n    input: synthetic\n    jobid: {job_id}\nShell command: None\n"
+    if complete:
+        text += f"Finished jobid: {job_id} (Rule: {rule})\n"
+    return text
+
+
+def test_twelve_sample_progress_counts_irma_and_overlapping_stages():
+    runner = load_runner()
+    log = "Job stats:\njob count\n--- ---\nirma 12\nmedaka_inference 12\ntotal 24\n\n"
+    log += "".join(job_log("irma", i, complete=True) for i in range(3))
+    log += job_log("irma", 3) + job_log("medaka_inference", 20, complete=True)
+    progress = runner.stage_progress({"status": "running", "sample_count": 12}, log)
+    assert progress["assembly"]["status"] == "running"
+    assert progress["assembly"]["irma_completed"] == 3
+    assert progress["assembly"]["irma_expected"] == 12
+    assert progress["assembly"]["active"] == 1
+    assert progress["polishing"]["status"] == "partial"
+    assert progress["polishing"]["completed"] == 1
+
+
+def test_counts_are_deduplicated_and_retries_remain_active():
+    runner = load_runner()
+    log = "Job stats:\nporechop 1\ntotal 1\n\n" + job_log("porechop", 1, complete=True)
+    log += "Finished jobid: 1 (Rule: porechop)\n"
+    assert runner.stage_progress({"status": "running"}, log)["read_qc"]["completed"] == 1
+    log += job_log("porechop", 1)
+    detail = runner.stage_progress({"status": "running"}, log)["read_qc"]
+    assert detail["completed"] == 0
+    assert detail["active"] == 1
+    assert detail["status"] == "running"
+
+
+def test_checkpoint_totals_remain_provisional_until_success():
+    runner = load_runner()
+    log = "Job stats:\nnormalize_irma_outputs 1\nmedaka_inference 1\ntotal 2\n\n"
+    log += job_log("normalize_irma_outputs", 1, complete=True, checkpoint=True)
+    log += job_log("medaka_inference", 2, complete=True)
+    progress = runner.stage_progress({"status": "running"}, log)
+    assert progress["assembly"]["completed"] == 1
+    assert progress["assembly"]["expected"] is None
+    assert progress["polishing"]["status"] == "partial"
+    assert progress["polishing"]["totals_provisional"] is True
+    assert runner.infer_stages({"status": "complete"}, log)["polishing"] == "complete"
+
+
+def test_failure_is_attributed_to_the_failed_rule_not_the_furthest_stage():
+    runner = load_runner()
+    log = job_log("sample_summary", 1, complete=True)
+    log += job_log("ebirdst_phenology", 2) + "Error in rule ebirdst_phenology:\n"
+    detail = runner.stage_progress({"status": "failed"}, log)
+    assert detail["surveillance"]["status"] == "failed"
+    assert detail["surveillance"]["failed_rules"] == ["ebirdst_phenology"]
+    assert detail["reporting"]["status"] == "partial"
+    assert detail["surveillance"]["active"] == 0
+
+
+def test_stopped_jobs_are_interrupted_without_inventing_a_failed_stage():
+    runner = load_runner()
+    detail = runner.stage_progress({"status": "stopped"}, job_log("irma", 1))
+    assert detail["assembly"]["status"] == "interrupted"
+    assert detail["polishing"]["status"] == "waiting"
+
+
+def test_missing_counts_never_prove_stage_completion_and_optional_stages_are_skipped():
+    runner = load_runner()
+    log = job_log("irma", 1, complete=True)
+    detail = runner.stage_progress({"status": "running"}, log)["assembly"]
+    assert detail["expected"] is None
+    assert detail["status"] == "partial"
+    assert runner.infer_stages({"status": "complete", "options": {"phylogeny": False}}, log)["phylogeny"] == "skipped"
+    assert runner.infer_stages({"status": "complete"}, "Nothing to be done.\n")["assembly"] == "complete"
+
+
+def test_resumed_attempt_counts_do_not_claim_all_samples_completed():
+    runner = load_runner()
+    log = "Job stats:\nirma 3\ntotal 3\n\n" + job_log("irma", 1, complete=True)
+    detail = runner.stage_progress({"status": "running", "sample_count": 12}, log)["assembly"]
+    assert detail["irma_expected"] == 3
+    assert detail["irma_completed"] == 1
+
+
+def test_enriched_state_exposes_attempt_scope_without_modifying_state(tmp_path, monkeypatch):
+    runner = load_runner()
+    monkeypatch.setattr(runner, "RUNS_ROOT", tmp_path)
+    make_run(runner, "synthetic-run", "failed")
+    original = runner.state_path("synthetic-run").read_bytes()
+    (runner.run_dir("synthetic-run") / "snakemake.log").write_text(job_log("irma", 1, complete=True))
+    # A separately written continuation must not silently replace launcher state.
+    (runner.run_dir("synthetic-run") / "snakemake-resume-test.log").write_text(job_log("irma", 2))
+    data = runner.enriched_state("synthetic-run")
+    assert data["status"] == "failed"
+    assert data["status_scope"] == "launcher_attempt"
+    assert data["stage_progress"]["assembly"]["irma_completed"] == 1
+    assert runner.state_path("synthetic-run").read_bytes() == original
 
 
 def test_log_milestones_measure_gaps_without_assuming_timezone():
@@ -328,7 +426,7 @@ def test_start_uses_persisted_task_limit_for_the_subprocess(tmp_path, monkeypatc
 
     runner = load_runner()
     monkeypatch.setattr(runner, "RUNS_ROOT", (tmp_path / "runs").resolve())
-    make_run(runner, "serial-run", "failed")
+    make_run(runner, "serial-run", "created")
     state = runner.read_state("serial-run")
     state.update(cores=8, max_parallel_jobs=1)
     runner.write_state("serial-run", state)
