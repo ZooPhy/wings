@@ -1,0 +1,2 @@
+attempt_id	dataset_id	sample_id	tool	tool_version	commit_or_digest	command_record	config_record	host_record	started_at_utc	finished_at_utc	exit_code	status	failure_category	retry_of	stdout_log	stderr_log	output_manifest
+REPLACE	REPLACE	REPLACE	wings	REPLACE	REPLACE	REPLACE	REPLACE	REPLACE	REPLACE	REPLACE	REPLACE	REPLACE	NA	NA	REPLACE	REPLACE	REPLACE

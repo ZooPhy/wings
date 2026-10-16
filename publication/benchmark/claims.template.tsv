@@ -1,0 +1,4 @@
+claim_id	manuscript_claim	endpoint	cohort	comparison	acceptance_criterion	evidence_path	status	limitations
+C01	WINGS provides accurate influenza A consensus genomes from Nanopore reads	Complete segments per sample and errors per 10,000 callable truth bases	analytical_truth	WINGS versus wf-flu and IRMA	FREEZE_BEFORE_ANALYSIS	REPLACE	planned	REPLACE
+C02	WINGS results can be reproduced from archived provenance	Successful independent replay and prespecified scientific equivalence checks	external_validation	Independent analyst replay	FREEZE_BEFORE_ANALYSIS	REPLACE	planned	REPLACE
+C03	WINGS reports improve traceability of surveillance results	Prespecified user task accuracy, time, and help requests	user_study	WINGS report versus comparator output	FREEZE_BEFORE_ANALYSIS	REPLACE	planned	Requires independent users and applicable institutional review
