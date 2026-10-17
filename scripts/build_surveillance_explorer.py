@@ -316,6 +316,8 @@ def build_tree_records(tree_paths: Iterable[Path], sample_ids: set[str]) -> tupl
             warnings.append(f"Multiple {segment} tree files supplied; using the first and ignoring {path.name}")
             continue
 
+        if not path.is_file() or path.stat().st_size == 0:
+            continue
         first_tree, tree_count = first_newick_tree_and_count(path)
         root = NewickParser(first_tree).parse()
         unmatched: list[str] = []
