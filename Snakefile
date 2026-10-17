@@ -1353,16 +1353,43 @@ rule resolve_medaka_model:
         fastq=lambda wildcards: SAMPLE_FASTQ[wildcards.sample]
     output:
         model=f"{RESULTS}/{{sample}}/medaka/model.tsv"
+    log:
+        f"{RESULTS}/{{sample}}/medaka/resolve_model.log"
     params:
         max_records=MEDAKA_MODEL_RECORDS
+    conda:
+        "envs/py-tools.yaml"
     shell:
         r"""
         set -euo pipefail
+        mkdir -p "$(dirname {output.model:q})"
 
+        # `set -e` is relaxed only around the resolver so its exit code can be
+        # inspected. `if cmd; then` would collapse every non-zero code into one
+        # branch, which is what previously hid unrelated failures.
+        set +e
         python scripts/resolve_medaka_model.py \
             --fastq {input.fastq:q} \
             --output {output.model:q} \
-            --max-records {params.max_records}
+            --max-records {params.max_records} \
+            > {log:q} 2>&1
+        resolver_status=$?
+        set -e
+
+        if [[ $resolver_status -eq 0 ]]; then
+            echo "RESOLUTION=fastq_metadata" >> {log:q}
+        elif [[ $resolver_status -eq 3 ]]; then
+            echo "RESOLUTION=unavailable" >> {log:q}
+            echo "No basecall_model_version_id in the first {params.max_records} records." >> {log:q}
+            echo "Set medaka_model in config.yaml to polish reads from public archives." >> {log:q}
+            printf 'fastq\tbasecaller_model\tmedaka_consensus_selector\tmedaka_variant_selector\trecords_with_model\n%s\t\t\t\t0\n' \
+                {input.fastq:q} > {output.model:q}
+        else
+            echo "RESOLUTION=failed (exit $resolver_status)" >> {log:q}
+            exit $resolver_status
+        fi
+
+        test -s {output.model:q}
         """
 
 
@@ -1374,7 +1401,13 @@ rule medaka_inference:
         bam=bam_path,
         fasta=fasta_path,
         flag=f"{RESULTS}/{{sample}}/coverage_flags/{{segment}}.flag",
-        model=f"{RESULTS}/{{sample}}/medaka/model.tsv"
+        # Resolving the model from FASTQ headers is unnecessary, and the header
+        # fields are often absent, when the model is asserted in config.
+        model=(
+            []
+            if MEDAKA_MODEL
+            else f"{RESULTS}/{{sample}}/medaka/model.tsv"
+        )
     output:
         features=f"{RESULTS}/{{sample}}/medaka/{{segment}}/features.hdf",
         status=f"{RESULTS}/{{sample}}/medaka/{{segment}}/inference.status.tsv"
@@ -1390,24 +1423,36 @@ rule medaka_inference:
     params:
         model_override=MEDAKA_MODEL or "",
         use_override="true" if MEDAKA_MODEL else "false",
+        model_table=lambda wildcards: f"{RESULTS}/{wildcards.sample}/medaka/model.tsv",
         fail_soft="true" if MEDAKA_FAIL_SOFT else "false"
     shell:
         r"""
         set -euo pipefail
         mkdir -p "$(dirname {output.features:q})"
 
+        # Model resolution is tiered so that the provenance records how the
+        # model was determined, not only which model was used:
+        #   config_override -> asserted by the user
+        #   fastq_metadata  -> inferred from basecaller headers
+        #   unavailable     -> neither; polishing is skipped, not failed
         if [[ {params.use_override:q} == "true" ]]; then
             model={params.model_override:q}
-            model_source="config override"
+            model_source="config_override"
+        elif [[ -s {params.model_table:q} ]]; then
+            model="$(awk -F '\t' 'NR == 2 {{print $3}}' {params.model_table:q})"
+            model_source="fastq_metadata"
         else
-            model="$(awk -F '\t' 'NR == 2 {{print $3}}' {input.model:q})"
-            model_source="FASTQ metadata"
+            model=""
+            model_source="unavailable"
         fi
 
         if [[ -z "$model" ]]; then
-            echo -e "status\tmodel_source\tmodel\treason\nFAILED\t$model_source\t\tmodel resolution failed" > {output.status:q}
-            echo "Could not resolve Medaka consensus model from {input.model:q}." > {log:q}
-            exit 1
+            model_source="unavailable"
+            echo "No Medaka model could be resolved for this sample." > {log:q}
+            echo "Set medaka_model in config.yaml to polish archived reads." >> {log:q}
+            : > {output.features:q}
+            echo -e "status\tmodel_source\tmodel\treason\nSKIPPED_NO_MODEL\t$model_source\t\tno_basecall_model_available" > {output.status:q}
+            exit 0
         fi
 
         echo "Medaka consensus selector: $model" > {log:q}
@@ -1487,6 +1532,10 @@ rule medaka_consensus:
         elif [[ "$inference_status" == "FAILED" ]]; then
             echo "Medaka inference failed and medaka_fail_soft=false." > {log:q}
             exit 1
+        elif [[ "$inference_status" == "SKIPPED_NO_MODEL" ]]; then
+            echo "No Medaka model was available; using the QC-passing IRMA consensus unpolished." > {log:q}
+            cp {input.fasta:q} {output.consensus:q}
+            echo -e "status\tconsensus_source\treason\nUNPOLISHED\tIRMA_FALLBACK\tmedaka_model_unavailable" > {output.status:q}
         elif [[ "$inference_status" == "SKIPPED_QC" ]]; then
             echo "Medaka inference was skipped because segment QC failed; no consensus generated." > {log:q}
             : > {output.consensus:q}
@@ -1587,6 +1636,10 @@ rule medaka_vcf:
                 echo "Medaka VCF generation failed and medaka_fail_soft=false." >> {log:q}
                 exit 1
             fi
+        elif [[ "$inference_status" == "SKIPPED_NO_MODEL" ]]; then
+            echo "No Medaka model was available; VCF generation skipped." >> {log:q}
+            : > {output.vcf:q}
+            echo -e "status\treason\nSKIPPED_NO_MODEL\tmedaka_model_unavailable" > {output.status:q}
         elif [[ "$inference_status" == "SKIPPED_QC" ]]; then
             echo "Medaka inference was skipped because segment QC failed; VCF generation skipped." >> {log:q}
             : > {output.vcf:q}
