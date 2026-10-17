@@ -39,6 +39,8 @@ def attach_reference_context(trees, samples, manifest, provenance, warnings):
     raw = Path(manifest).read_bytes()
     sha = hashlib.sha256(raw).hexdigest()
     meta = json.loads(Path(provenance).read_text(encoding="utf-8"))
+    if meta.get("skipped"):
+        return None
     for field in ("manifest_sha256", "retrieved_on", "selection_notes", "citation"):
         if not isinstance(meta.get(field), str) or not meta[field].strip():
             raise ValueError(f"Reference provenance requires {field}")
