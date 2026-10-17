@@ -468,6 +468,14 @@ medaka_by_sample <- medaka_status |>
     medaka_skipped_qc_segments = sum(
       inference_status == "SKIPPED_QC" | consensus_status == "SKIPPED_QC"
     ),
+    # WINGS_MODEL_STATUS_REPORT_V1: count segments, not status files.
+    medaka_skipped_no_model_segments = sum(
+      inference_status == "SKIPPED_NO_MODEL" |
+        (consensus_status == "UNPOLISHED" &
+          consensus_reason == "medaka_model_unavailable") |
+        variant_status == "SKIPPED_NO_MODEL",
+      na.rm = TRUE
+    ),
     vcf_failed_segments = sum(variant_status == "FAILED"),
     .groups = "drop"
   )
@@ -478,21 +486,33 @@ summary <- summary |>
     across(
       c(
         medaka_status_records, medaka_polished_segments, irma_fallback_segments,
-        medaka_failed_segments, medaka_skipped_qc_segments, vcf_failed_segments
+        medaka_failed_segments, medaka_skipped_qc_segments, vcf_failed_segments,
+        medaka_skipped_no_model_segments
       ),
       ~ coalesce(.x, 0L)
     )
   )
 
-# A Medaka failure/fallback is analytically usable in fail-soft mode but still
-# warrants explicit review because downstream consensus provenance changed.
-medaka_review <- summary$medaka_failed_segments > 0 | summary$irma_fallback_segments > 0
+# Flag recorded failures, fallback results, and missing-model skips for
+# review so the report makes polishing provenance explicit.
+medaka_review <- summary$medaka_failed_segments > 0 |
+  summary$irma_fallback_segments > 0 |
+  summary$medaka_skipped_no_model_segments > 0
 summary$review_required <- summary$review_required | medaka_review
 medaka_reason <- ifelse(
   medaka_review,
   paste0(
     "Medaka: ", summary$medaka_failed_segments, " failed segment(s); ",
-    summary$irma_fallback_segments, " IRMA fallback segment(s)"
+    summary$irma_fallback_segments, " IRMA fallback segment(s)",
+    ifelse(
+      summary$medaka_skipped_no_model_segments > 0,
+      paste0(
+        "; ", summary$medaka_skipped_no_model_segments,
+        " segment(s) skipped because no Medaka model was available",
+        "; affected fallback sequences were not Medaka-polished"
+      ),
+      ""
+    )
   ),
   NA_character_
 )
@@ -797,6 +817,13 @@ if (is.null(stability_summary) || nrow(stability_summary) == 0) {
 
 ### Sample Summary
 
+**Polishing status:** "Skipped: model unavailable" counts segments with a recorded
+missing-model status. Affected IRMA fallback sequences were **not Medaka-polished**.
+Counts can overlap: a segment can appear in both "Skipped: model unavailable" and
+"IRMA Fallback". "Medaka Polished" counts only recorded successful Medaka polishing.
+A zero count means no matching recorded status; it does not establish that
+polishing completed.
+
 ```{r}
 sample_table <-
   summary %>%
@@ -827,6 +854,7 @@ sample_table <-
     medaka_polished_segments,
     irma_fallback_segments,
     medaka_failed_segments,
+    medaka_skipped_no_model_segments,
     subtype_min_median_depth,
     aa_changes,
     synonymous_changes,
@@ -851,6 +879,7 @@ sample_table |>
     medaka_polished_segments = "Medaka Polished",
     irma_fallback_segments = "IRMA Fallback",
     medaka_failed_segments = "Medaka Failed",
+    medaka_skipped_no_model_segments = "Skipped: model unavailable",
     subtype_min_median_depth = "Min Median Depth",
     aa_changes = "AA Changes",
     synonymous_changes = "Synonymous",
