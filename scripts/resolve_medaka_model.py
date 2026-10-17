@@ -20,6 +20,22 @@ model selectors:
 Medaka performs the actual mapping from the basecaller model to the
 corresponding Medaka model. This avoids maintaining a duplicate model mapping
 inside WINGS.
+
+Exit codes
+----------
+0
+    A single basecaller model was resolved and the TSV was written.
+3
+    The FASTQ was read successfully but carries no basecall_model_version_id.
+    This is the expected outcome for reads retrieved from public archives,
+    because SRA normalisation discards ONT header comment fields. Callers may
+    treat this as an unresolved model rather than a workflow failure.
+1
+    A genuine failure: unreadable or truncated FASTQ, malformed headers, or
+    multiple basecaller models in one file. Callers must not treat this as a
+    benign metadata omission.
+2
+    Invalid command-line usage.
 """
 
 from __future__ import annotations
@@ -30,6 +46,14 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+
+
+class NoModelMetadata(RuntimeError):
+    """The FASTQ was read successfully but carries no basecall model field.
+
+    Kept distinct from RuntimeError so that an ordinary metadata omission is
+    never reported with the same exit code as a software or input failure.
+    """
 
 
 MODEL_PATTERN = re.compile(
@@ -58,8 +82,11 @@ def detect_basecaller_model(
 
     Raises
     ------
+    NoModelMetadata
+        If the file was read successfully but no model field is present.
     RuntimeError
-        If no model is found or multiple models are detected.
+        If the FASTQ is truncated or malformed, or if multiple basecaller
+        models are detected.
     """
     models: list[str] = []
 
@@ -90,12 +117,27 @@ def detect_basecaller_model(
                     f"{header.rstrip()!r}"
                 )
 
+            if not plus.startswith("+"):
+                raise RuntimeError(f"Invalid FASTQ separator at record {record_number}")
+            sequence_text = sequence.rstrip("\r\n")
+            quality_text = quality.rstrip("\r\n")
+
+            if not sequence_text:
+                raise RuntimeError(
+                    f"Empty sequence at record {record_number}")
+
+            if len(sequence_text) != len(quality_text):
+                raise RuntimeError(
+                    f"Sequence/quality length mismatch at record {record_number}")
             match = MODEL_PATTERN.search(header)
             if match:
                 models.append(match.group(1))
 
+    if record_number == 0:
+        raise RuntimeError(f"FASTQ contains no records: {fastq}")
+
     if not models:
-        raise RuntimeError(
+        raise NoModelMetadata(
             "No basecall_model_version_id metadata was found in the first "
             f"{max_records} FASTQ records of {fastq}"
         )
@@ -218,6 +260,12 @@ def main() -> int:
             basecaller_model,
             records_with_model,
         )
+
+    except NoModelMetadata as exc:
+        # Expected for archived reads. Reported separately so a caller can
+        # distinguish "the archive did not keep it" from "something broke".
+        print(f"NO_MODEL_METADATA: {exc}", file=sys.stderr)
+        return 3
 
     except (OSError, RuntimeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
