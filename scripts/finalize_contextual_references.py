@@ -46,8 +46,36 @@ def clean(value: object) -> str:
 
 def read_tsv(path: Path) -> List[dict]:
     with path.open(newline="", encoding="utf-8-sig") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        return [dict(row) for row in reader]
+        reader = csv.DictReader(handle, delimiter="\t", strict=True)
+        fields = reader.fieldnames or []
+        required = {"tip_label", "tip_kind", "segment"}
+        missing = required.difference(fields)
+        if missing:
+            raise ValueError(
+                f"Invalid contextual tip manifest {path}: missing columns: "
+                + ", ".join(sorted(missing))
+            )
+        if len(fields) != len(set(fields)) or any(not field.strip() for field in fields):
+            raise ValueError(f"Invalid contextual tip manifest {path}: blank or duplicate column names")
+        rows = []
+        for row in reader:
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(
+                    f"Invalid contextual tip manifest {path}, line {reader.line_num}: "
+                    "row width does not match the header"
+                )
+            if any(not clean(row[field]) for field in required):
+                raise ValueError(
+                    f"Invalid contextual tip manifest {path}, line {reader.line_num}: "
+                    "tip_label, tip_kind, and segment must be nonempty"
+                )
+            if clean(row["tip_kind"]) not in {"public_reference", "wings_sample"}:
+                raise ValueError(
+                    f"Invalid contextual tip manifest {path}, line {reader.line_num}: "
+                    f"unrecognized tip_kind {row['tip_kind']!r}"
+                )
+            rows.append(dict(row))
+        return rows
 
 
 def sha256_file(path: Path) -> str:
@@ -154,7 +182,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     public_rows = [row for row in all_rows if clean(row.get("tip_kind")) == "public_reference"]
     wings_rows = [row for row in all_rows if clean(row.get("tip_kind")) == "wings_sample"]
     if not public_rows:
-        raise ValueError("Contextual tip manifest contains no public-reference rows")
+        import json as _json, sys as _sys
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        (args.output_dir / "trees").mkdir(parents=True, exist_ok=True)
+        (args.output_dir / "manifest.tsv").write_text("tip_label\ttip_kind\tsegment\n")
+        (args.output_dir / "provenance.json").write_text(
+            _json.dumps({"skipped": True, "reason": "no_public_reference_rows"})
+        )
+        (args.output_dir / "public_references.config.yaml").write_text("")
+        (args.output_dir / "finalize_summary.json").write_text(
+            _json.dumps({"skipped": True, "reason": "no_public_reference_rows"})
+        )
+        for _seg in ["HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS"]:
+            (args.output_dir / "trees" / f"{_seg}_Tree.newick").write_text("")
+        print(
+            "WARNING: no public-reference rows in contextual tip manifest; "
+            "display finalization skipped; the manifest does not establish an upstream cause.",
+            file=_sys.stderr,
+        )
+        return 0
 
     linkage = group_linkage_basis(public_rows)
 

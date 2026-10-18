@@ -2918,6 +2918,9 @@
     }
 
     render() {
+      const reportWarnings = Array.isArray(this.payload.warnings)
+        ? this.payload.warnings.filter(message => typeof message === "string" && message.trim())
+        : [];
       this.root.innerHTML = `
         <div class="wse-shell">
           <div class="wse-heading">
@@ -2928,6 +2931,10 @@
             </div>
             <div class="wse-heading-accent" aria-hidden="true"></div>
           </div>
+          ${reportWarnings.length ? `<section class="wse-panel wse-report-warnings" aria-label="Report warnings">
+            <div class="wse-panel-heading"><h3>Report warnings</h3></div>
+            <ul>${reportWarnings.map(message => `<li>${esc(message)}</li>`).join("")}</ul>
+          </section>` : ""}
           <div class="wse-metrics"></div>
           <div class="wse-selected" aria-live="polite" hidden></div>
           <section class="wse-panel wse-timeline-panel">

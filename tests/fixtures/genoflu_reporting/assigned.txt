@@ -1,0 +1,13 @@
+
+genoflu.py set arguements:
+
+	FASTA:  consensus_all_segments.fasta
+	FASTA_dir:  None
+	pident_threshold:  98.0
+	cross_reference:  None
+	sample_name:  None
+	debug:  False
+
+
+
+consensus Genotype --> D1.1: HA:ea3, NA:am4N1, PB2:am24, PB1:ea3, PA:am4, NP:am13, MP:ea3, NS:ea3 at percent identity at 98.0

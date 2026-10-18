@@ -39,7 +39,14 @@ def attach_reference_context(trees, samples, manifest, provenance, warnings):
     raw = Path(manifest).read_bytes()
     sha = hashlib.sha256(raw).hexdigest()
     meta = json.loads(Path(provenance).read_text(encoding="utf-8"))
+    if "skipped" in meta and not isinstance(meta["skipped"], bool):
+        raise ValueError("Reference provenance skipped must be a boolean")
     if meta.get("skipped"):
+        reason = meta.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("Skipped reference provenance requires a reason")
+        reason = " ".join(reason.split())
+        warnings.append(f"Public reference context skipped. Recorded reason: {reason}")
         return None
     for field in ("manifest_sha256", "retrieved_on", "selection_notes", "citation"):
         if not isinstance(meta.get(field), str) or not meta[field].strip():

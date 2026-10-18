@@ -2346,6 +2346,15 @@ if REFERENCE_ENABLED and REFERENCE_BUILD_CONTEXTUAL:
         shell:
             r"""
             set -euo pipefail
+
+            # Exit-code contract (mirrors resolve_medaka_model):
+            #   0  -> references selected; outputs written normally.
+            #   3  -> expected empty: no GenoFLU assignment available (H5 QC
+            #         gate or unassigned genotype). Write placeholder outputs
+            #         so downstream rules receive their declared inputs and the
+            #         pipeline completes. The run report records the reason.
+            #   >0 -> genuine failure; propagate and stop the workflow.
+            set +e
             python {input.script:q} \
               --public-genotypes {input.public_genotypes:q} \
               --results-dir {RESULTS:q} \
@@ -2356,6 +2365,25 @@ if REFERENCE_ENABLED and REFERENCE_BUILD_CONTEXTUAL:
               --same-genotype-quota {REFERENCE_SAME_GENOTYPE_QUOTA} \
               --same-segment-type-quota {REFERENCE_SAME_SEGMENT_TYPE_QUOTA} \
               --background-quota {REFERENCE_BACKGROUND_QUOTA}
+            rc=$?
+            set -e
+
+            if [[ $rc -eq 0 ]]; then
+                echo "Contextual references selected."
+            elif [[ $rc -eq 3 ]]; then
+                echo "WARNING: no GenoFLU assignments; contextual phylogeny will be skipped." >&2
+                mkdir -p {REFERENCE_SELECTED_DIR:q}
+                for seg in HA NA PB2 PB1 PA NP MP NS; do
+                    : > {REFERENCE_SELECTED_DIR:q}/selected_${{seg}}.fasta
+                    : > {REFERENCE_SELECTED_DIR:q}/selected_${{seg}}.txt
+                done
+                printf 'sample\tgenotype\tsegment\taccession\n' \
+                    > {REFERENCE_SELECTED_DIR:q}/selected_references.tsv
+                printf '{{"skipped": true, "reason": "no_genoflu_assignments"}}\n' \
+                    > {REFERENCE_SELECTED_DIR:q}/selection_summary.json
+            else
+                exit $rc
+            fi
             """
 
 
@@ -2443,11 +2471,17 @@ if REFERENCE_ENABLED and REFERENCE_BUILD_CONTEXTUAL:
         shell:
             r"""
             set -euo pipefail
-            mafft --auto --thread {threads} \
-              {input.fasta:q} \
-              > {output.alignment:q} \
-              2> {log:q}
-            test -s {output.alignment:q}
+            if [[ ! -s {input.fasta:q} ]]; then
+                echo "Input FASTA is empty; contextual alignment skipped for {wildcards.segment}." \
+                    | tee {log:q} >&2
+                : > {output.alignment:q}
+            else
+                mafft --auto --thread {threads} \
+                  {input.fasta:q} \
+                  > {output.alignment:q} \
+                  2> {log:q}
+                test -s {output.alignment:q}
+            fi
             """
 
 
@@ -2479,16 +2513,29 @@ if REFERENCE_ENABLED and REFERENCE_BUILD_CONTEXTUAL:
         shell:
             r"""
             set -euo pipefail
-            iqtree2 \
-              -s {input.alignment:q} \
-              -m MFP \
-              -B 1000 \
-              -nt {threads} \
-              -seed 1 \
-              -redo \
-              -pre {params.prefix:q} \
-              > {log:q} 2>&1
-            test -s {output.tree:q}
+            if [[ ! -s {input.alignment:q} ]]; then
+                echo "Alignment is empty; tree skipped for {wildcards.segment}." \
+                    | tee {log:q} >&2
+                : > {output.tree:q}
+            else
+                n_seqs=$(grep -c '^>' {input.alignment:q} || true)
+                if [[ $n_seqs -lt 3 ]]; then
+                    echo "Only $n_seqs sequence(s); IQ-TREE requires at least 3, tree skipped for {wildcards.segment}." \
+                        | tee {log:q} >&2
+                    : > {output.tree:q}
+                else
+                    iqtree2 \
+                      -s {input.alignment:q} \
+                      -m MFP \
+                      -B 1000 \
+                      -nt {threads} \
+                      -seed 1 \
+                      -redo \
+                      -pre {params.prefix:q} \
+                      > {log:q} 2>&1
+                    test -s {output.tree:q}
+                fi
+            fi
             """
 
 
@@ -2676,9 +2723,20 @@ rule phylogeny_tree:
         r"""
         set -euo pipefail
         mkdir -p "$(dirname {output.tree:q})"
-        iqtree2 -s {input.alignment:q} -m MFP -B 1000 -nt {threads} -seed 1 -redo -pre {params.prefix:q} > {log:q} 2>&1
-        test -s {params.prefix:q}.treefile
-        cp {params.prefix:q}.treefile {output.tree:q}
+        if [[ ! -s {input.alignment:q} ]]; then
+            echo "Alignment is empty; tree skipped for {wildcards.segment}." | tee {log:q} >&2
+            : > {output.tree:q}
+        else
+            n_seqs=$(grep -c '^>' {input.alignment:q} || true)
+            if [[ $n_seqs -lt 3 ]]; then
+                echo "Only $n_seqs sequence(s); IQ-TREE requires at least 3, tree skipped for {wildcards.segment}." | tee {log:q} >&2
+                : > {output.tree:q}
+            else
+                iqtree2 -s {input.alignment:q} -m MFP -B 1000 -nt {threads} -seed 1 -redo -pre {params.prefix:q} > {log:q} 2>&1
+                test -s {params.prefix:q}.treefile
+                cp {params.prefix:q}.treefile {output.tree:q}
+            fi
+        fi
         """
 
 
