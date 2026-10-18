@@ -30,6 +30,10 @@ class GenofluReportStatesTests(unittest.TestCase):
         result = parse(ROOT / 'tests/fixtures/genoflu_reporting/assigned.txt')
         self.assertEqual(result['output_state'], 'assigned')
         self.assertEqual(result['status'], 'D1.1')
+        self.assertEqual(result['calls'], {
+            'HA': 'ea3', 'NA': 'am4N1', 'PB2': 'am24', 'PB1': 'ea3',
+            'PA': 'am4', 'NP': 'am13', 'MP': 'ea3', 'NS': 'ea3',
+        })
         self.assertEqual(present(result)[0], 'download-status-pass')
 
     def test_unassigned_preserves_existing_segment_evidence(self):
