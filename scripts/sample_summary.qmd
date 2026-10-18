@@ -939,6 +939,14 @@ def parse_genoflu_report(path):
         text,
         flags=re.IGNORECASE | re.DOTALL,
     )
+    # Assigned output lists the calls immediately after the genotype label.
+    # Copy those recorded annotations into the table; do not infer new calls.
+    if calls_match is None and result["output_state"] == "assigned" and summary_match:
+        calls_match = re.search(
+            r"^(.*?)\s+at\s+percent\s+identity",
+            summary_match.group(2),
+            flags=re.IGNORECASE,
+        )
     if calls_match:
         for item in calls_match.group(1).split(","):
             if ":" not in item:
