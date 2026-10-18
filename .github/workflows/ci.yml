@@ -65,6 +65,14 @@ jobs:
           tests/test_replay_archive.py \
           tests/test_wings_local_runner.py
 
+      - name: Check reporting states and manifest validation
+        shell: bash -el {0}
+        run: |
+          python -m pytest -q \
+            tests/test_reference_skip_reporting.py \
+            tests/test_context_manifest_validation.py \
+            tests/test_genoflu_report_states.py
+
       - name: Check runner status regressions
         shell: bash -el {0}
         run: python -m pytest -q tests/test_runner_status_regressions.py tests/test_attempt_provenance.py
