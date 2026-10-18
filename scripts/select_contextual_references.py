@@ -186,7 +186,7 @@ def parse_genoflu(text: str) -> dict:
     return result
 
 
-def load_wings_targets(results_dir: Path, metadata_path: Optional[Path]) -> List[dict]:
+def load_wings_targets(results_dir: Path, metadata_path: Optional[Path]) -> tuple:
     metadata: Dict[str, dict] = {}
     if metadata_path and metadata_path.is_file():
         for row in read_tsv(metadata_path):
@@ -195,11 +195,34 @@ def load_wings_targets(results_dir: Path, metadata_path: Optional[Path]) -> List
                 metadata[sid] = row
 
     targets: List[dict] = []
+    skipped_gated: List[str] = []   # GenoFLU was gated (H5 screen failed QC)
+    skipped_unassigned: List[str] = []  # GenoFLU ran but could not assign
+
     for path in sorted(results_dir.glob("*/genoflu/GenoFLU.tsv")):
         sample_id = path.parent.parent.name
         text = path.read_text(encoding="utf-8", errors="replace")
+
+        # Detect gate-status rows written by the WINGS H5/NA screen.
+        # These are not GenoFLU output — the file was written by WINGS itself
+        # when coverage QC gated GenoFLU from running.
+        gated_statuses = {
+            "H5_OR_NA_INDETERMINATE",
+            "H5_NOT_DETECTED",
+        }
+        status_match = None
+        for line in text.splitlines():
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] in gated_statuses:
+                status_match = parts[1]
+                break
+
+        if status_match:
+            skipped_gated.append(f"{sample_id} ({status_match})")
+            continue
+
         parsed = parse_genoflu(text)
         if not parsed["genotype"] and not parsed["segment_calls"]:
+            skipped_unassigned.append(sample_id)
             continue
         meta = metadata.get(sample_id, {})
         targets.append(
@@ -213,7 +236,7 @@ def load_wings_targets(results_dir: Path, metadata_path: Optional[Path]) -> List
                 "host": clean(meta.get("host") or meta.get("host_species") or meta.get("host_common_name")),
             }
         )
-    return targets
+    return targets, skipped_gated, skipped_unassigned
 
 
 def load_host_overrides(path: Optional[Path]) -> Dict[str, bool]:
@@ -523,10 +546,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             metadata_path = default_metadata
             print(f"Using WINGS metadata automatically: {metadata_path}")
 
-    targets = load_wings_targets(args.results_dir, metadata_path)
+    targets, skipped_gated, skipped_unassigned = load_wings_targets(args.results_dir, metadata_path)
     if not targets:
-        print("ERROR: no usable WINGS GenoFLU assignments found under results/*/genoflu/GenoFLU.tsv", file=sys.stderr)
-        return 2
+        lines = [
+            "ERROR: no usable WINGS GenoFLU assignments found.",
+            "",
+            f"  Searched: {args.results_dir}/*/genoflu/GenoFLU.tsv",
+        ]
+        if skipped_gated:
+            lines.append("")
+            lines.append(
+                "  The following sample(s) have a recorded status indicating that "
+                "GenoFLU was not run. Status codes are shown per sample:"
+            )
+            for entry in skipped_gated:
+                lines.append(f"    - {entry}")
+        if skipped_unassigned:
+            lines.append("")
+            lines.append(
+                "  The following sample(s) produced a GenoFLU output but no genotype "
+                "or segment calls could be parsed. The cause is not established "
+                "by this result:"
+            )
+            for entry in skipped_unassigned:
+                lines.append(f"    - {entry}")
+        print("\n".join(lines), file=sys.stderr)
+        return 3
 
     overrides = load_host_overrides(args.host_classification)
     public_rows_all = read_tsv(args.public_genotypes)

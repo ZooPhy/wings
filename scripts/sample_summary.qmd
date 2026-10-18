@@ -165,7 +165,7 @@ if multiple_irma_candidate_segments:
     )
 if medaka_fallback_segments:
     medaka_review_notes.append(
-        "IRMA fallback after Medaka failure: " + ", ".join(medaka_fallback_segments)
+        "Unpolished IRMA fallback: " + ", ".join(medaka_fallback_segments)
     )
 if medaka_failed_variant_segments:
     medaka_review_notes.append(
@@ -290,7 +290,7 @@ header_html = f"""
     <div class="metric-label">Review status</div>
     <div class="metric-value">
       <span class="status-badge {review_status}">
-        {"PASS" if review_flags == "NONE" else "REVIEW"}
+        {"PASS" if review_status == "status-pass" else "REVIEW"}
       </span>
     </div>
     <div class="metric-detail">
@@ -865,6 +865,7 @@ def parse_genoflu_report(path):
     """Parse the compact plain-text GenoFLU report emitted by genoflu.py."""
     result = {
         "status": "Not available",
+        "output_state": "missing",
         "reason": "GenoFLU output was not provided to the report.",
         "threshold": None,
         "matched_segments": None,
@@ -873,29 +874,40 @@ def parse_genoflu_report(path):
         "raw_text": "",
     }
 
-    if path is None or not path.exists() or path.stat().st_size == 0:
+    if path is None or not path.exists():
         return result
-
-    text = path.read_text(encoding="utf-8", errors="replace")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        result.update(status="Invalid output", output_state="invalid",
+                      reason="The supplied GenoFLU output could not be read as UTF-8 text.")
+        return result
     result["raw_text"] = text
+    if not text.strip():
+        result.update(status="Invalid output", output_state="invalid",
+                      reason="The supplied GenoFLU output is empty.")
+        return result
+    result.update(status="Unrecognized output", output_state="unrecognized",
+                  reason="No recognized GenoFLU result or skip status was found in the supplied output.")
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if len(lines) == 2 and lines[0].startswith("sample\tstatus"):
-        gate_status = lines[1].split("\t", 1)[-1].strip()
-        if gate_status in {"H5_NOT_DETECTED", "H5N1_NOT_DETECTED"}:
-            result["status"] = "Not run"
-            result["reason"] = "GenoFLU was not run because the QC-passing HA was not H5."
-        elif gate_status in {"H5_OR_NA_INDETERMINATE", "H5N1_INDETERMINATE"}:
-            result["status"] = "Not run"
-            result["reason"] = "GenoFLU was not run because QC-qualified H5/NA eligibility was indeterminate."
-        else:
-            result["status"] = gate_status
-            result["reason"] = "GenoFLU was gated by the H5 + NA eligibility result."
+    if len(lines) == 2 and lines[0] == "sample\tstatus":
+        fields = lines[1].split("\t")
+        if len(fields) != 2 or not fields[0].strip():
+            return result
+        gate_status = fields[1].strip()
+        if gate_status in {"H5_NOT_DETECTED", "H5N1_NOT_DETECTED",
+                           "H5_OR_NA_INDETERMINATE", "H5N1_INDETERMINATE"}:
+            result.update(status="Not run", output_state="skipped",
+                          reason=f"GenoFLU was not run. Recorded status: {gate_status}.")
         return result
 
     threshold_match = re.search(r"pident_threshold:\s*([0-9.]+)", text)
     if threshold_match:
-        result["threshold"] = float(threshold_match.group(1))
+        try:
+            result["threshold"] = float(threshold_match.group(1))
+        except ValueError:
+            pass
 
     summary_match = re.search(
         r"consensus\s+Genotype\s+-->\s+([^:\n]+):\s*(.*)",
@@ -905,6 +917,13 @@ def parse_genoflu_report(path):
     if summary_match:
         result["status"] = summary_match.group(1).strip()
         result["reason"] = summary_match.group(2).strip()
+        if not result["status"] or not result["reason"]:
+            result.update(status="Unrecognized output", output_state="unrecognized",
+                          reason="The GenoFLU result line is incomplete.")
+            return result
+        result["output_state"] = (
+            "unassigned" if result["status"].lower() == "not assigned" else "assigned"
+        )
 
     count_match = re.search(
         r"Only\s+(\d+)\s+segments\s+>[0-9.]+%\s+match\s+found\s+of\s+total\s+(\d+)\s+segments",
@@ -933,6 +952,21 @@ def parse_genoflu_report(path):
     return result
 
 
+def genoflu_report_presentation(result):
+    """Describe recorded output without inferring execution success from absence."""
+    state = result["output_state"]
+    badge = "download-status-pass" if state == "assigned" else "download-status-review"
+    explanations = {
+        "assigned": "The output records the genotype assignment shown above.",
+        "unassigned": "The output explicitly reports no genotype assignment. Any recorded segment-level calls are shown separately.",
+        "skipped": "The recorded status indicates that GenoFLU was not run; no genotype result is implied.",
+        "missing": "No output is available to determine whether GenoFLU ran or produced a result.",
+        "invalid": "The supplied output cannot be interpreted. Analysis completion is not established.",
+        "unrecognized": "The supplied text does not establish a recognized result. Analysis completion is not established.",
+    }
+    return badge, str(result["reason"]), explanations[state]
+
+
 genoflu = parse_genoflu_report(genoflu_file)
 all_segments = ["PB2", "PB1", "PA", "HA", "NP", "NA", "MP", "NS"]
 call_rows = []
@@ -952,11 +986,7 @@ for segment in all_segments:
 
 calls_df = pd.DataFrame(call_rows)
 status_text = str(genoflu["status"])
-status_class = (
-    "download-status-pass"
-    if status_text.lower() not in {"not assigned", "not available", "not run"}
-    else "download-status-review"
-)
+status_class, result_text, interpretation_text = genoflu_report_presentation(genoflu)
 
 if genoflu_file and genoflu_file.exists() and genoflu_file.stat().st_size > 0:
     genoflu_href = file_data_uri(genoflu_file, "text/plain;charset=utf-8")
@@ -988,27 +1018,6 @@ if matched is not None:
 if threshold is not None:
     summary_bits.append(f"identity threshold: {threshold:g}%")
 summary_line = " · ".join(summary_bits)
-
-if status_text.lower() == "not run":
-    result_text = str(genoflu["reason"])
-    interpretation_text = "GenoFLU gating requires a QC-passing H5 HA plus a QC-passing resolved NA segment; no genotype call is implied when that requirement is not met."
-elif status_text.lower() == "not assigned":
-    submitted_count = input_count if input_count is not None else len(genoflu["calls"])
-    matched_count = matched if matched is not None else len(genoflu["calls"])
-    threshold_phrase = f" at ≥{threshold:g}% identity" if threshold is not None else ""
-    missing_text = ", ".join(missing_segments) if missing_segments else "one or more required segments"
-    result_text = (
-        f"All {matched_count} of {submitted_count} submitted segments matched{threshold_phrase}, "
-        f"but {missing_text} were unavailable, so a complete eight-segment genotype "
-        "could not be assigned."
-    )
-    interpretation_text = (
-        "GenoFLU completed successfully. Missing or unresolved segments are shown as "
-        "not available."
-    )
-else:
-    result_text = str(genoflu["reason"])
-    interpretation_text = "GenoFLU completed and returned the genotype result shown below."
 
 reason_text = html.escape(result_text)
 
@@ -1205,7 +1214,7 @@ else:
 
 ## Consensus and variant files
 
-Medaka processing is tracked explicitly for each segment. **SUCCESS · MEDAKA** means polishing completed normally. **FAILED · IRMA FALLBACK** means Medaka failed after the segment passed WINGS segment QC, so the QC-passing IRMA consensus was carried forward with explicit provenance. **SKIPPED QC** means Medaka was not run because the segment did not pass segment QC. Variant-generation failures are reported separately and are not represented as successful empty VCFs.
+Medaka processing is tracked explicitly for each segment. **SUCCESS · MEDAKA** means polishing completed normally. **FAILED · IRMA FALLBACK** means Medaka failed after the segment passed WINGS segment QC, so the QC-passing IRMA consensus was carried forward with explicit provenance. **UNPOLISHED · IRMA FALLBACK** means polishing was skipped because no model was available; the retained consensus is unpolished. **SKIPPED NO MODEL** means the stage was not run because no model was available. This is distinct from a software failure. **SKIPPED QC** means Medaka was not run because the segment did not pass segment QC. Variant-generation failures are reported separately and are not represented as successful empty VCFs.
 
 ```{python}
 def count_vcf_records(path):
@@ -1225,6 +1234,8 @@ def status_badge(status, label=None):
     css_class = {
         "SUCCESS": "download-status-pass",
         "SKIPPED_QC": "download-status-neutral",
+        "SKIPPED_NO_MODEL": "download-status-review",
+        "UNPOLISHED": "download-status-review",
         "FAILED": "download-status-fail",
     }.get(normalized, "download-status-neutral")
     display_label = label or normalized.replace("_", " ")
@@ -1271,6 +1282,11 @@ for _, segment_row in segment_data.iterrows():
             f'download="{html.escape(str(sample_id))}_{html.escape(segment)}_variants.vcf">'
             '<span aria-hidden="true">↓</span> VCF</a>'
         )
+    elif variant_status == "SKIPPED_NO_MODEL":
+        variant_summary = status_badge(
+            "SKIPPED_NO_MODEL", "Skipped: model unavailable"
+        )
+        vcf_link = '<span class="file-unavailable">Not generated</span>'
     elif variant_status == "FAILED":
         variant_summary = status_badge("FAILED", "FAILED")
         vcf_link = '<span class="file-unavailable">Not generated</span>'
