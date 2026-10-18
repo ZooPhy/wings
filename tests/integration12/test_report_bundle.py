@@ -23,7 +23,10 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def test_production_wings_bundle_release_artifact():
+def test_production_wings_bundle_release_artifact(monkeypatch):
+    # This fixture represents direct terminal execution, not a launcher attempt.
+    monkeypatch.delenv("WINGS_ATTEMPT_PROVENANCE", raising=False)
+
     subprocess.run(
         [sys.executable, str(HERE / "prepare_fixtures.py")],
         cwd=REPO_ROOT,
@@ -140,7 +143,8 @@ def test_production_wings_bundle_release_artifact():
 
     assert bundle["provenance"]["filename"] == "run_provenance.json"
     assert embedded_provenance == disk_provenance
-    assert embedded_provenance["schema_version"] == 3
+    assert embedded_provenance["schema_version"] == 4
+    assert embedded_provenance["launcher_attempt"] is None
     assert embedded_provenance["workflow"]["name"] == "WINGS"
     assert embedded_provenance["workflow"]["sample_count"] == 2
     assert embedded_provenance["workflow"]["snakefile"] == "Snakefile"
