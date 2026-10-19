@@ -229,6 +229,46 @@ button, input, select { font: inherit; }
   animation: wings-fly 1.8s ease-in-out infinite;
 }
 
+.wings-landed-status {
+  position: relative;
+  display: none;
+  flex: 0 0 54px;
+  width: 54px;
+  height: 44px;
+}
+
+.status-activity.landed .wings-landed-status { display: block; }
+
+.wings-landed-bird {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 44px;
+  height: 36px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  transform: translateY(0);
+}
+
+.wings-complete-check {
+  position: absolute;
+  bottom: 1px;
+  right: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.status-activity.landing .wings-landed-bird {
+  animation: wings-land .65s ease-out both;
+}
+
+@keyframes wings-land {
+  0% { opacity: 0; transform: translateY(-7px); }
+  35% { opacity: 1; }
+  75% { transform: translateY(1px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes wings-fly {
   0%, 100% {
     transform: translate(0, 1px) rotate(-1deg);
@@ -239,7 +279,8 @@ button, input, select { font: inherit; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .status-activity.running .wings-flying-status {
+  .status-activity.running .wings-flying-status,
+  .status-activity.landing .wings-landed-bird {
     animation: none;
   }
 }

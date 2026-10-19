@@ -34,8 +34,29 @@
 
   const $ = (id) => document.getElementById(id);
   // A cached page may predate the optional activity indicator.
-  function setActivity(running) {
-    $("statusActivity")?.classList.toggle("running", running);
+  function setActivity(status) {
+    const activity = $("statusActivity");
+    if (!activity) return;
+    const running = status === "running";
+    const landed = status === "complete";
+    const landing = landed && activity.classList.contains("running");
+
+    if (landed && !activity.querySelector(".wings-landed-status")) {
+      const indicator = document.createElement("span");
+      indicator.className = "wings-landed-status";
+      indicator.setAttribute("aria-hidden", "true");
+      indicator.innerHTML = `
+        <img class="wings-landed-bird" src="assets/wings_logo.jpg" alt="">
+        <svg class="wings-complete-check" viewBox="0 0 20 20" focusable="false" aria-hidden="true">
+          <circle cx="10" cy="10" r="9" fill="#237a45" stroke="#fff" stroke-width="2"/>
+          <path d="m6 10 2.5 2.5L14 7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+      activity.insertBefore(indicator, $("metricStatus"));
+    }
+
+    activity.classList.toggle("running", running);
+    activity.classList.toggle("landed", landed);
+    activity.classList.toggle("landing", landing);
   }
   const stepMeta = [
     ["Run details", "Name the run and choose local compute settings."],
@@ -500,7 +521,7 @@
       }[run.status] || run.status;
 
       $("metricStatus").textContent = statusLabel;
-      setActivity(run.status === "running");
+      setActivity(run.status);
       $("metricSamples").textContent = run.sample_count ?? "—";
       $("metricElapsed").textContent = elapsedText(run.started_at, run.finished_at);
       $("metricRunId").textContent = run.run_id;
