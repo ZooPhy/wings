@@ -2105,6 +2105,7 @@ rule sample_summary_html:
         coverage=f"{RESULTS}/{{sample}}/coverage/coverage.tsv",
         blast=f"{RESULTS}/{{sample}}/summary/blast_top_hits.csv",
         template="scripts/sample_summary.qmd",
+        report_logo="assets/wings_logo.jpg",
         genoflu=optional_genoflu_input,
         vadr_log=optional_vadr_log_input,
         medaka_inference_status=lambda wildcards: [
@@ -2172,11 +2173,14 @@ rule sample_summary_html:
         constellation_css_abs="$(cd "$(dirname {input.constellation_css:q})" && pwd)/$(basename {input.constellation_css:q})"
         constellation_js_abs="$(cd "$(dirname {input.constellation_js:q})" && pwd)/$(basename {input.constellation_js:q})"
 
+        report_logo_abs="$(cd "$(dirname {input.report_logo:q})" && pwd)/$(basename {input.report_logo:q})"
+
         temp_qmd="$output_dir/.sample_summary.qmd"
         temp_report_dir="$output_dir/report"
 
         mkdir -p "$temp_report_dir"
 
+        cp "$report_logo_abs" "$temp_report_dir/wings_logo.jpg"
         cp "$template_abs" "$temp_qmd"
         cp "$css_abs" "$temp_report_dir/sample-report.css"
         cp "$report_html_abs" "$temp_report_dir/escape-report.html"
