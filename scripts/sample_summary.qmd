@@ -213,6 +213,10 @@ reads_after = int(row["reads_after"])
 def find_wings_logo():
     """Locate the WINGS logo from the repository or current render directory."""
     cwd = Path.cwd().resolve()
+    # sample_summary_html stages the asset here, including for external results.
+    staged_logo = cwd / "report" / "wings_logo.jpg"
+    if staged_logo.is_file() and staged_logo.stat().st_size > 0:
+        return staged_logo
     for base in (cwd, *cwd.parents):
         candidate = base / "assets/wings_logo.jpg"
         if candidate.is_file() and candidate.stat().st_size > 0:
