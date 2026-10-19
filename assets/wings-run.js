@@ -39,9 +39,11 @@
     if (!activity) return;
     const running = status === "running";
     const landed = status === "complete";
+    const failed = status === "failed";
+    const stopped = status === "stopped";
     const landing = landed && activity.classList.contains("running");
 
-    if (landed && !activity.querySelector(".wings-landed-status")) {
+    if ((landed || failed || stopped) && !activity.querySelector(".wings-landed-status")) {
       const indicator = document.createElement("span");
       indicator.className = "wings-landed-status";
       indicator.setAttribute("aria-hidden", "true");
@@ -50,12 +52,22 @@
         <svg class="wings-complete-check" viewBox="0 0 20 20" focusable="false" aria-hidden="true">
           <circle cx="10" cy="10" r="9" fill="#237a45" stroke="#fff" stroke-width="2"/>
           <path d="m6 10 2.5 2.5L14 7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <svg class="wings-failed-badge" viewBox="0 0 20 20" focusable="false" aria-hidden="true">
+          <circle cx="10" cy="10" r="9" fill="#b3261e" stroke="#fff" stroke-width="2"/>
+          <path d="m7 7 6 6m0-6-6 6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <svg class="wings-stopped-badge" viewBox="0 0 20 20" focusable="false" aria-hidden="true">
+          <circle cx="10" cy="10" r="9" fill="#60656c" stroke="#fff" stroke-width="2"/>
+          <rect x="6.5" y="6.5" width="7" height="7" rx=".6" fill="#fff"/>
         </svg>`;
       activity.insertBefore(indicator, $("metricStatus"));
     }
 
     activity.classList.toggle("running", running);
     activity.classList.toggle("landed", landed);
+    activity.classList.toggle("failed", failed);
+    activity.classList.toggle("stopped", stopped);
     activity.classList.toggle("landing", landing);
   }
   const stepMeta = [

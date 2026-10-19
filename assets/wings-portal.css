@@ -237,7 +237,9 @@ button, input, select { font: inherit; }
   height: 44px;
 }
 
-.status-activity.landed .wings-landed-status { display: block; }
+.status-activity.landed .wings-landed-status,
+.status-activity.failed .wings-landed-status,
+.status-activity.stopped .wings-landed-status { display: block; }
 
 .wings-landed-bird {
   position: absolute;
@@ -250,13 +252,20 @@ button, input, select { font: inherit; }
   transform: translateY(0);
 }
 
-.wings-complete-check {
+.wings-complete-check,
+.wings-failed-badge,
+.wings-stopped-badge {
+  display: none;
   position: absolute;
   bottom: 1px;
   right: 0;
   width: 18px;
   height: 18px;
 }
+
+.status-activity.landed .wings-complete-check,
+.status-activity.failed .wings-failed-badge,
+.status-activity.stopped .wings-stopped-badge { display: block; }
 
 .status-activity.landing .wings-landed-bird {
   animation: wings-land .65s ease-out both;
