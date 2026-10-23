@@ -22,6 +22,7 @@ params:
   stability_summary: "interpretation_stability.tsv"
   explorer_json: "surveillance_explorer.json"
   interpretation_json: "public_health_interpretation.json"
+  genotype_dashboard_html: "report/genotype-frequencies.html"
   explorer_enabled: true
   genoflu_enabled: false
   coverage_threshold: 50
@@ -1144,11 +1145,24 @@ if (explorer_enabled && file.exists(params$explorer_json)) {
     readLines(params$interpretation_json, warn = FALSE, encoding = "UTF-8"),
     collapse = "\n"
   ) else '{"status":"DISABLED"}'
-  htmltools::HTML(sprintf(
-    '<script type="application/json" id="wings-surveillance-data-0">%s</script>\n<script type="application/json" id="wings-public-health-interpretation-0">%s</script>\n<div class="wings-surveillance-explorer" data-wse-data-id="wings-surveillance-data-0" data-wse-interpretation-id="wings-public-health-interpretation-0"></div>',
+  genotype_dashboard_template <- NULL
+  if (file.exists(params$genotype_dashboard_html)) {
+    genotype_dashboard_template <- htmltools::tags$template(
+      id = "wings-genotype-dashboard-0",
+      htmltools::tags$iframe(
+        title = "WINGS and public genotype frequencies",
+        class = "wse-genotype-frame",
+        style = "display:block;width:100%;height:1200px;border:0;",
+        sandbox = "allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox",
+        srcdoc = paste(readLines(params$genotype_dashboard_html, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+      )
+    )
+  }
+  htmltools::tagList(htmltools::HTML(sprintf(
+    '<script type="application/json" id="wings-surveillance-data-0">%s</script>\n<script type="application/json" id="wings-public-health-interpretation-0">%s</script>\n<div class="wings-surveillance-explorer" data-wse-data-id="wings-surveillance-data-0" data-wse-interpretation-id="wings-public-health-interpretation-0" data-wse-genotype-template-id="wings-genotype-dashboard-0"></div>',
     explorer_json_text,
     interpretation_json_text
-  ))
+  )), genotype_dashboard_template)
 } else if (explorer_enabled) {
   htmltools::div(
     class = "alert alert-warning",

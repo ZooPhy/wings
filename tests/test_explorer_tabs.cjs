@@ -9,9 +9,9 @@ const context = vm.createContext({});
 vm.runInContext(source, context);
 const api = context.WINGS_EXPLORER_TABS;
 
-test('exports the four stable application views', () => {
-  assert.equal(api.VERSION, '0.2.0');
-  assert.deepEqual(Array.from(api.TAB_ORDER), ['overview', 'genome', 'ecology', 'coverage', 'concordance', 'outbreak']);
+test('exports application views including the embedded genotype dashboard', () => {
+  assert.equal(api.VERSION, '0.3.0');
+  assert.deepEqual(Array.from(api.TAB_ORDER), ['overview', 'genome', 'genotypes', 'ecology', 'coverage', 'concordance', 'outbreak']);
 });
 
 test('mount rejects a missing Explorer instance', () => {

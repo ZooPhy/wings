@@ -43,6 +43,7 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - Portable `.wings` report bundles containing the run summary, all sample reports, and embedded run-level provenance
 - Run-level provenance capturing workflow state, configuration hashes, environment hashes, runtime details, and BLAST database provenance
 - Browser-based local report viewing at `wings.scotchlab.org` with no sequencing-data upload
+- [Genotype frequencies](#public-genotype-frequency-graph) in the portal and Surveillance Explorer, with WINGS/public comparisons, genotype/host/location/month filters, separate sample/run denominators, automatic public-snapshot freshness checks, and SVG/CSV export
 - Apple Silicon and Linux ARM64 support
 - Docker, Apptainer, Singularity, or local IRMA execution
 
@@ -1013,6 +1014,127 @@ The record captures the WINGS Git commit, branch and dirty/clean state; SHA-256 
 For a formal reproducible analysis, generate provenance from a clean committed repository state so `workflow.git_dirty` is `false`.
 
 ## Reports
+
+### Public genotype frequency graph
+
+Open **Surveillance Explorer → Genotype frequencies** in a completed run
+report to compare WINGS samples with public records from
+[andersen-lab/avian-influenza](https://github.com/andersen-lab/avian-influenza).
+The standalone graph is also linked from the portal home and run setup pages,
+or available at `genotypes.html` on the local runner. Run reports embed the
+chart code and data snapshots for offline viewing and portable `.wings` sharing.
+The standalone portal shows public data; a completed run report also supplies
+that run's WINGS samples.
+
+#### Sources, filters, and denominators
+
+| Data source | Display and counting unit | Initial month range |
+| --- | --- | --- |
+| **All** (default) | Aligned WINGS and Public Data panels, with shared genotype colors and separate denominators | WINGS collection span when usable WINGS dates are available; otherwise the available data span |
+| **WINGS** | One record per unique sample ID in the run | WINGS collection span |
+| **Public Data** | One record per public SRA run; multiple runs can represent the same specimen | Full available public collection span |
+
+Views open by collection month when usable dates are available. The month range
+can be widened or narrowed, and selections are remembered for each source view
+while the page remains open. The default WINGS span is derived from the current
+run, not a fixed date range.
+
+Use the **genotype, host, location, and month** dropdowns to filter the graph.
+In **All**, the selected filters apply to both panels. Selecting a genotype
+shows its frequency while retaining all eligible genotypes in the denominator;
+it does not make that genotype automatically equal 100%.
+
+Location filters recognize `USA` and `United States` as the same country and
+ignore empty slash-separated fields. Selecting a country includes its recorded
+states and counties; selecting a state includes its recorded counties. For
+example, **United States / Kentucky** includes WINGS locations stored as
+`USA / Kentucky` and public locations stored as `United States/Kentucky//`.
+Records without the selected state or county information cannot be assigned to
+that location by the filter.
+
+Percentages default to records **with an assigned genotype**, calculated
+separately for each source. An alternate denominator includes all selected
+records. WINGS counts samples; public data counts SRA runs. Unassigned and
+unavailable results are reported separately, and records without a usable month
+are excluded from date-based views. These are descriptive frequencies in the
+included sequencing records, not estimates of population prevalence.
+
+#### Calendar-month toggle
+
+**Show all calendar months** controls whether months without eligible records
+remain on the time axis:
+
+- **Checked:** show every calendar month in the displayed range.
+- **Unchecked, WINGS or Public Data:** omit months with no eligible records for
+  that source and the selected denominator.
+- **Unchecked, All:** omit a month only when **both sources** have no eligible
+  records. If either source has data, the month remains visible in both panels
+  so their time axes stay aligned.
+
+The page explains when every month already has eligible records and toggling
+will not change the graph. To hide months empty only in WINGS, select **WINGS**.
+Dashed columns indicate unavailable frequencies, not measured zero frequency.
+When months are omitted, equal bar spacing does not represent elapsed time.
+Changing this display option does not change counts, percentages, or CSV exports.
+Graphs and downloaded SVGs use the ASU color palette, with patterns for extra
+categories. CSV downloads provide the underlying counts and denominators.
+
+#### Keeping public data current
+
+Each report build checks the public snapshot and, under the default refresh
+policy, attempts to refresh it when it is **more than seven days old**. Downloads
+are cached outside the repository. If a download fails, the last valid snapshot
+is retained; a successful report build therefore does not by itself prove that
+new data were downloaded. Refresh happens during report generation, **not
+installation**, and does not install a background scheduler. Opening an existing
+HTML report or `.wings` bundle does not refresh its embedded data.
+
+For the standalone portal, run a freshness check:
+
+```bash
+python scripts/refresh_genotype_frequencies.py
+```
+
+To request a new download immediately, regardless of snapshot age:
+
+```bash
+python scripts/refresh_genotype_frequencies.py --force
+```
+
+The script downloads the genotype and collection-metadata tables from one
+source commit and rebuilds `assets/data/genotype-frequencies.json`. Reload the
+portal page afterward. Automatic report refresh saves a separate copy in
+`results/run_summary/public_genotype_frequencies.json`; it does not modify the
+portal's tracked snapshot. Refreshing the portal alone does not update an
+already-built report or bundle.
+
+Check the genotype page's source information for the **snapshot build date,
+source commit, and report refresh status/note**, when present. For a report,
+`results/run_summary/public_genotype_frequencies.json` also records `built_at`,
+`source_commit`, and `report_refresh`. A `cached` status means the saved snapshot
+was reused; check its date and the accompanying note when assessing freshness.
+The report preserves the exact snapshot used for reproducibility.
+
+#### Rebuild an existing report and bundle
+
+From the WINGS repository, rebuild using the saved analysis results:
+
+```bash
+snakemake results/wings_report_bundle.wings \
+  --cores 1 \
+  --use-conda \
+  --allowed-rules run_summary_html wings_report_bundle \
+  --forcerun run_summary_html wings_report_bundle
+```
+
+Open `results/run_summary/run_summary.html`, or reload
+`results/wings_report_bundle.wings` in the bundle viewer. This runs the report's
+freshness check and embeds the resulting snapshot. It rebuilds the report and
+bundle from existing results without rerunning sequencing analysis or Ollama.
+
+Offline mode, source-commit pinning, local TSV import, join rules, date precision,
+source provenance, and exports are documented in
+[Genotype frequencies](docs/genotype-frequencies.md).
 
 ### Sample report
 
