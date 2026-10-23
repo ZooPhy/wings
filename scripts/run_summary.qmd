@@ -21,6 +21,7 @@ params:
   review_tsv: "samples_requiring_review.tsv"
   stability_summary: "interpretation_stability.tsv"
   explorer_json: "surveillance_explorer.json"
+  interpretation_json: "public_health_interpretation.json"
   explorer_enabled: true
   genoflu_enabled: false
   coverage_threshold: 50
@@ -1139,9 +1140,14 @@ if (explorer_enabled && file.exists(params$explorer_json)) {
     collapse = "\n"
   )
   # build_surveillance_explorer.py already escapes closing-script sequences.
+  interpretation_json_text <- if (file.exists(params$interpretation_json)) paste(
+    readLines(params$interpretation_json, warn = FALSE, encoding = "UTF-8"),
+    collapse = "\n"
+  ) else '{"status":"DISABLED"}'
   htmltools::HTML(sprintf(
-    '<script type="application/json" id="wings-surveillance-data-0">%s</script>\n<div class="wings-surveillance-explorer" data-wse-data-id="wings-surveillance-data-0"></div>',
-    explorer_json_text
+    '<script type="application/json" id="wings-surveillance-data-0">%s</script>\n<script type="application/json" id="wings-public-health-interpretation-0">%s</script>\n<div class="wings-surveillance-explorer" data-wse-data-id="wings-surveillance-data-0" data-wse-interpretation-id="wings-public-health-interpretation-0"></div>',
+    explorer_json_text,
+    interpretation_json_text
   ))
 } else if (explorer_enabled) {
   htmltools::div(
