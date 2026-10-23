@@ -429,6 +429,20 @@ else:
     )
     REFERENCE_TREE_DIR = REFERENCE_CONFIG.get("tree_dir")
 
+# Public genotype context is refreshed only while rendering a run report.
+GENOTYPE_FREQUENCY_CONFIG = config.get("genotype_frequencies", {}) or {}
+if not isinstance(GENOTYPE_FREQUENCY_CONFIG, dict):
+    raise ValueError("genotype_frequencies must be a mapping")
+GENOTYPE_FREQUENCY_SEED = str(
+    frozen_reexecution_input("genotype_frequencies")
+    or GENOTYPE_FREQUENCY_CONFIG.get("snapshot", "assets/data/genotype-frequencies.json")
+)
+GENOTYPE_FREQUENCY_OFFLINE = (
+    HISTORICAL_REEXECUTION_ENABLED
+    or as_bool(GENOTYPE_FREQUENCY_CONFIG.get("offline", False))
+    or not as_bool(GENOTYPE_FREQUENCY_CONFIG.get("auto_refresh", True))
+)
+
 # Ecological context can use a supplied snapshot or run-specific acquisition.
 ECOLOGY_CONFIG = config.get("ecological_context", {}) or {}
 if not isinstance(ECOLOGY_CONFIG, dict):
@@ -3305,13 +3319,21 @@ rule run_summary_html:
         explorer_json=(CONCORDANCE_REPORT_EXPLORER_JSON if RUN_CONCORDANCE else f"{RESULTS}/run_summary/surveillance_explorer.json"),
         interpretation=f"{RESULTS}/run_summary/public_health_interpretation.json",
         run_report_html="scripts/report/run-report.html",
+        genotype_builder="scripts/build_genotype_dashboard.py",
+        genotype_refresh="scripts/refresh_genotype_frequencies.py",
+        genotype_importer="scripts/build_genotype_frequencies.py",
+        genotype_page="genotypes.html",
+        genotype_styles=["assets/wings-portal.css", "assets/wings-genotypes.css"],
+        genotype_js="assets/wings-genotypes.js",
+        genotype_snapshot=GENOTYPE_FREQUENCY_SEED,
         explorer_css="scripts/report/surveillance-explorer.css",
         map_boundaries_js="scripts/report/map-boundaries.js",
         explorer_js="scripts/report/surveillance-explorer.js"
     output:
         html=f"{RESULTS}/run_summary/run_summary.html",
         tsv=f"{RESULTS}/run_summary/run_summary.tsv",
-        review=f"{RESULTS}/run_summary/samples_requiring_review.tsv"
+        review=f"{RESULTS}/run_summary/samples_requiring_review.tsv",
+        public_genotypes=f"{RESULTS}/run_summary/public_genotype_frequencies.json"
     params:
         samples=",".join(SAMPLES),
         snakemake_version=SNAKEMAKE_VERSION,
@@ -3321,6 +3343,10 @@ rule run_summary_html:
         max_n_fraction=SEGMENT_MAX_N_FRACTION,
         explorer_enabled="true" if RUN_SURVEILLANCE_EXPLORER else "false",
         genoflu_enabled="true" if RUN_GENOFLU else "false",
+        genotype_cache=str(Path(str(GENOTYPE_FREQUENCY_CONFIG.get("cache_dir", "~/.cache/wings/genotype-frequencies"))).expanduser()),
+        genotype_ref=str(GENOTYPE_FREQUENCY_CONFIG.get("ref", "master")),
+        genotype_age=float(GENOTYPE_FREQUENCY_CONFIG.get("max_age_days", 7)),
+        genotype_offline="--offline" if GENOTYPE_FREQUENCY_OFFLINE else "",
         quarto=QUARTO_CMD,
     conda:
         REPORTING_ENV
@@ -3357,6 +3383,21 @@ rule run_summary_html:
         cp "$explorer_js_abs" "$temp_report_dir/surveillance-explorer.js"
         cp "$map_boundaries_js_abs" "$temp_report_dir/map-boundaries.js"
 
+        python {input.genotype_refresh:q} \
+          --seed {input.genotype_snapshot:q} \
+          --output {output.public_genotypes:q} \
+          --cache-dir {params.genotype_cache:q} \
+          --ref {params.genotype_ref:q} --max-age-days {params.genotype_age} \
+          {params.genotype_offline}
+
+        python {input.genotype_builder:q} \
+          --page {input.genotype_page:q} \
+          --styles {input.genotype_styles:q} \
+          --script {input.genotype_js:q} \
+          --snapshot {output.public_genotypes:q} \
+          --explorer-json {input.explorer_json:q} \
+          --output "$temp_report_dir/genotype-frequencies.html"
+
         (
             cd "$output_dir"
             runtime_dir="${{TMPDIR:-/tmp}}/wings-jupyter-run-summary"
@@ -3374,6 +3415,7 @@ rule run_summary_html:
               -P "stability_summary:interpretation_stability.tsv" \
               -P "explorer_json:${{explorer_json_abs}}" \
               -P "interpretation_json:${{interpretation_json_abs}}" \
+              -P "genotype_dashboard_html:report/genotype-frequencies.html" \
               -P "explorer_enabled:{params.explorer_enabled}" \
               -P "genoflu_enabled:{params.genoflu_enabled}" \
               -P "coverage_threshold:{params.coverage_threshold}" \

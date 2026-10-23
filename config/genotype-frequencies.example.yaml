@@ -1,0 +1,9 @@
+# Optional section to copy into config.yaml. These are the defaults.
+# Checked when run_summary_html runs, not by a background service.
+genotype_frequencies:
+  auto_refresh: true
+  max_age_days: 7
+  cache_dir: "~/.cache/wings/genotype-frequencies"
+  snapshot: "assets/data/genotype-frequencies.json"
+  ref: "master"  # Use a 40-character source commit for a pinned public dataset.
+  offline: false

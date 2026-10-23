@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.0";
+  const VERSION = "0.3.0";
 
   const make = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -10,10 +10,11 @@
     return node;
   };
 
-  const TAB_ORDER = ["overview", "genome", "ecology", "coverage", "concordance", "outbreak"];
+  const TAB_ORDER = ["overview", "genome", "genotypes", "ecology", "coverage", "concordance", "outbreak"];
   const TAB_LABELS = {
     overview: "Overview",
     genome: "Genome",
+    genotypes: "Genotype frequencies",
     ecology: "Ecology",
     coverage: "Sampling & Detections",
     concordance: "Concordance",
@@ -179,6 +180,28 @@
     return wrap;
   }
 
+  function mountGenotypeDashboard(explorer, panel) {
+    const id = explorer.root.dataset.wseGenotypeTemplateId;
+    const template = id ? document.getElementById(id) : null;
+    const original = template?.content?.querySelector("iframe");
+    if (!original) {
+      panel.append(make("p", "wse-app-empty", "Public genotype frequencies were not embedded in this report. Rebuild the run summary with a public genotype snapshot."));
+      return null;
+    }
+    const frame = original.cloneNode(true);
+    panel.append(frame);
+    const refresh = () => frame.contentWindow?.postMessage({type:"wings-genotype-measure"}, "*");
+    frame.addEventListener("load", refresh);
+    globalThis.addEventListener("message", event => {
+      if (event.source !== frame.contentWindow || event.data?.type !== "wings-genotype-height") return;
+      const height = event.data.height;
+      if (typeof height !== "number" || !Number.isFinite(height) || height < 200 || height > 20000) return;
+      frame.style.height = `${Math.max(400, Math.ceil(height))}px`;
+    });
+    refresh();
+    return {refresh};
+  }
+
   function mount(explorer) {
     if (!explorer || !explorer.root) throw new Error("Explorer instance is required.");
     if (explorer.explorerTabs) return explorer.explorerTabs;
@@ -281,6 +304,7 @@
     if (genomeFooter) panels.genome.append(genomeFooter);
 
     panels.ecology.append(ecology);
+    const genotypeDashboard = mountGenotypeDashboard(explorer, panels.genotypes);
 
 
     if (panels.concordance) {
@@ -329,6 +353,9 @@
     const activate = (name, focus = false) => {
       if (!TAB_ORDER.includes(name)) return;
       active = name;
+      toolbar.hidden = name === "genotypes";
+      if (subtitle) subtitle.hidden = name === "genotypes";
+      if (name === "genotypes") requestAnimationFrame(() => genotypeDashboard?.refresh());
       for (const key of TAB_ORDER) {
         const selected = key === name;
         buttons[key].setAttribute("aria-selected", String(selected));
@@ -462,5 +489,5 @@
     return api;
   }
 
-  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison} };
+  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison,mountGenotypeDashboard} };
 })();

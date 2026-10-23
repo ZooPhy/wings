@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Genotype frequencies | WINGS</title>
+  <meta name="description" content="Explore recorded influenza genotype frequencies in public SRA runs.">
+  <link rel="stylesheet" href="assets/wings-portal.css">
+  <link rel="stylesheet" href="assets/wings-genotypes.css">
+  <script defer src="assets/wings-genotypes.js"></script>
+</head>
+<body>
+<header class="portal-header">
+  <div class="portal-header-inner">
+    <a class="portal-brand" href="index.html"><img src="assets/wings_logo.jpg" alt="WINGS logo"><span>WINGS</span></a>
+    <a class="btn btn-secondary" href="index.html">Back to WINGS home</a>
+  </div>
+</header>
+<main class="portal-main gf-main">
+  <p id="gf-eyebrow" class="gf-eyebrow">Public sequencing context</p>
+  <h1 class="portal-title">Genotype frequencies</h1>
+  <p id="gf-description" class="portal-lede">See how often each recorded genotype occurs in the selected dataset.</p>
+  <p id="gf-status" class="gf-status" role="status">Loading frequency snapshot…</p>
+  <section id="gf-controls" class="gf-controls" aria-label="Frequency chart controls" hidden>
+    <label>Data source<select id="gf-source"><option value="all" selected>All</option><option value="wings" disabled>WINGS</option><option value="public">Public Data</option></select></label>
+    <label>View<select id="gf-view"><option value="overall">Overall frequencies</option><option value="monthly">By collection month</option></select></label>
+    <label>Percent of<select id="gf-denominator"><option value="assigned">Runs with an assigned genotype</option><option value="all">All included runs</option></select></label>
+    <label>Genotype<select id="gf-genotype"><option value="">All genotypes</option></select></label>
+    <label>Host<select id="gf-host"><option value="">All hosts</option></select></label>
+    <label>Location<select id="gf-location"><option value="">All locations</option></select></label>
+    <label>From month<select id="gf-from"><option value="">First available month</option></select></label>
+    <label>Through month<select id="gf-through"><option value="">Last available month</option></select></label>
+  </section>
+  <div id="gf-stats" class="gf-stats" aria-live="polite"></div>
+  <section class="gf-chart-panel" aria-labelledby="gf-chart-title">
+    <div class="gf-chart-heading"><h2 id="gf-chart-title">Frequency by genotype</h2><button id="gf-export-svg" class="btn btn-secondary" type="button" disabled>Download graph</button></div>
+    <p id="gf-denominator-note" class="gf-note"></p>
+    <label id="gf-calendar-control" class="gf-calendar-control" hidden><input id="gf-show-empty" type="checkbox"> Show all calendar months</label>
+    <div id="gf-chart" class="gf-chart" aria-live="polite"></div>
+    <div id="gf-legend" class="gf-legend"></div>
+    <p id="gf-coverage" class="gf-note"></p>
+  </section>
+  <p id="gf-unit-note" class="gf-note">Each public record is one SRA run. Multiple runs may come from the same specimen. Percentages describe the included records.</p>
+  <details class="gf-details">
+    <summary>View counts and download data</summary>
+    <button id="gf-export-csv" class="btn btn-secondary" type="button" disabled>Download all genotype counts</button>
+    <div id="gf-table" class="gf-table-wrap"></div>
+  </details>
+  <section class="gf-source" aria-labelledby="gf-source-title">
+    <h2 id="gf-source-title">Source snapshot</h2>
+    <p id="gf-source-description">Public genotype assignments and collection metadata from <a href="https://github.com/andersen-lab/avian-influenza" target="_blank" rel="noopener noreferrer">andersen-lab/avian-influenza</a>.</p>
+    <p id="gf-source-info"></p>
+    <label class="gf-load">Load an updated WINGS frequency snapshot<input id="gf-file" type="file" accept=".json,application/json"></label>
+    <p class="gf-note">The selected snapshot is read in your browser. <a href="docs/genotype-frequencies.md" target="_blank" rel="noopener noreferrer">Refresh instructions</a></p>
+  </section>
+</main>
+</body>
+</html>
