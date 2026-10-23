@@ -10,6 +10,8 @@ WINGS is a portable Snakemake workflow for genomic analysis of avian influenza A
 
 The Surveillance Explorer combines sample locations with **USDA APHIS wild-bird detection context**, including a shared map with state-level detection counts, a dated timeline, source links, and snapshot provenance. These records provide context and do not establish epidemiological links between detections and WINGS samples.
 
+An optional **Knowledge for action** briefing translates the run's results into plain-language public-health implications: what was learned, why it matters, and what it informs for surveillance. A locally hosted language model works from recorded subtype and genotype results, hosts, collection locations and dates, and available ecological and detection evidence. The briefing appears only on **Surveillance Explorer → Overview**, above the sample and host controls. See [Local public-health briefing](#optional-local-public-health-briefing) for setup and report refresh instructions.
+
 WINGS was developed in support of the [**Pandemic ESCAPE Center**](https://escape.engr.uky.edu/), with a focus on genomic epidemiology, bioinformatics, and surveillance of avian influenza viruses in wild birds.
 
 The workflow has been validated on Apple Silicon macOS using Snakemake, Conda, and Docker Desktop, and on Linux ARM64 SLURM clusters using Snakemake, Conda, and Apptainer. VADR is currently disabled on Linux ARM64 because the pinned VADR container image does not provide a Linux ARM64 image.
@@ -36,6 +38,8 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - Linked eight-segment Surveillance Explorer with synchronized sample selection across timeline, map, and segment trees
 - [Ecological context](docs/ecological-context.md) with aligned eBird reporting frequency, an offline BirdCast state pilot, and cached ERA5 weather; source scales, units, dates, and provenance remain visible
 - [USDA APHIS outbreak context](#usda-aphis-outbreak-context) with state-level map shading, date filters, source-record browsing, and reproducible offline snapshots
+- Optional [local public-health briefing](#optional-local-public-health-briefing) using Ollama, with staged assessment, plain-language writing, and evidence review
+- Briefing context covering recorded subtype/genotype, host and location metadata, seasonal bird abundance, migration, weather, and public detections when supplied
 - Portable `.wings` report bundles containing the run summary, all sample reports, and embedded run-level provenance
 - Run-level provenance capturing workflow state, configuration hashes, environment hashes, runtime details, and BLAST database provenance
 - Browser-based local report viewing at `wings.scotchlab.org` with no sequencing-data upload
@@ -135,6 +139,8 @@ NanoPlot raw-read QC is included in the default `rule all` workflow. Set `run_na
 │   ├── build_phylogeny_input.py
 │   ├── build_report_bundle.py
 │   ├── build_surveillance_explorer.py
+│   ├── generate_public_health_interpretation.py  # evidence preparation and local model requests
+│   ├── agency_briefing.py              # staged assessment, writing, and review
 │   ├── install_vadr_models.sh           # pinned VADR influenza-model installer
 │   ├── check_coverage.py
 │   ├── coverage_table.py
@@ -981,7 +987,9 @@ The sequencing-run report is written to:
 results/run_summary/run_summary.html
 ```
 
-The HTML report uses tabs for **Run Summary**, **Sample Detail**, **Subtype/Genotype Distribution**, **Genome Coverage**, and **Surveillance Explorer**. The subtype tab shows HA and NA distributions and, when GenoFLU is enabled, genotype counts among H5Nx-screen-eligible samples. Samples without an assigned GenoFLU genotype are shown separately; samples ineligible for GenoFLU are excluded. The Explorer shows the linked timeline, map, segment trees, and a compact host distribution beneath the map. Click a host bar to filter the Explorer; click it again to show all hosts.
+The HTML report separates **Pipeline Results** from **Surveillance Explorer**. Pipeline Results contains **Run Summary**, **Sample Detail**, **Subtype/Genotype Distribution**, and **Genome Coverage**. The subtype tab shows HA and NA distributions and, when GenoFLU is enabled, genotype counts among H5Nx-screen-eligible samples. Samples without an assigned GenoFLU genotype are shown separately; samples ineligible for GenoFLU are excluded.
+
+The Explorer has **Overview**, **Genome**, **Ecology**, **Sampling & Detections**, **Concordance**, and **Outbreak context** tabs. Its linked timeline, map, and segment trees share sample selection. The optional Knowledge for action briefing appears on Overview only; it summarizes the whole run and does not change with sample selection or host filters.
 
 A portable WINGS report bundle containing the run summary and all sample reports is written to:
 
@@ -1037,6 +1045,127 @@ snakemake \
 ```
 
 Because the run summary depends on all sample reports, target an individual sample report when rerunning only one barcode.
+
+### Optional local public-health briefing
+
+The **Knowledge for action** panel presents a headline and three bullets under
+**Public Health Implications**:
+
+- **What we learned:** the most useful finding from the sampled collection.
+- **Why it matters:** how the genomic findings and available context fit together.
+- **What this informs:** a proportionate implication for surveillance or a specific information gap.
+
+WINGS prepares factual summaries from existing results. The local model assesses
+them, writes the briefing, and reviews the draft against the fuller evidence.
+The writing prompt asks for familiar language without statistical equations,
+methods jargon, or internal evidence codes. Subtype screening and genotype
+assignment retain their recorded status; missing or unassigned results remain
+distinct from negative results.
+
+Context can include USDA APHIS wild-bird detections, seasonal bird abundance,
+BirdCast migration estimates, and weather. The briefing uses the supplied
+geographic scope, date windows, source coverage, and comparison results. Seasonal
+abundance is distinct from measured migration, and short-term weather is distinct
+from a climate trend. An unavailable comparison does not establish that a
+relationship is absent. The briefing generator summarizes existing analyses;
+it does not run new association tests or retrieve missing context.
+
+#### Enable the local model
+
+This feature is disabled by default. Install and start Ollama separately, then
+download the model you intend to use. For the model used during development:
+
+```bash
+ollama pull gpt-oss:20b
+```
+
+Add or update this block in your local `config.yaml`:
+
+```yaml
+public_health_interpretation:
+  enabled: true
+  mode: staged
+  audience: wildlife
+  provider: ollama
+  model: "gpt-oss:20b"
+  url: "http://127.0.0.1:11434/api/chat"
+  timeout_seconds: 180
+  allow_remote: false
+```
+
+Supported audiences are `wildlife`, `animal_health`, and `public_health`. The
+model tag is configurable; WINGS does not install Ollama or download model
+weights automatically. The workflow uses staged mode by default when enabled;
+standalone commands should pass `--mode staged` explicitly. Each model request
+has its own timeout, so the complete staged process can take longer than
+`timeout_seconds`.
+
+WINGS sends structured result summaries, sample identifiers and metadata,
+contextual evidence, and any explicitly supplied briefing context to the
+configured model endpoint. It does not send raw reads, consensus sequences, or
+tree files. With the loopback endpoint above and a locally served model,
+inference runs on your computer; WINGS does not train or fine-tune the model.
+Nonlocal endpoints require an explicit opt-in.
+
+The output is `results/run_summary/public_health_interpretation.json`. It retains
+the evidence, prompts, responses, model identity, and validation diagnostics,
+and is embedded in the HTML report. Sharing the HTML or a rebuilt `.wings`
+bundle therefore also shares that embedded record. Automated checks and a
+separate review call to the same model support traceability; they do not replace
+scientific review. If a staged generation fails, its diagnostics are retained
+and the report identifies the briefing as unavailable.
+
+#### Regenerate a briefing from completed analyses
+
+For a run with existing concordance outputs, use the commands below from the
+repository root. Replace `results` with the completed run's actual results
+directory where needed, including runs stored under `~/.wings/runs/`.
+
+```bash
+python scripts/generate_public_health_interpretation.py \
+  --explorer-json results/run_summary/surveillance_explorer.concordance.json \
+  --concordance-json results/run_summary/concordance/concordance.json \
+  --host-map resources/ebird_host_codes_2025.tsv \
+  --output results/run_summary/public_health_interpretation.staged.json \
+  --mode staged \
+  --audience wildlife \
+  --enabled true \
+  --provider ollama \
+  --model "gpt-oss:20b" \
+  --url http://127.0.0.1:11434/api/chat \
+  --max-output-tokens 2048 \
+  --timeout 180 \
+  --fail-on-error \
+  --print-narrative &&
+cp results/run_summary/public_health_interpretation.staged.json \
+   results/run_summary/public_health_interpretation.json
+```
+
+The copy runs only after successful generation. These commands reuse completed
+analyses and do not rerun read processing, assembly, or tree inference. For a
+run without concordance outputs, use `surveillance_explorer.json` instead and
+omit `--concordance-json`; the briefing can use only the evidence in that input.
+
+#### Rebuild the HTML after a briefing or layout change
+
+With the required report inputs already present, rebuild only the HTML:
+
+```bash
+snakemake results/run_summary/run_summary.html \
+  --cores 1 \
+  --use-conda \
+  --allowed-rules run_summary_html \
+  --forcerun run_summary_html
+```
+
+This embeds the current briefing and report assets without calling Ollama or
+rerunning upstream analyses. A layout-only change needs just this rebuild.
+Use the configuration and output directory belonging to the completed run.
+Rebuild the `.wings` bundle separately before sharing; an existing bundle keeps
+its previously embedded HTML and data.
+
+See [Local LLM interpretation](docs/local-llm-interpretation.md#staged-agency-briefing-v170)
+for optional decision questions, user-supplied context, and saved diagnostics.
 
 ### Optional eBird reporting context
 
@@ -1300,3 +1429,8 @@ See [public reference context](docs/public-reference-context.md) and
 ## Use of AI Statement
 
 Generative AI tools were used during the development of WINGS to assist with software development tasks including code drafting, debugging, documentation, test development, and workflow refinement. All AI-generated or AI-assisted content was reviewed, tested, and modified by the project developers before inclusion in the repository. Scientific, analytical, and software-design decisions remain the responsibility of the authors and maintainers of WINGS.
+
+The optional local public-health briefing is a separate, user-enabled runtime
+use of a language model. It produces a narrative from existing WINGS evidence;
+it does not replace the analytical pipeline. Passing the automated briefing
+checks does not mean a human has reviewed or endorsed the generated conclusions.

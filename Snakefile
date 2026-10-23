@@ -269,6 +269,24 @@ RUN_GENOFLU = as_bool(config.get("run_genoflu", True))
 RUN_VADR = as_bool(config.get("run_vadr", True))
 RUN_SUMMARY = as_bool(config.get("run_summary", True))
 RUN_SURVEILLANCE_EXPLORER = as_bool(config.get("run_surveillance_explorer", True))
+PUBLIC_HEALTH_INTERPRETATION = config.get("public_health_interpretation", {}) or {}
+if not isinstance(PUBLIC_HEALTH_INTERPRETATION, dict):
+    raise ValueError("public_health_interpretation must be a mapping")
+PUBLIC_HEALTH_INTERPRETATION_ENABLED = as_bool(PUBLIC_HEALTH_INTERPRETATION.get("enabled", False))
+PUBLIC_HEALTH_INTERPRETATION_PROVIDER = str(PUBLIC_HEALTH_INTERPRETATION.get("provider", "ollama"))
+PUBLIC_HEALTH_INTERPRETATION_MODEL = str(PUBLIC_HEALTH_INTERPRETATION.get("model", "") or "")
+PUBLIC_HEALTH_INTERPRETATION_URL = str(PUBLIC_HEALTH_INTERPRETATION.get("url", "http://127.0.0.1:11434/api/chat"))
+PUBLIC_HEALTH_INTERPRETATION_TIMEOUT = int(PUBLIC_HEALTH_INTERPRETATION.get("timeout_seconds", 180))
+PUBLIC_HEALTH_INTERPRETATION_ALLOW_REMOTE = as_bool(PUBLIC_HEALTH_INTERPRETATION.get("allow_remote", False))
+PUBLIC_HEALTH_INTERPRETATION_MODE = str(PUBLIC_HEALTH_INTERPRETATION.get("mode", "staged"))
+PUBLIC_HEALTH_INTERPRETATION_AUDIENCE = str(PUBLIC_HEALTH_INTERPRETATION.get("audience", "wildlife"))
+PUBLIC_HEALTH_INTERPRETATION_QUESTION = str(PUBLIC_HEALTH_INTERPRETATION.get("decision_question", "") or "")
+PUBLIC_HEALTH_INTERPRETATION_CONTEXT = str(PUBLIC_HEALTH_INTERPRETATION.get("context_json", "") or "")
+if PUBLIC_HEALTH_INTERPRETATION_MODE not in {"legacy", "staged"}:
+    raise ValueError("interpretation mode must be legacy or staged")
+if PUBLIC_HEALTH_INTERPRETATION_AUDIENCE not in {"wildlife", "animal_health", "public_health"}:
+    raise ValueError("interpretation audience must be wildlife, animal_health or public_health")
+
 
 PHYLOGENY_CONFIG = config.get("phylogeny", {}) or {}
 if not isinstance(PHYLOGENY_CONFIG, dict):
@@ -3191,6 +3209,46 @@ rule historical_stability:
 
 # Produce a run-level report across all FASTQ-derived samples
 # -----------------------------------------------------------------------------
+rule public_health_interpretation:
+    input:
+        explorer=(CONCORDANCE_REPORT_EXPLORER_JSON if RUN_CONCORDANCE else f"{RESULTS}/run_summary/surveillance_explorer.json"),
+        concordance=(f"{CONCORDANCE_DIR}/concordance.json" if RUN_CONCORDANCE else []),
+        host_map=PHENOLOGY_HOST_MAP,
+        generator="scripts/generate_public_health_interpretation.py",
+        briefing="scripts/agency_briefing.py",
+        brief_context=([PUBLIC_HEALTH_INTERPRETATION_CONTEXT] if PUBLIC_HEALTH_INTERPRETATION_CONTEXT else [])
+    output:
+        json=f"{RESULTS}/run_summary/public_health_interpretation.json"
+    params:
+        enabled="true" if PUBLIC_HEALTH_INTERPRETATION_ENABLED else "false",
+        mode=PUBLIC_HEALTH_INTERPRETATION_MODE,
+        audience=PUBLIC_HEALTH_INTERPRETATION_AUDIENCE,
+        question=PUBLIC_HEALTH_INTERPRETATION_QUESTION,
+        context_arg=("--brief-context-json " + shlex.quote(PUBLIC_HEALTH_INTERPRETATION_CONTEXT) if PUBLIC_HEALTH_INTERPRETATION_CONTEXT else ""),
+        provider=PUBLIC_HEALTH_INTERPRETATION_PROVIDER,
+        model=PUBLIC_HEALTH_INTERPRETATION_MODEL,
+        url=PUBLIC_HEALTH_INTERPRETATION_URL,
+        timeout=PUBLIC_HEALTH_INTERPRETATION_TIMEOUT,
+        allow_remote="--allow-remote" if PUBLIC_HEALTH_INTERPRETATION_ALLOW_REMOTE else "",
+        concordance_arg=("--concordance-json " + shlex.quote(f"{CONCORDANCE_DIR}/concordance.json") if RUN_CONCORDANCE else "")
+    conda:
+        REPORTING_ENV
+    shell:
+        r"""
+        python {input.generator:q} \
+          --explorer-json {input.explorer:q} \
+          --host-map {input.host_map:q} \
+          --output {output.json:q} \
+          --enabled {params.enabled:q} \
+          --mode {params.mode:q} --audience {params.audience:q} \
+          --decision-question {params.question:q} {params.context_arg} \
+          --provider {params.provider:q} \
+          --model {params.model:q} \
+          --url {params.url:q} \
+          --timeout {params.timeout:q} {params.allow_remote} {params.concordance_arg}
+        """
+
+
 rule run_summary_html:
     input:
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
@@ -3245,6 +3303,7 @@ rule run_summary_html:
         report_html="scripts/report/escape-report.html",
         report_js="scripts/report/escape-report.js",
         explorer_json=(CONCORDANCE_REPORT_EXPLORER_JSON if RUN_CONCORDANCE else f"{RESULTS}/run_summary/surveillance_explorer.json"),
+        interpretation=f"{RESULTS}/run_summary/public_health_interpretation.json",
         run_report_html="scripts/report/run-report.html",
         explorer_css="scripts/report/surveillance-explorer.css",
         map_boundaries_js="scripts/report/map-boundaries.js",
@@ -3276,6 +3335,7 @@ rule run_summary_html:
         report_html_abs="$(cd "$(dirname {input.report_html:q})" && pwd)/$(basename {input.report_html:q})"
         report_js_abs="$(cd "$(dirname {input.report_js:q})" && pwd)/$(basename {input.report_js:q})"
         explorer_json_abs="$(cd "$(dirname {input.explorer_json:q})" && pwd)/$(basename {input.explorer_json:q})"
+        interpretation_json_abs="$(cd "$(dirname {input.interpretation:q})" && pwd)/$(basename {input.interpretation:q})"
         run_report_html_abs="$(cd "$(dirname {input.run_report_html:q})" && pwd)/$(basename {input.run_report_html:q})"
         explorer_css_abs="$(cd "$(dirname {input.explorer_css:q})" && pwd)/$(basename {input.explorer_css:q})"
         explorer_js_abs="$(cd "$(dirname {input.explorer_js:q})" && pwd)/$(basename {input.explorer_js:q})"
@@ -3313,6 +3373,7 @@ rule run_summary_html:
               -P "review_tsv:samples_requiring_review.tsv" \
               -P "stability_summary:interpretation_stability.tsv" \
               -P "explorer_json:${{explorer_json_abs}}" \
+              -P "interpretation_json:${{interpretation_json_abs}}" \
               -P "explorer_enabled:{params.explorer_enabled}" \
               -P "genoflu_enabled:{params.genoflu_enabled}" \
               -P "coverage_threshold:{params.coverage_threshold}" \

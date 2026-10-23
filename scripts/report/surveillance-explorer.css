@@ -912,6 +912,16 @@
   border-radius: .7rem .7rem 0 0;
   background: #f7faf9;
 }
+.wse-tabs-mounted .wse-app-shell > .wse-subtitle {
+  box-sizing: border-box;
+  margin: 0;
+  max-width: none;
+  padding: .65rem .85rem;
+  border-right: 1px solid #d8e0e1;
+  border-bottom: 1px solid #d8e0e1;
+  border-left: 1px solid #d8e0e1;
+  background: #fff;
+}
 .wse-app-control { display: grid; gap: .25rem; min-width: 0; }
 .wse-app-control-label {
   color: #52656d;
@@ -1233,3 +1243,22 @@
   line-height:1.45 !important;
 }
 /* WINGS_EXPLORER_TABS_CSS_END */
+.wse-evidence-synthesis { min-width: 0; margin: 0 0 1rem; padding: 1.25rem; border: 1px solid #bdceca; border-radius: 12px; background: #f5faf8; color: #163c37; overflow-wrap: anywhere; }
+.wse-evidence-synthesis[hidden] { display: none !important; }
+.wse-evidence-synthesis h2 { margin: .15rem 0 1rem; font-size: 1.4rem; line-height: 1.35; }
+.wse-evidence-kicker { margin: 0; color: #47716a; font-size: .75rem; font-weight: 750; letter-spacing: .12em; }
+.wse-evidence-findings-title { margin: 0 0 .6rem; font-size: 1rem; line-height: 1.4; }
+/* Narrative and source findings use full-width rows, including on small screens. */
+.wse-evidence-story { display: grid; grid-template-columns: minmax(0,1fr); gap: .75rem; }
+.wse-evidence-story > section, .wse-evidence-meaning { min-width: 0; padding: .85rem; border-radius: 8px; background: #fff; }
+.wse-evidence-story h3, .wse-evidence-meaning h3, .wse-evidence-action h3 { margin: 0 0 .35rem; font-size: .95rem; }
+.wse-evidence-story p, .wse-evidence-meaning p, .wse-evidence-action p { margin: 0; line-height: 1.45; }
+.wse-evidence-action ul { margin: 0; padding-left: 1.2rem; }
+.wse-evidence-action li + li { margin-top: .35rem; }
+.wse-evidence-bullets { margin: 0; padding-left: 1.25rem; line-height: 1.5; }
+.wse-evidence-bullets li + li { margin-top: .45rem; }
+.wse-evidence-meaning { margin: 0 0 1rem; border-left: 4px solid #FFC627; }
+.wse-evidence-action { margin-top: .8rem; padding: 1rem; border-left: 5px solid #2b786b; background: #e6f2ed; }
+.wse-evidence-scope, .wse-evidence-synthesis small { display: block; font-size: .85rem; margin: .75rem 0; }
+.wse-evidence-meaning .wse-evidence-scope { margin: .8rem 0 0; color: #47716a; }
+.wse-evidence-synthesis :focus-visible { outline: 3px solid #216b79; outline-offset: 3px; }

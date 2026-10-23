@@ -71,6 +71,18 @@ run_summary: true
 # the first tree is displayed.
 run_surveillance_explorer: true
 
+# Optional local LLM interpretation. WINGS sends only its structured evidence
+# dossier to the local Ollama server. Local prompts and responses stay on the
+# user's machine and are not used to train a model. WINGS does not download a
+# model automatically; install Ollama and pull the selected model separately.
+public_health_interpretation:
+  enabled: false
+  provider: ollama
+  model: "gpt-oss:20b"
+  url: "http://127.0.0.1:11434/api/chat"
+  timeout_seconds: 180
+  allow_remote: false
+
 # Optional eBird reporting context. Keep cache_dir outside the WINGS repository.
 # Turn on only after obtaining sampling-event data from the SAME EBD release
 # for the relevant regions/dates without a species filter.
