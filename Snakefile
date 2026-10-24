@@ -3237,29 +3237,33 @@ rule public_health_interpretation:
         enabled="true" if PUBLIC_HEALTH_INTERPRETATION_ENABLED else "false",
         mode=PUBLIC_HEALTH_INTERPRETATION_MODE,
         audience=PUBLIC_HEALTH_INTERPRETATION_AUDIENCE,
-        question=PUBLIC_HEALTH_INTERPRETATION_QUESTION,
         context_arg=("--brief-context-json " + shlex.quote(PUBLIC_HEALTH_INTERPRETATION_CONTEXT) if PUBLIC_HEALTH_INTERPRETATION_CONTEXT else ""),
         provider=PUBLIC_HEALTH_INTERPRETATION_PROVIDER,
         model=PUBLIC_HEALTH_INTERPRETATION_MODEL,
         url=PUBLIC_HEALTH_INTERPRETATION_URL,
         timeout=PUBLIC_HEALTH_INTERPRETATION_TIMEOUT,
         allow_remote="--allow-remote" if PUBLIC_HEALTH_INTERPRETATION_ALLOW_REMOTE else "",
-        concordance_arg=("--concordance-json " + shlex.quote(f"{CONCORDANCE_DIR}/concordance.json") if RUN_CONCORDANCE else "")
+        concordance_arg=("--concordance-json " + shlex.quote(f"{CONCORDANCE_DIR}/concordance.json") if RUN_CONCORDANCE else ""),
+        decision_question_arg=(
+            "--decision-question " + shlex.quote(PUBLIC_HEALTH_INTERPRETATION_QUESTION)
+            if PUBLIC_HEALTH_INTERPRETATION_QUESTION
+            else ""
+        ),
     conda:
         REPORTING_ENV
     shell:
         r"""
         python {input.generator:q} \
-          --explorer-json {input.explorer:q} \
-          --host-map {input.host_map:q} \
-          --output {output.json:q} \
-          --enabled {params.enabled:q} \
-          --mode {params.mode:q} --audience {params.audience:q} \
-          --decision-question {params.question:q} {params.context_arg} \
-          --provider {params.provider:q} \
-          --model {params.model:q} \
-          --url {params.url:q} \
-          --timeout {params.timeout:q} {params.allow_remote} {params.concordance_arg}
+           --explorer-json {input.explorer:q} \
+           --host-map {input.host_map:q} \
+           --output {output.json:q} \
+           --enabled {params.enabled:q} \
+           --mode {params.mode:q} --audience {params.audience:q} \
+           {params.decision_question_arg} \
+           --provider {params.provider:q} \
+           --model {params.model:q} \
+           --url {params.url:q} \
+           --timeout {params.timeout:q} {params.allow_remote} {params.concordance_arg}
         """
 
 
