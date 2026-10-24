@@ -510,8 +510,8 @@ medaka_reason <- ifelse(
       summary$medaka_skipped_no_model_segments > 0,
       paste0(
         "; ", summary$medaka_skipped_no_model_segments,
-        " segment(s) skipped because no Medaka model was available",
-        "; affected fallback sequences were not Medaka-polished"
+        " segment(s) not Medaka-polished because basecaller model metadata were unavailable",
+        "; IRMA consensus retained"
       ),
       ""
     )
@@ -819,12 +819,14 @@ if (is.null(stability_summary) || nrow(stability_summary) == 0) {
 
 ### Sample Summary
 
-**Polishing status:** "Skipped: model unavailable" counts segments with a recorded
-missing-model status. Affected IRMA fallback sequences were **not Medaka-polished**.
-Counts can overlap: a segment can appear in both "Skipped: model unavailable" and
-"IRMA Fallback". "Medaka Polished" counts only recorded successful Medaka polishing.
-A zero count means no matching recorded status; it does not establish that
-polishing completed.
+**Medaka polishing:** "Not applied: model metadata unavailable" counts segments
+for which WINGS could not identify the ONT basecaller model required by Medaka.
+WINGS retained the **IRMA consensus** for those segments rather than guessing a
+Medaka model. This commonly occurs with archived FASTQ files that do not preserve
+basecaller-model metadata. Counts can overlap because the same segment appears as
+both "Not applied: model metadata unavailable" and "IRMA Fallback". "Medaka
+Polished" counts only recorded successful Medaka polishing. A zero count means no
+matching recorded status; it does not establish that polishing completed.
 
 ```{r}
 sample_table <-
@@ -881,7 +883,7 @@ sample_table |>
     medaka_polished_segments = "Medaka Polished",
     irma_fallback_segments = "IRMA Fallback",
     medaka_failed_segments = "Medaka Failed",
-    medaka_skipped_no_model_segments = "Skipped: model unavailable",
+    medaka_skipped_no_model_segments = "Medaka not applied: model metadata unavailable",
     subtype_min_median_depth = "Min Median Depth",
     aa_changes = "AA Changes",
     synonymous_changes = "Synonymous",
