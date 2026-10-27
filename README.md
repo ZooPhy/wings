@@ -1293,6 +1293,8 @@ for optional decision questions, user-supplied context, and saved diagnostics.
 
 The Status & Trends phenology stage (`ebirdst_phenology`) uses raster data and is separate from the EBD observation and sampling-event reporting context described below. When a required raster is not already cached, this stage requires an **eBird Status & Trends access key** in the `EBIRDST_ACCESS_KEY` environment variable. Do not assume a general eBird API token grants Status & Trends data access. A key is unnecessary when all required rasters are already cached.
 
+Get your access key through the [eBird Status & Trends Download Data page](https://science.ebird.org/status-and-trends/download-data).
+
 Set the key in the environment that starts WINGS, before launching a run:
 
 ```bash
