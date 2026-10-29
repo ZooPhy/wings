@@ -117,6 +117,24 @@
             <label class="option-card"><input id="optPhylogeny" type="checkbox"><span><strong>Phylogenetics</strong><small>Build segment-level phylogenetic trees when enough sequences are available.</small></span></label>
             <label class="option-card"><input id="optExplorer" type="checkbox" checked><span><strong>Surveillance Explorer</strong><small>Generate the integrated run-level surveillance interface.</small></span></label>
           </div>
+          <label class="option-card" style="margin-top:1rem"><input id="optBriefing" type="checkbox"><span><strong>Public health interpretation / agency briefing</strong><small>Generate a briefing from the report evidence using a locally installed Ollama model.</small></span></label>
+          <div id="briefingSettings" hidden>
+            <div class="field">
+              <label for="briefingModel">Local Ollama model</label>
+              <input id="briefingModel" type="text" value="gpt-oss:20b" maxlength="200" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="briefingAudience">Briefing audience</label>
+              <select id="briefingAudience">
+                <option value="wildlife">Wildlife surveillance</option>
+                <option value="animal_health">Domestic animal health</option>
+                <option value="public_health">Public health</option>
+              </select>
+            </div>
+            <button id="checkBriefingModel" class="btn btn-secondary" type="button">Check local model</button>
+            <p id="briefingModelStatus" class="help" role="status" aria-live="polite">Check that Ollama is running and the selected model is installed.</p>
+            <p class="help">Requires Surveillance Explorer. Install Ollama and the model separately. This option applies to new runs.</p>
+          </div>
           <details style="margin-top:1rem">
             <summary><strong>Advanced settings</strong></summary>
             <p class="help">The first portal version uses the repository's WINGS defaults for thresholds, IRMA, Medaka, BLAST, and VADR resources. Advanced parameter editing will be added here without exposing users to the full YAML file.</p>
@@ -191,6 +209,6 @@
   </section>
 </main>
 
-<script src="assets/wings-run.js?v=20261014-resume-1"></script>
+<script src="assets/wings-run.js?v=20261029-briefing-2"></script>
 </body>
 </html>

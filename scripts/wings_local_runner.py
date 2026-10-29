@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+from http.client import HTTPConnection, HTTPException
 import json
 import os
 import re
@@ -183,6 +184,66 @@ def metadata_ids(path: Path) -> list[str]:
     return values
 
 
+BRIEFING_URL = "http://127.0.0.1:11434/api/chat"
+
+
+def briefing_options(options: dict) -> dict:
+    """Translate browser controls into the existing interpretation configuration."""
+    enabled = options.get("briefing", False)
+    if not isinstance(enabled, bool):
+        raise ValueError("Briefing selection must be true or false")
+    if not enabled:
+        return {"enabled": False}
+    model = str(options.get("briefing_model", "gpt-oss:20b")).strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", model):
+        raise ValueError("Enter a valid local Ollama model name")
+    audience = options.get("briefing_audience", "wildlife")
+    if audience not in {"wildlife", "animal_health", "public_health"}:
+        raise ValueError("Choose a valid briefing audience")
+    return {"enabled": True, "provider": "ollama", "mode": "staged",
+            "model": model, "audience": audience, "url": BRIEFING_URL,
+            "timeout_seconds": 180, "allow_remote": False}
+
+
+def check_briefing_model(model: str) -> dict:
+    """Inspect local model tags only; never download a model or follow redirects."""
+    model = briefing_options({"briefing": True, "briefing_model": model})["model"]
+    connection = HTTPConnection("127.0.0.1", 11434, timeout=5)
+    try:
+        connection.request("GET", "/api/tags")
+        response = connection.getresponse()
+        if response.status != 200:
+            return {"ready": False, "detail": "Ollama did not return its local model list."}
+        raw = response.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("Model list is too large")
+        payload = json.loads(raw)
+        models = payload.get("models")
+        if not isinstance(models, list):
+            raise ValueError("Invalid model list")
+        def normalize(tag):
+            return tag if ":" in tag.rsplit("/", 1)[-1] else tag + ":latest"
+        installed = {normalize(tag) for row in models if isinstance(row, dict)
+                     for tag in (row.get("name"), row.get("model"))
+                     if isinstance(tag, str) and tag}
+        ready = normalize(model) in installed
+        return {"ready": ready, "detail": "Selected local model is installed." if ready
+                else "Selected model is not installed. Install it in Ollama, then check again."}
+    except (OSError, HTTPException, ValueError, AttributeError):
+        return {"ready": False, "detail": "Cannot read local Ollama models. Start Ollama, then check again."}
+    finally:
+        connection.close()
+
+
+def require_briefing_model(config: dict) -> None:
+    interpretation = config.get("public_health_interpretation") or {}
+    if interpretation.get("enabled") is not True:
+        return
+    result = check_briefing_model(interpretation.get("model", ""))
+    if not result["ready"]:
+        raise ValueError(result["detail"])
+
+
 def build_config(run_id: str) -> tuple[Path, int]:
     directory = run_dir(run_id)
     state = read_state(run_id)
@@ -230,6 +291,11 @@ def build_config(run_id: str) -> tuple[Path, int]:
     config["run_genoflu"] = bool(options.get("genoflu", True))
     config["run_vadr"] = bool(options.get("vadr", True))
     config["run_surveillance_explorer"] = bool(options.get("explorer", True))
+    interpretation = dict(config.get("public_health_interpretation") or {})
+    interpretation.update(briefing_options(options))
+    config["public_health_interpretation"] = interpretation
+    if interpretation["enabled"]:
+        config["run_surveillance_explorer"] = True
     phylogeny = dict(config.get("phylogeny") or {})
     phylogeny["enabled"] = bool(options.get("phylogeny", False))
     config["phylogeny"] = phylogeny
@@ -716,6 +782,7 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
             sample_count = state.get("sample_count", 0)
         else:
             config_path, sample_count = build_config(run_id)
+        require_briefing_model(yaml.safe_load(config_path.read_text(encoding="utf-8")) or {})
         attempts = list(state.get("attempts") or [])
         if resume and not attempts:
             attempts.append({
@@ -940,8 +1007,17 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = self.parsed()
         try:
+            if parsed.path == "/api/briefing/check":
+                payload = self.read_json()
+                self.json_response(check_briefing_model(payload.get("model", "")))
+                return
             if parsed.path == "/api/runs":
                 payload = self.read_json()
+                options = payload.get("options") or {}
+                if not isinstance(options, dict):
+                    raise ValueError("Run options must be an object")
+                interpretation = briefing_options(options)
+                require_briefing_model({"public_health_interpretation": interpretation})
                 name = str(payload.get("name", "")).strip() or "WINGS run"
                 cores, max_parallel_jobs = execution_limits(payload)
                 run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
