@@ -40,7 +40,7 @@
     const running = status === "running";
     const landed = status === "complete";
     const failed = status === "failed";
-    const stopped = status === "stopped";
+    const stopped = status === "stopped" || status === "interrupted";
     const landing = landed && activity.classList.contains("running");
 
     if ((landed || failed || stopped) && !activity.querySelector(".wings-landed-status")) {
@@ -522,7 +522,7 @@
           ? "WINGS is flying through this run locally."
           : run.status === "complete"
             ? "WINGS has landed successfully."
-            : ["failed", "stopped"].includes(run.status)
+            : ["failed", "stopped", "interrupted"].includes(run.status)
               ? `The launcher attempt ${run.status}. Processing started separately in Terminal is not tracked here. Completed outputs remain on disk.`
               : `Launcher attempt ${run.status}.`;
       const statusLabel = {
@@ -530,12 +530,13 @@
         complete: "landed",
         failed: "failed",
         stopped: "stopped",
+        interrupted: "Interrupted—status unknown",
       }[run.status] || run.status;
 
       $("metricStatus").textContent = statusLabel;
       setActivity(run.status);
       $("metricSamples").textContent = run.sample_count ?? "—";
-      $("metricElapsed").textContent = elapsedText(run.started_at, run.finished_at);
+      $("metricElapsed").textContent = elapsedText(run.started_at, run.finished_at || run.status_recovery?.recovered_at);
       $("metricRunId").textContent = run.run_id;
       $("runLog").textContent = run.log_tail || "Waiting for log output…";
       $("runLog").scrollTop = $("runLog").scrollHeight;
@@ -554,7 +555,7 @@
         $("resultsLink").href = `results.html?run=${encodeURIComponent(run.run_id)}`;
       } else {
         $("resultsLink").removeAttribute("href");
-        if (["failed", "stopped"].includes(run.status)) {
+        if (["failed", "stopped", "interrupted"].includes(run.status)) {
           clearInterval(state.poller);
         }
       }
