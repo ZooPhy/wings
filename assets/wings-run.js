@@ -253,6 +253,56 @@
     $("metadataSummary").textContent = `${state.metadata.name} · ${state.metadataIds.length} metadata sample(s)\n${match.ok ? "✓" : "⚠"} ${match.detail}`;
   }
 
+  let briefingRequest = 0;
+  let briefingCheck = null;
+
+  function briefingOptions() {
+    return {
+      briefing: Boolean($("optBriefing")?.checked),
+      briefing_model: $("briefingModel")?.value.trim() || "gpt-oss:20b",
+      briefing_audience: $("briefingAudience")?.value || "wildlife"
+    };
+  }
+
+  function syncBriefing() {
+    const enabled = briefingOptions().briefing;
+    if ($("briefingSettings")) $("briefingSettings").hidden = !enabled;
+    if (enabled) $("optExplorer").checked = true;
+    $("optExplorer").disabled = enabled;
+    if (state.step === 4) renderPreflight();
+  }
+
+  async function checkBriefingModel() {
+    const request = ++briefingRequest;
+    const model = briefingOptions().briefing_model;
+    briefingCheck = null;
+    $("briefingModelStatus").textContent = "Checking local Ollama model…";
+    $("checkBriefingModel").disabled = true;
+    if (state.step === 4) renderPreflight();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(`${localOrigin}/api/briefing/check`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({model}), signal: controller.signal
+      });
+      if (!response.ok) throw new Error("Check unavailable");
+      const result = await response.json();
+      if (request !== briefingRequest) return;
+      briefingCheck = {model, ready: result.ready === true};
+      $("briefingModelStatus").textContent = result.detail || "Model check did not return a result.";
+    } catch (error) {
+      if (request !== briefingRequest) return;
+      $("briefingModelStatus").textContent = "Model check unavailable. Restart the updated WINGS launcher and start Ollama, then check again.";
+    } finally {
+      clearTimeout(timeout);
+      if (request === briefingRequest) {
+        $("checkBriefingModel").disabled = false;
+        if (state.step === 4) renderPreflight();
+      }
+    }
+  }
+
   function preflightRows() {
     const match = validateMetadataMatch();
     const extensions = new Set(state.reads.map((f) => fastqExtension(f.name)));
@@ -263,7 +313,10 @@
     if (state.runner && !state.runner.snakemake_available) runnerDetail = "Snakemake is not available in the runner environment.";
     else if (state.runner && !state.runner.config_yaml_present) runnerDetail = "Create the local base config: cp config/config.example.yaml config.yaml";
     else if (runnerOk) runnerDetail = `Ready · ${state.runner.snakemake}`;
+    const briefing = briefingOptions();
+    const briefingReady = briefingCheck?.ready && briefingCheck.model === briefing.briefing_model;
     return [
+      ...(briefing.briefing ? [[Boolean(briefingReady), "Local agency briefing", briefingReady ? "Selected model is installed." : "Use Check local model under Analysis before starting."]] : []),
       [runnerOk, "Local WINGS runner", runnerDetail],
       [readsOk, "Sequence inputs", readsOk ? `${state.reads.length} FASTQ file(s) selected` : "Select FASTQ files with one consistent extension"],
       [metadataOk, "Metadata structure", metadataOk ? `${state.metadataIds.length} sample rows detected` : (state.metadataError || "Select metadata.tsv")],
@@ -285,7 +338,8 @@
       $("optGenoflu").checked && "GenoFLU",
       $("optVadr").checked && "VADR",
       $("optPhylogeny").checked && "Phylogenetics",
-      $("optExplorer").checked && "Surveillance Explorer"
+      $("optExplorer").checked && "Surveillance Explorer",
+      briefingOptions().briefing && "Public health interpretation / agency briefing"
     ].filter(Boolean);
     $("reviewBox").textContent = [
       `Run: ${$("runName").value.trim() || "—"}`,
@@ -318,7 +372,8 @@
             genoflu: $("optGenoflu").checked,
             vadr: $("optVadr").checked,
             phylogeny: $("optPhylogeny").checked,
-            explorer: $("optExplorer").checked
+            explorer: $("optExplorer").checked,
+            ...briefingOptions()
           }
         })
       });
@@ -696,6 +751,17 @@
     renderMetadata();
   });
   ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
+  $("optBriefing")?.addEventListener("change", syncBriefing);
+  $("checkBriefingModel")?.addEventListener("click", checkBriefingModel);
+  $("briefingModel")?.addEventListener("input", () => {
+    ++briefingRequest;
+    briefingCheck = null;
+    $("checkBriefingModel").disabled = false;
+    $("briefingModelStatus").textContent = "Model changed. Check the selected local model again.";
+    if (state.step === 4) renderPreflight();
+  });
+  $("briefingAudience")?.addEventListener("change", () => { if (state.step === 4) renderPreflight(); });
+  syncBriefing();
   $("startRun").addEventListener("click", startRun);
   $("stopRun").addEventListener("click", stopRun);
   // Keep updated JavaScript compatible with an older cached run page.
