@@ -309,7 +309,7 @@ def stage_progress(state: dict, log_text: str) -> dict[str, dict]:
     dynamic = "normalize_irma_outputs" in expected or bool(re.search(r"^\s*(?:local)?checkpoint\s", log_text, re.MULTILINE))
     provisional_stages = set(STAGE_ORDER[2:]) if dynamic else set()
     finished = state.get("status") == "complete"
-    terminal = state.get("status") in {"failed", "stopped"}
+    terminal = state.get("status") in {"failed", "stopped", "interrupted"}
     details = {}
     for stage in STAGE_ORDER:
         rules = {rule for rule in expected if RULE_STAGE.get(rule) == stage}
@@ -485,8 +485,98 @@ def launcher_status_log(log_path: Path) -> tuple[str, str]:
         return "", ""
 
 
+def recorded_process_alive(state: dict) -> bool | None:
+    """False means gone/unrelated; None means identity could not be verified."""
+    pid = state.get("pid")
+    if not isinstance(pid, int) or pid <= 0:
+        return None
+    try:
+        result = subprocess.run(
+            ["ps", "-ww", "-p", str(pid), "-o", "stat=", "-o", "command="],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode == 1 and not result.stdout.strip():
+        return False
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    status, _, command = result.stdout.strip().partition(" ")
+    if status.startswith("Z"):
+        return False
+    config = state.get("execution_config")
+    if not config:
+        return None
+    # Do not confuse a reused PID belonging to another program/run with ours.
+    return "snakemake" in command and str(config) in command
+
+
+def reconcile_state(run_id: str) -> dict:
+    """Recover orphaned launcher attempts without rerunning or altering results."""
+    with LOCK:
+        state = read_state(run_id)
+        if state.get("status") not in {"running", "stopping"}:
+            return state
+        process = PROCESSES.get(run_id)
+        code = process.poll() if process is not None else None
+        if process is not None and code is None:
+            return state
+        if process is None:
+            alive = recorded_process_alive(state)
+            if alive is not False:
+                return state
+        attempt = next((a for a in state.get("attempts", [])
+                        if a.get("attempt_id") == state.get("active_attempt")), None)
+        # A process exit code is authoritative when this server still owns it.
+        finished = None
+        if code is not None:
+            status = "stopped" if state["status"] == "stopping" else ("complete" if code == 0 else "failed")
+            finished = utc_now()
+            basis = "observed_process_exit"
+        else:
+            text = ""
+            log_name = attempt.get("log_path") if attempt else state.get("launcher_log")
+            if log_name:
+                directory = run_dir(run_id)
+                path = (directory / log_name).resolve()
+                try:
+                    path.relative_to(directory)
+                    with path.open("rb") as stream:
+                        stream.seek(0, 2)
+                        stream.seek(max(0, stream.tell() - 262144))
+                        text = stream.read().decode("utf-8", errors="replace")
+                except (OSError, ValueError):
+                    pass
+            complete = re.search(
+                r"\[([^\]]+)\]\s*Finished jobid: \d+ \(Rule: all\)\s*"
+                r"(\d+) of (\d+) steps \(100%\) done", text)
+            failed = re.search(r"(?m)^(?:WorkflowError:|Error in rule |Exiting because a job execution failed)", text)
+            if complete and complete[2] == complete[3] and not failed:
+                status, basis = "complete", "log_verified_completion"
+                try:
+                    finished = datetime.strptime(complete[1], "%a %b %d %H:%M:%S %Y").astimezone(timezone.utc).isoformat()
+                except ValueError:
+                    pass
+            elif failed:
+                status, basis = "failed", "log_verified_failure"
+            else:
+                status, basis = "interrupted", "process_absent_outcome_unknown"
+        # Preserve the original record for diagnosis. Never invent an exit code.
+        stamp = utc_now()
+        backup = state_path(run_id).with_name(f"state.before-recovery-{uuid.uuid4().hex}.json")
+        atomic_json(backup, state)
+        state.update(status=status, finished_at=finished, exit_code=code,
+                     status_recovery={"basis": basis, "recovered_at": stamp})
+        if attempt is not None:
+            attempt.update(status=status, finished_at=finished, exit_code=code,
+                           status_recovery=state["status_recovery"])
+        write_state(run_id, state)
+        PROCESSES.pop(run_id, None)
+        return state
+
+
 def enriched_state(run_id: str) -> dict:
-    state = read_state(run_id)
+    state = reconcile_state(run_id)
     directory = run_dir(run_id)
     log_path = (directory / state.get("launcher_log", "snakemake.log")).resolve()
     log_path.relative_to(directory)
@@ -501,7 +591,7 @@ def enriched_state(run_id: str) -> dict:
             for log_index in range(len(failure["logs"]))
         ]
     state["irma_progress"] = irma_log_progress(run_dir(run_id))
-    state["can_resume"] = state.get("status") in {"failed", "stopped"} and (
+    state["can_resume"] = state.get("status") in {"failed", "stopped", "interrupted"} and (
         directory / "execution_config.yaml"
     ).is_file()
     for attempt in state.get("attempts", []):
@@ -609,11 +699,11 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
         process = PROCESSES.get(run_id)
         if process and process.poll() is None:
             raise ValueError("This run already has an active launcher process")
-        if state.get("status") not in {"created", "failed", "stopped"}:
+        if state.get("status") not in {"created", "failed", "stopped", "interrupted"}:
             raise ValueError(f"Run cannot start from status {state.get('status')}")
-        if resume and state.get("status") not in {"failed", "stopped"}:
+        if resume and state.get("status") not in {"failed", "stopped", "interrupted"}:
             raise ValueError("Resume requires a failed or stopped run")
-        resume = resume or state.get("status") in {"failed", "stopped"}
+        resume = resume or state.get("status") in {"failed", "stopped", "interrupted"}
         executable = shutil.which("snakemake")
         if not executable:
             raise ValueError("snakemake was not found in PATH")
@@ -725,7 +815,7 @@ class Handler(SimpleHTTPRequestHandler):
                 rows = []
                 for path in sorted(RUNS_ROOT.glob("*/state.json"), reverse=True):
                     try:
-                        rows.append(json.loads(path.read_text(encoding="utf-8")))
+                        rows.append(reconcile_state(path.parent.name))
                     except (OSError, json.JSONDecodeError):
                         continue
                 self.json_response(rows)
@@ -738,7 +828,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self.error_response("Unknown run", HTTPStatus.NOT_FOUND)
                     return
 
-                state = read_state(run_id)
+                state = reconcile_state(run_id)
                 if state.get("status") != "complete":
                     self.error_response(
                         "Run results are not available until the run is complete",
@@ -909,6 +999,11 @@ def main() -> int:
         raise SystemExit("For safety, the WINGS local runner only binds to localhost.")
 
     RUNS_ROOT.mkdir(parents=True, exist_ok=True)
+    for saved in RUNS_ROOT.glob("*/state.json"):
+        try:
+            reconcile_state(saved.parent.name)
+        except (OSError, ValueError):
+            pass  # A damaged record must not prevent the server from starting.
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://127.0.0.1:{args.port}/run.html"
     print(f"WINGS local runner: {url}")

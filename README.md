@@ -1306,15 +1306,13 @@ Replace the placeholder with your own key. Keep the key private; do not commit i
 - **Terminal launch:** Set the variable in the same terminal before running your usual WINGS command.
 - **Browser launch:** The local WINGS server or launcher must inherit the variable when it starts. Setting it in a separate terminal, refreshing the browser, or clicking **Resume Run** does not update an already-running server's environment. When no run is active, restart the WINGS launcher from the terminal where the key is set, then resume the existing run in the browser. If another service starts the launcher, configure the variable in that service's environment instead.
 
-**Current behavior:** If a required raster is missing and the key is unset, the phenology stage exits with the following error and Snakemake stops the workflow:
+**Graceful raster handling:** When phenology is enabled without an access key, WINGS warns at workflow initialization, before lengthy jobs start. This warning does not assert that the cache is incomplete. The phenology stage uses cached rasters normally and records uncached species as **Unavailable: missing data/access key** (`UNAVAILABLE_MISSING_ACCESS_KEY`).
 
-```text
-ERROR: At least one required Status & Trends raster is not cached and EBIRDST_ACCESS_KEY is not set.
-```
+File-list and raster-download requests retry temporary network failures and HTTP 408, 429, 500, 502, 503, and 504 responses, with at most three attempts and waits of one and two seconds. Other HTTP errors, including rejected credentials, are not retried. If a request still fails, that species is marked `UNAVAILABLE_DOWNLOAD`; species without the requested product are marked `NO_STATUS_PRODUCT`. Cached and successfully downloaded species remain usable, and the workflow continues. Invalid JSON or non-TIFF download responses are also recorded as unavailable. Local filesystem errors, malformed inputs, and unexpected processing errors still fail visibly.
 
-The detailed message is recorded in the run's `results/run_summary/phenology/phenology.log`. Preserve existing results when addressing this error; Docker cleanup and deleting outputs do not resolve a missing credential.
+Unavailable samples have an explanatory reason and no generated abundance profile; missing abundance is never replaced with zero. Check `results/run_summary/phenology/phenology.log` and the `sample_status` and `download_manifest` fields of `wings_phenology.json`. Network diagnostics omit access-key query strings. The initial modeled-species reference must still be available from its cache, a supplied taxonomy file, or its source.
 
-**Planned improvement (not yet implemented):** Check credential/cache availability before lengthy processing. If required phenology data cannot be obtained because the key is missing, issue a warning, record phenology as unavailable with the reason, and continue the remaining workflow. Reports should distinguish unavailable context from zero abundance. Until this change is implemented, the credential requirement above still applies.
+**Retry after restoring access:** An unavailable result is a completed workflow output, so a normal resume need not revisit it. After the run has stopped, rerun only the phenology rule and its dependent reports using the same saved execution configuration (Snakemake `--forcerun ebirdst_phenology`), or remove only `results/run_summary/phenology/wings_phenology.json` from that run before resuming. Preserve the raster cache and other completed results.
 
 ### Optional eBird reporting context
 
@@ -1371,7 +1369,7 @@ The first command still reads the entire compressed observation file once; later
 
 If you obtain a better matching sampling-event export for the same EBD release and metadata scope, repeat the `--sampling-only` command with `--replace-sampling`. This replaces only the cached sampling events, without reopening the full observation archive. Check that the sampling-event export covers the locations and dates of every host species being compared; a taxon-specific request may not provide a suitable denominator for all hosts.
 
-If `ebird_samples.tsv` exists when Snakemake builds the run summary, the Surveillance Explorer displays READY results in a dedicated eBird panel. Samples sharing a host species, geographic scope, and collection-date window share **one** checklist context; do not add those checklist totals across samples. State-only metadata yield state-wide context; a local radius requires both sample coordinates and `--radius-km`. When these EBD aggregates are absent, the panel is hidden and the standard report still works. This behavior does not apply to the separate Status & Trends phenology stage; see its access-key requirement above. Rebuild `results/run_summary/run_summary.html` after updating eBird aggregates, then rebuild the portable bundle if needed.
+If `ebird_samples.tsv` exists when Snakemake builds the run summary, the Surveillance Explorer displays READY results in a dedicated eBird panel. Samples sharing a host species, geographic scope, and collection-date window share **one** checklist context; do not add those checklist totals across samples. State-only metadata yield state-wide context; a local radius requires both sample coordinates and `--radius-km`. When these EBD aggregates are absent, the panel is hidden and the standard report still works. For the separate Status & Trends phenology stage, missing credentials or failed raster downloads are recorded as unavailable; see the guidance above. Rebuild `results/run_summary/run_summary.html` after updating eBird aggregates, then rebuild the portable bundle if needed.
 
 ### Linked eight-segment genome explorer
 
