@@ -21,6 +21,8 @@ import math
 import os
 import re
 import sys
+import time
+from http.client import IncompleteRead
 import tempfile
 import zipfile
 from datetime import date, datetime, timedelta, timezone
@@ -29,7 +31,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-VERSION = "0.2.3"
+VERSION = "0.2.5"
 VERSION_YEAR_DEFAULT = 2023
 RESOLUTION_DEFAULT = "27km"
 API_LIST = "https://st-download.ebird.org/v1/list-obj/{version_year}/{species_code}"
@@ -103,13 +105,28 @@ def atomic_write(path: Path, text: str) -> None:
         Path(name).unlink(missing_ok=True)
 
 
+class RemoteDataUnavailable(RuntimeError):
+    """External data could not be obtained; messages never contain credentials."""
+
+
 def request_bytes(url: str, timeout: int = 180) -> bytes:
     req = Request(url, headers={"User-Agent": f"WINGS-ebirdst-phenology/{VERSION}"})
-    try:
-        with urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except (HTTPError, URLError, TimeoutError) as exc:
-        raise RuntimeError(f"request failed for {url.split('?')[0]}: {exc}") from exc
+    safe_url = url.split("?", 1)[0]
+    for attempt in range(3):
+        try:
+            with urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except (HTTPError, URLError, TimeoutError, ConnectionError, IncompleteRead) as exc:
+            retryable = not isinstance(exc, HTTPError) or exc.code in {408, 429, 500, 502, 503, 504}
+            detail = f"HTTP {exc.code}" if isinstance(exc, HTTPError) else type(exc).__name__
+            # Do not stringify network exceptions: they can contain keyed URLs.
+            if retryable and attempt < 2:
+                print(f"WARNING: {safe_url}: {detail}; retry {attempt + 1}/2.", file=sys.stderr)
+                time.sleep(2 ** attempt)
+                continue
+            raise RemoteDataUnavailable(
+                f"request failed for {safe_url}: {detail} after {attempt + 1} attempt(s)"
+            ) from None
 
 
 def api_get_json(url: str, access_key: str) -> object:
@@ -118,7 +135,7 @@ def api_get_json(url: str, access_key: str) -> object:
     try:
         return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("eBird Status & Trends list endpoint did not return JSON") from exc
+        raise RemoteDataUnavailable("eBird Status & Trends list endpoint did not return JSON") from None
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -577,7 +594,7 @@ def download_raster(key_name: str, access_key: str, target: Path) -> dict:
     url = API_FETCH + "?" + urlencode({"objKey": key_name, "key": access_key})
     raw = request_bytes(url)
     if len(raw) < 4 or raw[:2] not in {b"II", b"MM"}:
-        raise RuntimeError(f"Status & Trends object {key_name!r} did not return a GeoTIFF")
+        raise RemoteDataUnavailable("Status & Trends download did not return a GeoTIFF")
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(target.name + ".partial")
     tmp.write_bytes(raw)
@@ -616,25 +633,34 @@ def prepare_rasters(samples: list[dict], cache_dir: Path, version_year: int, res
                 "retrieved_on": retrieved_on, "retrieved_on_basis": basis,
             })
             continue
+        if not access_key:
+            reason = "Unavailable: missing data/access key. Required Status & Trends raster is not cached and no access key is configured."
+            print(f"WARNING: {common} ({code}): {reason} Continuing without this phenology profile.", file=sys.stderr)
+            for sample in samples:
+                if sample.get("ebird_species_code") == code and sample["status"] in {"PENDING", "PENDING_REGIONAL"}:
+                    sample.update(status="UNAVAILABLE_MISSING_ACCESS_KEY", reason=reason,
+                                  collection_week_value=None)
+            manifests.append({"species_code": code, "common_name": common,
+                              "status": "UNAVAILABLE_MISSING_ACCESS_KEY", "reason": reason})
+            continue
         if dry_run:
             manifests.append({"species_code": code, "common_name": common, "status": "WOULD_DOWNLOAD"})
             continue
-        if not access_key:
-            raise RuntimeError(
-                "At least one required Status & Trends raster is not cached and EBIRDST_ACCESS_KEY is not set."
-            )
         list_url = API_LIST.format(version_year=version_year, species_code=code)
         try:
             listing = api_get_json(list_url, access_key)
             object_key = choose_key(extract_file_keys(listing), resolution)
-        except LookupError as exc:
+            target = cache_dir / str(version_year) / code / Path(object_key).name
+            meta = download_raster(object_key, access_key, target)
+        except (LookupError, RemoteDataUnavailable) as exc:
+            status = "NO_STATUS_PRODUCT" if isinstance(exc, LookupError) else "UNAVAILABLE_DOWNLOAD"
+            reason = "Unavailable: " + str(exc)
+            print(f"WARNING: {common} ({code}): {reason}. Continuing without this phenology profile.", file=sys.stderr)
             for sample in samples:
-                if sample.get("ebird_species_code") == code and sample["status"] == "PENDING":
-                    sample.update(status="NO_STATUS_PRODUCT", reason=str(exc))
-            manifests.append({"species_code": code, "common_name": common, "status": "NO_STATUS_PRODUCT", "reason": str(exc)})
+                if sample.get("ebird_species_code") == code and sample["status"] in {"PENDING", "PENDING_REGIONAL"}:
+                    sample.update(status=status, reason=reason, collection_week_value=None)
+            manifests.append({"species_code": code, "common_name": common, "status": status, "reason": reason})
             continue
-        target = cache_dir / str(version_year) / code / Path(object_key).name
-        meta = download_raster(object_key, access_key, target)
         sidecar = target.with_suffix(target.suffix + ".provenance.json")
         atomic_write(sidecar, json.dumps({
             "provider": "Cornell Lab of Ornithology eBird Status and Trends",

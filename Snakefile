@@ -576,6 +576,11 @@ CONCORDANCE_PHENOLOGY_INPUT = (
 )
 if RUN_CONCORDANCE and not RUN_SURVEILLANCE_EXPLORER:
     raise ValueError("genomic_ecological_concordance requires run_surveillance_explorer: true")
+# Initial credential warning; species-specific cache checks occur in the builder.
+if (PHENOLOGY_ENABLED or PHENOLOGY_OUTPUT in CONCORDANCE_PHENOLOGY_INPUT) and not FROZEN_PHENOLOGY and not os.environ.get("EBIRDST_ACCESS_KEY", "").strip():
+    print("WARNING: Phenology downloads unavailable: EBIRDST_ACCESS_KEY is not set. "
+          "Cached rasters remain usable; uncached species will be reported as "
+          "'Unavailable: missing data/access key'. The workflow will continue.", file=sys.stderr)
 # WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CONFIG_END
 
 # APHIS context uses a pinned local CSV; report builds never fetch live data.
