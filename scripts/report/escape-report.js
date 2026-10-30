@@ -201,7 +201,12 @@
     const chart = document.createElement("div");
     chart.className = "escape-segment-chart escape-comparison-chart";
 
-    root.append(controls, chart);
+    // WINGS_QC_CUTOFF_LABELS_V1: read cutoffs from this report's payload.
+    const cutoffNote = document.createElement("p");
+    cutoffNote.className = "escape-qc-cutoff-note";
+    cutoffNote.setAttribute("aria-live", "polite");
+    cutoffNote.style.cssText = "margin:.25rem 0 1rem;line-height:1.5;font-size:.95rem";
+    root.append(controls, cutoffNote, chart);
 
     [
       ["Median depth", "depth"],
@@ -230,6 +235,31 @@
         button.classList.toggle("is-active", button.dataset.value === mode);
       });
 
+      const knownDepth = payload.threshold != null && Number.isFinite(Number(payload.threshold)) && Number(payload.threshold) > 0;
+      const knownBreadth = payload.breadth_threshold != null && Number.isFinite(Number(payload.breadth_threshold)) && Number(payload.breadth_threshold) >= 0 && Number(payload.breadth_threshold) <= 1;
+      const knownN = payload.max_n_fraction != null && Number.isFinite(Number(payload.max_n_fraction)) && Number(payload.max_n_fraction) >= 0 && Number(payload.max_n_fraction) <= 1;
+      const depthLabel = knownDepth ? `${Number(payload.threshold).toLocaleString()}×` : "unavailable";
+      const breadthLabel = knownBreadth ? `${Number((Number(payload.breadth_threshold) * 100).toPrecision(10))}%` : "unavailable";
+      const nLabel = knownN ? `${Number((Number(payload.max_n_fraction) * 100).toPrecision(10))}%` : "unavailable";
+      const coverageNote = knownDepth && knownBreadth
+        ? `Coverage colors reflect the combined criteria: median depth ≥ ${depthLabel} and ≥ ${breadthLabel} of positions at depth ≥ ${depthLabel}.`
+        : "Coverage colors reflect the saved coverage status. One or more cutoffs are unavailable in this report.";
+      if (mode === "depth") {
+        cutoffNote.textContent = knownDepth
+          ? `Median-depth cutoff: ≥ ${depthLabel} (yellow dashed line). ${coverageNote} Bar lengths use a logarithmic scale.`
+          : `Median-depth cutoff: unavailable in this report. ${coverageNote} Bar lengths use a logarithmic scale.`;
+      } else if (mode === "breadth") {
+        cutoffNote.textContent = knownDepth && knownBreadth
+          ? `Breadth cutoff: ≥ ${breadthLabel} of positions at depth ≥ ${depthLabel} (yellow dashed line). ${coverageNote}`
+          : `Breadth cutoff or qualifying depth: unavailable in this report. ${coverageNote}`;
+      } else if (mode === "ncontent") {
+        cutoffNote.textContent = knownN
+          ? `N-content cutoff: ≤ ${nLabel} ambiguous bases (yellow dashed line). Colors reflect the saved N-content status.`
+          : "N-content cutoff: unavailable in this report. Colors reflect the saved N-content status.";
+      } else {
+        cutoffNote.textContent = `${coverageNote} Overall QC also reflects segment-length and N-content checks; see the segment QC details.`;
+      }
+
       const maxDepth = Math.max(
         ...data.map((record) => Number(record.median_depth) || 0),
         threshold,
@@ -253,12 +283,14 @@
           label = `${fmt(value, 1)}x`;
           color = statusColor(record.coverage_status);
           marker = `<span class="escape-threshold-marker" style="left:${Math.log10(threshold + 1) / Math.log10(maxDepth + 1) * 100}%"></span>`;
+          if (!knownDepth) marker = "";
         } else if (mode === "breadth") {
           const value = Number(record.breadth_covered) || 0;
           width = Math.max(2, Math.min(100, value * 100));
           label = pct(value);
           color = statusColor(record.coverage_status);
           marker = `<span class="escape-threshold-marker" style="left:${Math.min(100, breadthThreshold * 100)}%"></span>`;
+          if (!knownBreadth) marker = "";
         } else if (mode === "ncontent") {
           const value = record.n_fraction == null ? NaN : Number(record.n_fraction);
           const finite = Number.isFinite(value);
@@ -267,6 +299,7 @@
           label = finite ? pct(value) : "NA";
           color = statusColor(record.n_content_status);
           marker = '<span class="escape-threshold-marker" style="left:100%"></span>';
+          if (!knownN) marker = "";
         } else {
           const status = statusText(record.overall_status);
           width = 100;
