@@ -356,7 +356,75 @@
     });
   };
 
+  // WINGS_GENoflu_WHEEL_V1: visualize only recorded table values.
+  const renderGenofluWheel = () => {
+    const section = document.querySelector("#genoflu-genotype");
+    if (!section || section.querySelector(".genoflu-wheel-layout")) return;
+    const table = Array.from(section.querySelectorAll("table")).find(t =>
+      Array.from(t.querySelectorAll("th")).map(h => h.textContent.trim()).join("|") === "Segment|GenoFLU call");
+    if (!table) return; // Preserve the original missing/skipped-output message.
+    const calls = new Map();
+    table.querySelectorAll("tbody tr").forEach(row => {
+      const cells = row.querySelectorAll("td");
+      if (cells.length === 2) calls.set(cells[0].textContent.trim(), cells[1].textContent.trim());
+    });
+    const segments = ["PB2", "PB1", "PA", "HA", "NP", "NA", "MP", "NS"];
+    const layout = document.createElement("div"); layout.className = "genoflu-wheel-layout";
+    const ns = "http://www.w3.org/2000/svg";
+    const svgEl = (tag, attrs, text) => {
+      const el = document.createElementNS(ns, tag);
+      Object.entries(attrs || {}).forEach(([key, value]) => el.setAttribute(key, value));
+      if (text !== undefined) el.textContent = text;
+      return el;
+    };
+    const svg = svgEl("svg", {viewBox: "0 0 520 520", role: "group", "aria-label": "GenoFLU calls for eight genome segments"});
+    const panel = document.createElement("div"); panel.className = "genoflu-wheel-detail";
+    const eyebrow = document.createElement("div"); eyebrow.className = "genoflu-wheel-eyebrow"; eyebrow.textContent = "SELECTED GENOME SEGMENT";
+    const heading = document.createElement("h3");
+    const callLabel = document.createElement("div"); callLabel.textContent = "GenoFLU call";
+    const callValue = document.createElement("div"); callValue.className = "genoflu-wheel-call";
+    const help = document.createElement("p"); help.textContent = "Select a wedge to view its recorded call. Maroon indicates a recorded call; gray indicates no call recorded. Colors do not indicate QC status.";
+    panel.append(eyebrow, heading, callLabel, callValue, help);
+    panel.setAttribute("aria-live", "polite");
+    const groups = [];
+    const select = index => {
+      groups.forEach((g, i) => { g.classList.toggle("is-selected", i === index); g.setAttribute("aria-pressed", String(i === index)); });
+      heading.textContent = segments[index];
+      callValue.textContent = calls.get(segments[index]) || "Not recorded";
+    };
+    const point = (r, a) => [260 + r * Math.cos(a), 260 + r * Math.sin(a)];
+    segments.forEach((segment, i) => {
+      const start = -Math.PI / 2 + i * Math.PI / 4 + .025;
+      const end = start + Math.PI / 4 - .05;
+      const a = point(240, start), b = point(240, end), c = point(122, end), d = point(122, start);
+      const call = calls.get(segment) || "Not recorded";
+      const g = svgEl("g", {role: "button", tabindex: "0", "aria-label": `${segment}: ${call}`, class: "genoflu-wheel-wedge"});
+      g.appendChild(svgEl("path", {d: `M ${a} A 240 240 0 0 1 ${b} L ${c} A 122 122 0 0 0 ${d} Z`, fill: calls.has(segment) && calls.get(segment) ? "#8C1D40" : "#666"}));
+      const [x, y] = point(181, (start + end) / 2);
+      g.appendChild(svgEl("text", {x, y: y - 4, class: "genoflu-wheel-segment", "text-anchor": "middle"}, segment));
+      g.appendChild(svgEl("text", {x, y: y + 19, class: "genoflu-wheel-annotation", "text-anchor": "middle"}, call.length > 12 ? call.slice(0, 11) + "…" : call));
+      g.appendChild(svgEl("title", {}, `${segment}: ${call}`));
+      g.addEventListener("click", () => select(i));
+      g.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(i); }
+        if (["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(e.key)) {
+          e.preventDefault(); const next = (i + (["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : 7)) % 8;
+          groups[next].focus(); select(next);
+        }
+      });
+      groups.push(g); svg.appendChild(g);
+    });
+    svg.appendChild(svgEl("circle", {cx: 260, cy: 260, r: 104, fill: "#080808", stroke: "#FFC627", "stroke-width": 7}));
+    const genotype = section.querySelector(".download-status-pass")?.textContent.trim() || "Unassigned";
+    svg.appendChild(svgEl("text", {x: 260, y: 245, "text-anchor": "middle", class: "genoflu-wheel-center-label"}, "GENOTYPE"));
+    svg.appendChild(svgEl("text", {x: 260, y: 281, "text-anchor": "middle", class: "genoflu-wheel-center-value", style: `font-size:${genotype.length > 10 ? 19 : 27}px`}, genotype));
+    layout.append(svg, panel);
+    table.replaceWith(layout);
+    select(0);
+  };
+
   const initialize = () => {
+    renderGenofluWheel();
     refreshSummaryCards();
     document.querySelectorAll("table").forEach(enhanceTable);
     document.querySelectorAll(".escape-read-viz").forEach(renderReadViz);
