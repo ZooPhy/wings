@@ -230,6 +230,14 @@
       return ASU.gold;
     };
 
+    // Display-only metric colors; saved overall QC is unchanged.
+    const metricNumber = raw => raw == null || String(raw).trim() === "" ? NaN : Number(raw);
+    const metricColor = (value, known, passes) => {
+      if (!Number.isFinite(value)) return "#AEB4BC";
+      if (!known) return "#AEB4BC";
+      return passes ? "#176B3A" : "#B3261E";
+    };
+
     const draw = (mode) => {
       controls.querySelectorAll("button").forEach((button) => {
         button.classList.toggle("is-active", button.dataset.value === mode);
@@ -242,20 +250,20 @@
       const breadthLabel = knownBreadth ? `${Number((Number(payload.breadth_threshold) * 100).toPrecision(10))}%` : "unavailable";
       const nLabel = knownN ? `${Number((Number(payload.max_n_fraction) * 100).toPrecision(10))}%` : "unavailable";
       const coverageNote = knownDepth && knownBreadth
-        ? `Coverage colors reflect the combined criteria: median depth ≥ ${depthLabel} and ≥ ${breadthLabel} of positions at depth ≥ ${depthLabel}.`
-        : "Coverage colors reflect the saved coverage status. One or more cutoffs are unavailable in this report.";
+        ? `Combined coverage criteria: median depth ≥ ${depthLabel} and ≥ ${breadthLabel} of positions at depth ≥ ${depthLabel}.`
+        : "One or more coverage cutoffs are unavailable in this report.";
       if (mode === "depth") {
         cutoffNote.textContent = knownDepth
-          ? `Median-depth cutoff: ≥ ${depthLabel} (yellow dashed line). ${coverageNote} Bar lengths use a logarithmic scale.`
-          : `Median-depth cutoff: unavailable in this report. ${coverageNote} Bar lengths use a logarithmic scale.`;
+          ? `Median-depth cutoff: ≥ ${depthLabel} (yellow dashed line). Colors reflect median depth only. Bar lengths use a logarithmic scale.`
+          : `Median-depth cutoff: unavailable in this report. Colors are neutral because the cutoff is unavailable. Bar lengths use a logarithmic scale.`;
       } else if (mode === "breadth") {
         cutoffNote.textContent = knownDepth && knownBreadth
-          ? `Breadth cutoff: ≥ ${breadthLabel} of positions at depth ≥ ${depthLabel} (yellow dashed line). ${coverageNote}`
-          : `Breadth cutoff or qualifying depth: unavailable in this report. ${coverageNote}`;
+          ? `Breadth cutoff: ≥ ${breadthLabel} of positions at depth ≥ ${depthLabel} (yellow dashed line). Colors reflect breadth only.`
+          : `Breadth cutoff or qualifying depth: unavailable in this report. Colors are neutral.`;
       } else if (mode === "ncontent") {
         cutoffNote.textContent = knownN
-          ? `N-content cutoff: ≤ ${nLabel} ambiguous bases (yellow dashed line). Colors reflect the saved N-content status.`
-          : "N-content cutoff: unavailable in this report. Colors reflect the saved N-content status.";
+          ? `N-content cutoff: ≤ ${nLabel} ambiguous bases (yellow dashed line). Colors reflect N content only.`
+          : "N-content cutoff: unavailable in this report. Colors are neutral because the cutoff is unavailable.";
       } else {
         cutoffNote.textContent = `${coverageNote} Overall QC also reflects segment-length and N-content checks; see the segment QC details.`;
       }
@@ -278,26 +286,26 @@
         let marker = "";
 
         if (mode === "depth") {
-          const value = Number(record.median_depth) || 0;
-          width = Math.max(2, Math.log10(value + 1) / Math.log10(maxDepth + 1) * 100);
-          label = `${fmt(value, 1)}x`;
-          color = statusColor(record.coverage_status);
+          const value = metricNumber(record.median_depth);
+          width = Number.isFinite(value) ? Math.max(2, Math.log10(value + 1) / Math.log10(maxDepth + 1) * 100) : 2;
+          label = Number.isFinite(value) ? `${fmt(value, 1)}x` : "NA";
+          color = metricColor(value, knownDepth, value >= threshold);
           marker = `<span class="escape-threshold-marker" style="left:${Math.log10(threshold + 1) / Math.log10(maxDepth + 1) * 100}%"></span>`;
           if (!knownDepth) marker = "";
         } else if (mode === "breadth") {
-          const value = Number(record.breadth_covered) || 0;
-          width = Math.max(2, Math.min(100, value * 100));
-          label = pct(value);
-          color = statusColor(record.coverage_status);
+          const value = metricNumber(record.breadth_covered);
+          width = Number.isFinite(value) ? Math.max(2, Math.min(100, value * 100)) : 2;
+          label = Number.isFinite(value) ? pct(value) : "NA";
+          color = metricColor(value, knownBreadth && knownDepth, value >= breadthThreshold);
           marker = `<span class="escape-threshold-marker" style="left:${Math.min(100, breadthThreshold * 100)}%"></span>`;
           if (!knownBreadth) marker = "";
         } else if (mode === "ncontent") {
-          const value = record.n_fraction == null ? NaN : Number(record.n_fraction);
+          const value = metricNumber(record.n_fraction);
           const finite = Number.isFinite(value);
           const denominator = maxNFraction > 0 ? maxNFraction : 1;
           width = finite ? Math.max(2, Math.min(100, value / denominator * 100)) : 2;
           label = finite ? pct(value) : "NA";
-          color = statusColor(record.n_content_status);
+          color = metricColor(value, knownN, value <= maxNFraction);
           marker = '<span class="escape-threshold-marker" style="left:100%"></span>';
           if (!knownN) marker = "";
         } else {
