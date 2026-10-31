@@ -335,7 +335,7 @@
       const screen = cards.find(card => label(card) === "H5 + NA SCREEN");
       if (!screen) return;
       grid.classList.add("escape-summary-grid");
-      cards.filter(card => label(card) === "REVIEW STATUS").forEach(card => card.remove());
+      cards.filter(card => ["REVIEW STATUS", "FILTERED READS"].includes(label(card))).forEach(card => card.remove());
       if (screen.querySelector(".status-badge")?.textContent.trim().toUpperCase() !== "DETECTED") return;
       let segments = [];
       try { segments = JSON.parse(document.querySelector(".escape-segment-viz")?.dataset.escapeSegments || "{}").segments || []; } catch {}
