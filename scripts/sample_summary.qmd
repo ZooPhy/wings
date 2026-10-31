@@ -1127,7 +1127,15 @@ else:
 
 ## Consensus and variant files
 
-Medaka processing is tracked explicitly for each segment. **SUCCESS · MEDAKA** means polishing completed normally. **FAILED · IRMA FALLBACK** means Medaka failed after the segment passed WINGS segment QC, so the QC-passing IRMA consensus was carried forward with explicit provenance. **UNPOLISHED · IRMA FALLBACK** means polishing was skipped because no model was available; the retained consensus is unpolished. **SKIPPED NO MODEL** means the stage was not run because no model was available. This is distinct from a software failure. **SKIPPED QC** means Medaka was not run because the segment did not pass segment QC. Variant-generation failures are reported separately and are not represented as successful empty VCFs.
+**Medaka status by segment**
+
+- **SUCCESS · MEDAKA:** Polishing completed.
+- **FAILED · IRMA FALLBACK:** Polishing failed; the QC-passing IRMA consensus was retained.
+- **UNPOLISHED · IRMA FALLBACK:** No model was available; the unpolished IRMA consensus was retained.
+- **SKIPPED NO MODEL:** Not run because no model was available.
+- **SKIPPED QC:** Not run because the segment failed QC.
+
+Variant-generation failures are flagged separately from successful runs with no variants.
 
 ```{python}
 def count_vcf_records(path):
