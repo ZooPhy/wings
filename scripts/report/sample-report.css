@@ -468,3 +468,21 @@ a:hover, a:focus { color: var(--escape-maroon-dark); }
 @media (max-width: 600px) {
   .metric-grid.escape-summary-grid { grid-template-columns: 1fr; }
 }
+
+/* Recorded GenoFLU segment calls; colors are not QC outcomes. */
+.genoflu-wheel-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.5rem; align-items: center; margin-top: 1.5rem; }
+.genoflu-wheel-layout svg { display: block; width: 100%; height: auto; font-family: Arial, Helvetica, sans-serif; }
+.genoflu-wheel-wedge { cursor: pointer; outline: none; }
+.genoflu-wheel-wedge path { stroke: white; stroke-width: 3; }
+.genoflu-wheel-wedge.is-selected path, .genoflu-wheel-wedge:focus path { stroke: #FFC627; stroke-width: 7; }
+.genoflu-wheel-segment { fill: white; font-size: 23px; font-weight: 700; }
+.genoflu-wheel-annotation { fill: #FFC627; font-size: 16px; font-weight: 700; }
+.genoflu-wheel-center-label { fill: #FFC627; font-size: 16px; font-weight: 700; }
+.genoflu-wheel-center-value { fill: white; font-weight: 700; }
+.genoflu-wheel-detail { background: #080808; color: white; border-top: 8px solid #FFC627; border-radius: 16px; padding: 1.5rem; min-width: 0; }
+.genoflu-wheel-eyebrow { color: #FFC627; font-size: .8rem; font-weight: 700; letter-spacing: .06em; }
+.genoflu-wheel-detail h3 { color: white; font-size: 2.5rem; margin: .3rem 0 1rem; }
+.genoflu-wheel-call { color: #FFC627; font-size: 1.75rem; font-weight: 700; overflow-wrap: anywhere; }
+.genoflu-wheel-detail p { color: #ddd; font-size: .85rem; line-height: 1.5; margin-top: 1.25rem; }
+@media (max-width: 700px) { .genoflu-wheel-layout { grid-template-columns: 1fr; } }
+@media print { .genoflu-wheel-layout { break-inside: avoid; } }
