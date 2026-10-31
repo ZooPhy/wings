@@ -1045,9 +1045,6 @@
       else panels.concordance.append(make("p", "wse-app-empty", "Genomic–Ecological Concordance is unavailable for this report."));
 
     }
-    const samplingDetails = make("div", "wse-sampling-details");
-    samplingDetails.append(renderCoveragePanel(explorer));
-    panels.coverage.append(samplingDetails);
 
     if (outbreak) {
       panels.outbreak.append(outbreak);
@@ -1112,9 +1109,6 @@
       shared.hidden = !showShared;
       if (braid) braid.dataset.wseLens = showShared ? name : "";
       placeTreeStudio();
-      if (name === "coverage") {
-        samplingDetails.replaceChildren(renderCoveragePanel(explorer));
-      }
       if (showShared) {
         requestAnimationFrame(() => explorer.braidClock?.refresh?.());
       }
@@ -1153,7 +1147,6 @@
         explorer.updateSelection();
       }
 
-      samplingDetails.replaceChildren(renderCoveragePanel(explorer));
     });
 
     clearButton.addEventListener("click", () => {
