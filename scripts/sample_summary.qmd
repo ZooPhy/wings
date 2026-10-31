@@ -360,46 +360,6 @@ else:
     )
 ```
 
-```{python}
-overview = pd.DataFrame(
-    {
-        "Metric": [
-            "Segments detected",
-            "Segments passing segment QC",
-            "Consensus segments",
-            "Medaka provenance",
-            "H5 + NA screen",
-            "GenoFLU status",
-            "Review flags",
-        ],
-        "Value": [
-            row["segments_detected"],
-            row["segments_pass"],
-            row["consensus_segments"],
-            (
-                f"{sum(1 for r in medaka_segment_status.values() if r['consensus'].get('consensus_source', '').upper() == 'MEDAKA')} Medaka-polished; "
-                f"{len(medaka_fallback_segments)} IRMA fallback"
-                if medaka_status_recorded else "Not recorded"
-            ),
-            h5_status,
-            row["genoflu_status"],
-            review_text,
-        ],
-    }
-)
-
-display(
-    HTML(
-        '<div class="report-panel">'
-        + overview.to_html(
-            index=False,
-            escape=False,
-            classes="report-table",
-        )
-        + "</div>"
-    )
-)
-```
 
 ## Read processing
 
@@ -716,40 +676,6 @@ display(HTML(f"""
 """))
 ```
 
-## Influenza subtype evidence
-
-```{python}
-subtype_table = pd.DataFrame(
-    {
-        "Feature": [
-            "HA contig",
-            "NA contig",
-            "HA median depth",
-            "NA median depth",
-            "H5 + NA screen",
-        ],
-        "Value": [
-            display_unknown(row["ha_contig"]),
-            display_unknown(row["na_contig"]),
-            row["ha_median_depth"],
-            row["na_median_depth"],
-            h5_status,
-        ],
-    }
-)
-
-display(
-    HTML(
-        '<div class="report-panel">'
-        + subtype_table.to_html(
-            index=False,
-            classes="report-table",
-        )
-        + "</div>"
-    )
-)
-```
-
 ## BLAST top hits
 
 ```{python}
@@ -834,31 +760,6 @@ display(
         + "</div>"
     )
 )
-```
-
-
-## IRMA candidate selection
-
-```{python}
-if multiple_irma_candidates.empty:
-    display(HTML(
-        '<div class="report-panel"><p><strong>IRMA candidate selection:</strong> '
-        'All recovered segments had a unique IRMA candidate.</p></div>'
-    ))
-else:
-    ambiguity_table = multiple_irma_candidates[[
-        "segment", "contig", "candidate_count", "selection_status", "selection_reason"
-    ]].copy()
-    ambiguity_table.columns = [
-        "Segment", "Selected contig", "Candidate count", "Selection status", "Selection reason"
-    ]
-    display(HTML(
-        '<div class="report-panel">'
-        '<p><strong>Review condition:</strong> IRMA produced multiple candidate contigs for one or more segments. '
-        'WINGS retained the deterministically selected candidate; this does not by itself fail segment QC.</p>'
-        + ambiguity_table.to_html(index=False, escape=True, classes="report-table")
-        + '</div>'
-    ))
 ```
 
 
