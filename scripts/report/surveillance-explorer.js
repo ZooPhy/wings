@@ -630,8 +630,32 @@
     };
     const box = make("section", undefined, "wse-evidence-synthesis");
     box.setAttribute("aria-label", "Knowledge for public health action");
-    if (generated?.unavailable) {
-      box.append(make("h2", "Public Health Implications"), make("p", "The agency briefing is not available yet. The run results remain available below."));
+    if (!generated || generated.unavailable) {
+      box.setAttribute("aria-label", "Run snapshot");
+      box.append(make("p", "RUN SNAPSHOT", "wse-evidence-kicker"), make("h2", "Recorded results at a glance"));
+      const samples = Array.isArray(explorer.payload.samples) ? explorer.payload.samples : [];
+      const hosts = new Set(samples.map(s => s.host).filter(Boolean));
+      const dates = samples.map(s => s.collection_date).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d || "")).sort();
+      const detected = samples.filter(s => s.h5_status === "DETECTED").length;
+      const indeterminate = samples.filter(s => s.h5_status === "INDETERMINATE").length;
+      const complete = samples.filter(s => s.segments_pass === 8).length;
+      const located = samples.filter(s => s.has_coordinates === true).length;
+      appendBullets(box, [
+        `${samples.length} samples across ${hosts.size} recorded host groups.`,
+        dates.length ? `Collection dates: ${dates[0]} to ${dates[dates.length-1]}.` : "Collection dates not recorded.",
+        `H5 screen: ${detected} detected; ${indeterminate} indeterminate; ${samples.filter(s => s.h5_status === "NOT_DETECTED").length} not detected.`,
+        `${complete} samples have all eight segments passing QC.`,
+        `${located} of ${samples.length} samples have coordinates.`
+      ]);
+      const actions = make("div");
+      actions.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin:16px 0";
+      for (const [tab, label] of [["coverage", "Explore samples"], ["genome", "View genomes"], ["concordance", "Compare context"]]) {
+        const button = make("button", label, "wse-ecology-clock-action");
+        button.type = "button";
+        button.addEventListener("click", () => explorer.root.querySelector(`[data-tab="${tab}"]`)?.click());
+        actions.append(button);
+      }
+      box.append(actions, make("p", "No generated surveillance briefing is included in this report."));
       panel.append(box);
       return result;
     }
@@ -988,7 +1012,7 @@
       panels[name] = panel;
     });
 
-    panels.overview.append(timeline, mainGrid);
+    panels.coverage.append(timeline, mainGrid);
 
     const shared = make("div", "wse-app-shared");
     shared.hidden = true;
@@ -1021,7 +1045,9 @@
       else panels.concordance.append(make("p", "wse-app-empty", "Genomic–Ecological Concordance is unavailable for this report."));
 
     }
-    panels.coverage.append(renderCoveragePanel(explorer));
+    const samplingDetails = make("div", "wse-sampling-details");
+    samplingDetails.append(renderCoveragePanel(explorer));
+    panels.coverage.append(samplingDetails);
 
     if (outbreak) {
       panels.outbreak.append(outbreak);
@@ -1062,8 +1088,8 @@
     const activate = (name, focus = false) => {
       if (!TAB_ORDER.includes(name)) return;
       active = name;
-      toolbar.hidden = name === "genotypes";
-      if (subtitle) subtitle.hidden = name === "genotypes";
+      toolbar.hidden = name === "genotypes" || name === "overview";
+      if (subtitle) subtitle.hidden = name !== "coverage";
       if (name === "genotypes") requestAnimationFrame(() => genotypeDashboard?.refresh());
       // Keep the run brief above the shared controls, but only on Overview.
       if (overviewBrief) overviewBrief.hidden = name !== "overview";
@@ -1074,7 +1100,7 @@
         panels[key].hidden = !selected;
       }
       if (focus) buttons[name].focus();
-      if (name === "overview") {
+      if (name === "coverage") {
         requestAnimationFrame(() => {
           explorer.renderMap?.();
           explorer.updateEmphasis?.();
@@ -1085,7 +1111,7 @@
       if (braid) braid.dataset.wseLens = showShared ? name : "";
       placeTreeStudio();
       if (name === "coverage") {
-        panels.coverage.replaceChildren(renderCoveragePanel(explorer));
+        samplingDetails.replaceChildren(renderCoveragePanel(explorer));
       }
       if (showShared) {
         requestAnimationFrame(() => explorer.braidClock?.refresh?.());
@@ -1125,7 +1151,7 @@
         explorer.updateSelection();
       }
 
-      panels.coverage.replaceChildren(renderCoveragePanel(explorer));
+      samplingDetails.replaceChildren(renderCoveragePanel(explorer));
     });
 
     clearButton.addEventListener("click", () => {
