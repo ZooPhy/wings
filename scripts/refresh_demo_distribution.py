@@ -4,13 +4,16 @@ import argparse,gzip,json,re,shutil,tempfile
 from pathlib import Path
 
 def refresh(source, enhancement):
-    source=re.sub(r'<!-- WINGS_DISTRIBUTION_OVERVIEW_V1 -->.*?<!-- /WINGS_DISTRIBUTION_OVERVIEW_V1 -->', '', source, flags=re.S)
+    source=re.sub(r'<!-- WINGS_DISTRIBUTION_OVERVIEW_V1 -->.*?<!-- /WINGS_DISTRIBUTION_OVERVIEW_V1 -->\n{0,2}', '', source, flags=re.S)
     if 'id="wings-distribution-data"' not in source and 'id="wings-surveillance-data-0"' not in source:
         raise ValueError('Report lacks distribution data; no changes made')
     if 'id="ha-subtype-distribution"' not in source:
         raise ValueError('Distribution tab not found')
     if '</body>' not in source: raise ValueError('Report body not found')
-    return source.replace('</body>',enhancement+'\n</body>',1)
+    # The first closing-body string can be inside a popup JavaScript template.
+    # Remove the prior enhancement above, then insert at the document's final closing tag.
+    position = source.rfind('</body>')
+    return source[:position] + enhancement + '\n' + source[position:]
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--apply',action='store_true');args=parser.parse_args()
