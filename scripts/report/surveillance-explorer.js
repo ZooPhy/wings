@@ -1089,6 +1089,8 @@
       if (!TAB_ORDER.includes(name)) return;
       active = name;
       toolbar.hidden = name === "genotypes" || name === "overview";
+      // Explicit display prevents the toolbar grid rule from overriding hidden.
+      toolbar.style.display = toolbar.hidden ? "none" : "";
       if (subtitle) subtitle.hidden = name !== "coverage";
       if (name === "genotypes") requestAnimationFrame(() => genotypeDashboard?.refresh());
       // Keep the run brief above the shared controls, but only on Overview.
