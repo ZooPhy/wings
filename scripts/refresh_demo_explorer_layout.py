@@ -53,7 +53,7 @@ def main():
     path = repo / 'demo/wings_demo.wings'
     packed = path.with_suffix('.wings.gz')
     script = (repo / 'scripts/report/surveillance-explorer.js').read_text()
-    if 'wse-sampling-details' not in script or '</script' in script.lower():
+    if 'panels.coverage.append(timeline, mainGrid)' not in script or '</script' in script.lower():
         raise ValueError('Updated chart script missing or unsuitable for embedding')
     raw = path.read_bytes()
     bundle = json.loads(raw)
