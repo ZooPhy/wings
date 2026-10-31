@@ -1027,6 +1027,23 @@ if (!genoflu_enabled) {
 }
 ```
 
+```{r, results='asis'}
+distribution_samples <- lapply(seq_len(nrow(summary)), function(i) {
+  id <- as.character(summary$sample_id[i])
+  list(id = id, ha = as.character(summary$ha_call[i]),
+       na = as.character(summary$na_call[i]),
+       eligible = isTRUE(summary$h5_screen[i] == "DETECTED"),
+       genotype = if (genoflu_enabled) read_genoflu_genotype(id) else "Not run",
+       href = sprintf("../%s/summary/%s.sample_summary.html", id, id))
+})
+distribution_json <- jsonlite::toJSON(
+  list(enabled = genoflu_enabled, samples = distribution_samples),
+  auto_unbox = TRUE, na = "null", null = "null")
+distribution_json <- gsub("<", "\\u003c", distribution_json, fixed = TRUE)
+cat('<script type="application/json" id="wings-distribution-data">',
+    distribution_json, '</script>', sep = "")
+```
+
 ## Genome Coverage
 
 ### QC-qualified Genome Completeness

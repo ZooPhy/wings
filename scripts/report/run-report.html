@@ -1,3 +1,58 @@
 <script src="report/escape-report.js"></script>
 <script src="report/map-boundaries.js"></script>
 <script src="report/surveillance-explorer.js"></script>
+
+<!-- WINGS_DISTRIBUTION_OVERVIEW_V1 -->
+<style>
+.wdo{font-family:Arial,Helvetica,sans-serif;color:#171717}.wdo *{box-sizing:border-box}.wdo-top{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0}.wdo-card{background:#111;color:white;border-radius:16px;border-top:6px solid #FFC627;padding:22px}.wdo-card:nth-child(2){background:#8C1D40}.wdo-kicker{color:#FFC627;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.wdo h3{font-size:25px;margin:8px 0;color:inherit}.wdo-subrow{margin-top:16px}.wdo-subrow strong{font-size:22px}.wdo-track{height:7px;background:#ffffff30;border-radius:5px;margin-top:8px}.wdo-track span{display:block;height:100%;background:#FFC627;border-radius:5px}.wdo-subrow small{float:right}.wdo-main{border:1px solid #ddd;border-top:7px solid #111;border-radius:18px;padding:24px}.wdo-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}.wdo svg{width:100%;max-width:390px;display:block;margin:auto}.wdo-slice{cursor:pointer;outline:none}.wdo-slice:hover,.wdo-slice:focus,.wdo-slice[aria-pressed=true]{stroke:#FFC627;stroke-width:5}.wdo-detail{background:#111;color:white;border-top:6px solid #FFC627;border-radius:14px;padding:24px;min-width:0}.wdo-detail h3{overflow-wrap:anywhere}.wdo-count{font-size:34px;font-weight:700;margin:12px 0}.wdo-links{max-height:260px;overflow:auto;padding-left:20px}.wdo-links a{color:white;text-decoration:underline;overflow-wrap:anywhere}.wdo-links li{margin:9px 0}.wdo-legend{display:grid;gap:7px;margin:12px 0}.wdo-legend button{font:inherit;text-align:left;background:white;border:1px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;color:#222}.wdo-legend button[aria-pressed=true]{border:2px solid #8C1D40;background:#fff7df}.wdo-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:9px}.wdo details{margin-top:20px;color:#555;font-size:14px}.wdo summary{cursor:pointer;font-weight:bold}.wdo-empty{padding:25px;color:#555}@media(max-width:750px){.wdo-top,.wdo-layout{grid-template-columns:1fr}}
+</style>
+<script>
+(()=>{
+const init=()=>{
+ const target=document.getElementById('subtypegenotype-distribution') || document.getElementById('subtype-genotype-distribution') || document.getElementById('ha-subtype-distribution')?.closest('.tab-pane');
+ if(!target || target.querySelector('.wdo'))return;
+ let rows, enabled=true;
+ try{
+  const dedicated=document.getElementById('wings-distribution-data');
+  if(dedicated){const d=JSON.parse(dedicated.textContent);rows=d.samples;enabled=d.enabled;}
+  else {const d=JSON.parse(document.getElementById('wings-surveillance-data-0')?.textContent||'null');if(!d?.samples)return;
+   enabled=!target.textContent.includes('GenoFLU is disabled');
+   rows=d.samples.map(s=>({id:s.sample_id,ha:s.ha_call,na:s.na_call,eligible:s.h5_status==='DETECTED',href:s.report_href,genotype:s.genotype?.call || (['MISSING','MISSING_OUTPUT'].includes(s.genotype?.status)?'Missing output':'Not assigned')}));}
+ }catch{return;}
+ if(!Array.isArray(rows))return;
+ const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
+ const ui=el('div','wdo');ui.append(el('h3','','Subtype & Genotype Overview'));
+ const top=el('div','wdo-top');
+ for(const [field,title] of [['ha','HA subtypes'],['na','NA subtypes']]){
+  const card=el('div','wdo-card');card.append(el('div','wdo-kicker',title),el('h3','',`${rows.length} samples`));
+  const counts=new Map();rows.forEach(s=>{const k=s[field]||'Not recorded';counts.set(k,(counts.get(k)||0)+1);});
+  [...counts].sort((a,b)=>b[1]-a[1]).forEach(([label,n])=>{const r=el('div','wdo-subrow');r.append(el('strong','',label),el('small','',`${n} / ${rows.length} · ${(100*n/rows.length).toFixed(1)}%`));const track=el('div','wdo-track'),fill=el('span');fill.style.width=`${100*n/rows.length}%`;track.append(fill);r.append(track);card.append(r);});
+  card.append(el('p','','Recorded subtype calls; counts do not imply QC eligibility.'));top.append(card);
+ }
+ ui.append(top);const main=el('div','wdo-main');main.append(el('div','wdo-kicker','GenoFLU'),el('h3','','Genotype distribution'));
+ const eligible=rows.filter(s=>s.eligible);main.append(el('p','',enabled?`Among ${eligible.length} eligible samples; ${rows.length-eligible.length} excluded.`:'GenoFLU is disabled for this run.'));
+ if(enabled && eligible.length){
+  const grouped=new Map();eligible.forEach(s=>{const k=s.genotype||'Missing output';if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(s);});
+  const groups=[...grouped].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0]));
+  const palette=['#8C1D40','#FFC627','#4E6680','#A95670','#586B44'];let colorIndex=0;
+  const colors=groups.map(([k])=>k==='Not assigned'?'#AEB4BC':k==='Missing output'?'#555':palette[colorIndex++%palette.length]);
+  const layout=el('div','wdo-layout'),left=el('div'),panel=el('div','wdo-detail'),legend=el('div','wdo-legend');panel.setAttribute('aria-live','polite');
+  const ns='http://www.w3.org/2000/svg',sv=(tag,attrs,text)=>{const e=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));if(text!==undefined)e.textContent=text;return e;};
+  const svg=sv('svg',{viewBox:'0 0 360 360',role:'group','aria-label':'Genotype distribution'}),paths=[],buttons=[];
+  const select=i=>{paths.forEach((p,j)=>p.setAttribute('aria-pressed',j===i));buttons.forEach((p,j)=>p.setAttribute('aria-pressed',j===i));const [name,samples]=groups[i];panel.replaceChildren(el('div','wdo-kicker','Selected genotype'),el('h3','',name),el('div','wdo-count',`${samples.length} samples`),el('p','',`${(100*samples.length/eligible.length).toFixed(1)}% of ${eligible.length} eligible samples`));const list=el('ul','wdo-links');samples.forEach(s=>{const li=el('li');const href=String(s.href||'');if(href && !/^(?:[a-z]+:|\/\/)/i.test(href)){const a=el('a','',s.id);a.href=href;li.append(a);}else li.textContent=s.id;list.append(li);});panel.append(list);};
+  let angle=-Math.PI/2;groups.forEach(([name,samples],i)=>{const amount=2*Math.PI*samples.length/eligible.length,end=angle+amount;let path;
+   if(groups.length===1)path=sv('circle',{cx:180,cy:180,r:119,fill:'none',stroke:colors[i],'stroke-width':66});
+   else {const pt=(r,a)=>`${180+r*Math.cos(a)},${180+r*Math.sin(a)}`;const large=amount>Math.PI?1:0;path=sv('path',{d:`M${pt(152,angle)} A152,152 0 ${large} 1 ${pt(152,end)} L${pt(86,end)} A86,86 0 ${large} 0 ${pt(86,angle)} Z`,fill:colors[i],stroke:'white','stroke-width':2});}
+   path.setAttribute('class',groups.length===1?'':'wdo-slice');path.setAttribute('tabindex','0');path.setAttribute('role','button');path.setAttribute('aria-label',`${name}: ${samples.length} samples`);path.addEventListener('click',()=>select(i));path.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(i);}});svg.append(path);paths.push(path);angle=end;
+   const button=el('button');button.type='button';const dot=el('span','wdo-dot');dot.style.background=colors[i];button.append(dot,document.createTextNode(`${name}: ${samples.length} (${(100*samples.length/eligible.length).toFixed(1)}%)`));button.addEventListener('click',()=>select(i));buttons.push(button);legend.append(button);
+  });
+  svg.append(sv('text',{x:180,y:178,'text-anchor':'middle','font-size':42,'font-weight':700,fill:'#111'},eligible.length),sv('text',{x:180,y:203,'text-anchor':'middle','font-size':13,fill:'#555'},'ELIGIBLE SAMPLES'));
+  left.append(svg,legend);layout.append(left,panel);main.append(layout);select(0);
+ }else if(enabled)main.append(el('p','wdo-empty','No samples met GenoFLU eligibility criteria.'));
+ const details=el('details');details.append(el('summary','','How counts are calculated'),el('p','','HA and NA counts include all samples and display recorded calls. GenoFLU counts include only samples with a DETECTED QC-qualified H5Nx screen. Not assigned means no consensus genotype was returned. Missing output means the result was absent or empty. Percentages use eligible samples as the denominator.'));main.append(details);ui.append(main);
+ // Retain the original plots in the document as a fallback, but remove them from the displayed tab.
+ Array.from(target.children).forEach(child=>child.hidden=true);target.append(ui);
+};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
+</script>
+<!-- /WINGS_DISTRIBUTION_OVERVIEW_V1 -->
