@@ -383,7 +383,7 @@
     const heading = document.createElement("h3");
     const callLabel = document.createElement("div"); callLabel.textContent = "GenoFLU call";
     const callValue = document.createElement("div"); callValue.className = "genoflu-wheel-call";
-    const help = document.createElement("p"); help.textContent = "Select a wedge to view its recorded call. Maroon indicates a recorded call; gray indicates no call recorded. Colors do not indicate QC status.";
+    const help = document.createElement("p"); help.textContent = "Select a wedge to view its recorded call. Maroon indicates a recorded call; gray indicates no call recorded.";
     panel.append(eyebrow, heading, callLabel, callValue, help);
     panel.setAttribute("aria-live", "polite");
     const groups = [];
@@ -420,6 +420,9 @@
     svg.appendChild(svgEl("text", {x: 260, y: 281, "text-anchor": "middle", class: "genoflu-wheel-center-value", style: `font-size:${genotype.length > 10 ? 19 : 27}px`}, genotype));
     layout.append(svg, panel);
     table.replaceWith(layout);
+    section.querySelectorAll("p").forEach(paragraph => {
+      if (paragraph.querySelector("strong")?.textContent.trim() === "GenoFLU result:") paragraph.remove();
+    });
     select(0);
   };
 
