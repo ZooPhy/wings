@@ -2260,22 +2260,30 @@
     section.append(style,make("h4","","Nightly migration context by state"),make("p","","Each point represents one night in one state. Select a point to highlight its linked samples. Activity is ranked within the state's complete source season; progress is the share of that season's crossings already accumulated."));
     const svgNode=(name,attrs={},text)=>{const node=document.createElementNS("http://www.w3.org/2000/svg",name);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));if(text!==undefined)node.textContent=text;return node;};
     const migrationModels=(data.models || []).filter(row=>row.comparison === "migration_vs_ecology");
-    section.append(make("h5","","Added fit by segment"),make("p","","Select a segment row to show the collections eligible for that comparison. Each change in R² compares the same pairs with and without migration context."));
-    const fitChart=svgNode("svg",{viewBox:"0 0 900 255",role:"group","aria-label":"Migration added fit by segment"});
-    const maximum=Math.max(.05,...migrationModels.map(row=>finite(row.delta_r2)?row.delta_r2:0));
-    for(let i=0;i<SEGMENTS.length;i++){
-      const segment=SEGMENTS[i],row=migrationModels.find(r=>r.segment === segment),yy=24+i*27,active=explorer.migrationConcordanceSegment === segment;
-      const line=svgNode("g",{class:"wgec-migration-point",role:"button",tabindex:0,"aria-pressed":active,"aria-label":`${segment}: ${row && finite(row.delta_r2)?"added fit "+row.delta_r2.toFixed(3):friendlyStatus(row)}. Show eligible collections.`});
-      line.append(svgNode("text",{x:30,y:yy+4},segment),svgNode("line",{x1:105,x2:600,y1:yy,y2:yy,stroke:"#e3e9e9"}),svgNode("circle",{class:"wgec-migration-focus",cx:84,cy:yy,r:6,fill:"none",stroke:"#bd811f","stroke-width":2}));
-      if(row && finite(row.delta_r2)){
-        const xx=105+Math.max(0,row.delta_r2)/maximum*495;
-        line.append(svgNode("line",{x1:105,x2:xx,y1:yy,y2:yy,stroke:active?"#8c1d40":"#147d83","stroke-width":4}),svgNode("circle",{cx:xx,cy:yy,r:5,fill:active?"#8c1d40":"#147d83"}),svgNode("text",{x:622,y:yy+4},`ΔR² ${signed(row.delta_r2)} · ${row.display_status === "DESCRIPTIVE"?"descriptive":`q ${qfmt(row.fdr_q)}`}`));
-      }else line.append(svgNode("text",{x:622,y:yy+4},friendlyStatus(row)));
-      line.append(svgNode("title",{},`${segment}: ${row?.diagnostic || "Comparison unavailable."}`));
-      const choose=()=>{explorer.migrationConcordanceSegment=active?null:segment;explorer.concordanceController?.refresh();};
-      line.addEventListener("click",choose);line.addEventListener("keydown",event=>{if(["Enter"," "].includes(event.key)){event.preventDefault();choose();}});fitChart.append(line);
+    const hasMigrationFit = migrationModels.some(row => finite(row.delta_r2));
+    if (hasMigrationFit) {
+      section.append(make("h5","","Added fit by segment"),make("p","","Select a segment row to show the collections eligible for that comparison. Each change in R² compares the same pairs with and without migration context."));
+      const fitChart=svgNode("svg",{viewBox:"0 0 900 255",role:"group","aria-label":"Migration added fit by segment"});
+      const maximum=Math.max(.05,...migrationModels.map(row=>finite(row.delta_r2)?row.delta_r2:0));
+      for(let i=0;i<SEGMENTS.length;i++){
+        const segment=SEGMENTS[i],row=migrationModels.find(r=>r.segment === segment),yy=24+i*27,active=explorer.migrationConcordanceSegment === segment;
+        const line=svgNode("g",{class:"wgec-migration-point",role:"button",tabindex:0,"aria-pressed":active,"aria-label":`${segment}: ${row && finite(row.delta_r2)?"added fit "+row.delta_r2.toFixed(3):friendlyStatus(row)}. Show eligible collections.`});
+        line.append(svgNode("text",{x:30,y:yy+4},segment),svgNode("line",{x1:105,x2:600,y1:yy,y2:yy,stroke:"#e3e9e9"}),svgNode("circle",{class:"wgec-migration-focus",cx:84,cy:yy,r:6,fill:"none",stroke:"#bd811f","stroke-width":2}));
+        if(row && finite(row.delta_r2)){
+          const xx=105+Math.max(0,row.delta_r2)/maximum*495;
+          line.append(svgNode("line",{x1:105,x2:xx,y1:yy,y2:yy,stroke:active?"#8c1d40":"#147d83","stroke-width":4}),svgNode("circle",{cx:xx,cy:yy,r:5,fill:active?"#8c1d40":"#147d83"}),svgNode("text",{x:622,y:yy+4},`ΔR² ${signed(row.delta_r2)} · ${row.display_status === "DESCRIPTIVE"?"descriptive":`q ${qfmt(row.fdr_q)}`}`));
+        }else line.append(svgNode("text",{x:622,y:yy+4},friendlyStatus(row)));
+        line.append(svgNode("title",{},`${segment}: ${row?.diagnostic || "Comparison unavailable."}`));
+        const choose=()=>{explorer.migrationConcordanceSegment=active?null:segment;explorer.concordanceController?.refresh();};
+        line.addEventListener("click",choose);line.addEventListener("keydown",event=>{if(["Enter"," "].includes(event.key)){event.preventDefault();choose();}});fitChart.append(line);
+      }
+      section.append(fitChart);
+    } else {
+      const reasons = [...new Set(migrationModels.map(friendlyStatus))];
+      const message = reasons.length === 1 ? reasons[0] : "Insufficient eligible data for the migration comparisons";
+      section.append(make("p", "wgec-migration-unavailable", `Migration comparisons unavailable: ${message.charAt(0).toLowerCase() + message.slice(1)}.`));
+      explorer.migrationConcordanceSegment = null;
     }
-    section.append(fitChart);
     const all=Array.isArray(data.migration_samples)?data.migration_samples:[];
     const model=migrationModels.find(row=>row.segment === explorer.migrationConcordanceSegment);
     const eligible=model && Array.isArray(model.eligible_sample_ids)?new Set(model.eligible_sample_ids):null;
