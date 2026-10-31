@@ -35,7 +35,7 @@ const init=()=>{
   const grouped=new Map();eligible.forEach(s=>{const k=s.genotype||'Missing output';if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(s);});
   const groups=[...grouped].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0]));
   const palette=['#8C1D40','#FFC627','#4E6680','#A95670','#586B44'];let colorIndex=0;
-  const colors=groups.map(([k])=>k==='Not assigned'?'#AEB4BC':k==='Missing output'?'#555':palette[colorIndex++%palette.length]);
+  const colors=groups.map(([k])=>k==='Not assigned'?'#747474':k==='Missing output'?'#555':palette[colorIndex++%palette.length]);
   const layout=el('div','wdo-layout'),left=el('div'),panel=el('div','wdo-detail'),legend=el('div','wdo-legend');panel.setAttribute('aria-live','polite');
   const ns='http://www.w3.org/2000/svg',sv=(tag,attrs,text)=>{const e=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));if(text!==undefined)e.textContent=text;return e;};
   const svg=sv('svg',{viewBox:'0 0 360 360',role:'group','aria-label':'Genotype distribution'}),paths=[],buttons=[];
