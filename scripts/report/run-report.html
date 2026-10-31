@@ -115,10 +115,13 @@ const init=()=>{
  const extras=[...new Set(rows.map(s=>s.screen))].filter(s=>!states.some(t=>t[0]===s));extras.forEach(s=>states.push([s,s,'#777']));
  states.forEach(([state,label,color])=>{const samples=rows.filter(s=>s.screen===state),b=el('button','wro-screen');b.type='button';b.setAttribute('aria-pressed','false');b.append(document.createTextNode(label),el('strong','',`${samples.length} · ${percent(samples.length)}`));const track=el('div','wro-track'),fill=el('i');fill.style.width=percent(samples.length);fill.style.background=color;track.append(fill);b.append(track);b.addEventListener('click',()=>choose(b,samples,label));buttons.push(b);left.append(b);});
  const reset=el('button','wro-reset','Show all samples');reset.type='button';reset.addEventListener('click',()=>choose(null,rows,'All samples'));left.append(reset);layout.append(left,detail);panel.append(layout);
- const defs=el('details');defs.append(el('summary','','Screening definitions'));Array.from(screen.children).filter(n=>['P','UL','OL'].includes(n.tagName)).forEach(n=>defs.append(n.cloneNode(true)));panel.append(defs);ui.append(panel);
- // Hide only the two replaced sections; keep historical results and other content intact.
+ const defs=el('details');defs.append(el('summary','','Screening definitions'));const list=el('ul');
+ const definitions=[['DETECTED','QC-passing H5 HA and subtype-resolved NA (H5Nx).'],['NOT DETECTED','QC-passing HA is not H5, regardless of NA.'],['INDETERMINATE','HA is uninformative, or H5 is present but NA is missing, fails QC, or is unresolved.']];
+ definitions.forEach(([label,text])=>{const li=el('li');li.append(el('strong','',label+': '),document.createTextNode(text));list.append(li);});
+ defs.append(list,el('p','','GenoFLU runs only for DETECTED samples.'));panel.append(defs);ui.append(panel);
+ // Replace overview displays and remove Historical Stability from this tab.
  overview.hidden=true;screen.hidden=true;tab.insertBefore(ui,overview);
- if(history){history.classList.add('wro-history');ui.append(history);}
+ if(history)history.remove();
  show(rows,'All samples');
 };if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();})();
 </script>
