@@ -376,6 +376,10 @@
       const cells = row.querySelectorAll("td");
       if (cells.length === 2) calls.set(cells[0].textContent.trim(), cells[1].textContent.trim());
     });
+    const hasGenofluCall = value => {
+      const text = String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+      return !["", "not available", "not recorded", "n/a", "na", "none", "null", "nan", "missing", "unknown", "-", "–", "—"].includes(text);
+    };
     const segments = ["PB2", "PB1", "PA", "HA", "NP", "NA", "MP", "NS"];
     const layout = document.createElement("div"); layout.className = "genoflu-wheel-layout";
     const ns = "http://www.w3.org/2000/svg";
@@ -407,7 +411,7 @@
       const a = point(240, start), b = point(240, end), c = point(122, end), d = point(122, start);
       const call = calls.get(segment) || "Not recorded";
       const g = svgEl("g", {role: "button", tabindex: "0", "aria-label": `${segment}: ${call}`, class: "genoflu-wheel-wedge"});
-      g.appendChild(svgEl("path", {d: `M ${a} A 240 240 0 0 1 ${b} L ${c} A 122 122 0 0 0 ${d} Z`, fill: calls.has(segment) && calls.get(segment) ? "#8C1D40" : "#666"}));
+      g.appendChild(svgEl("path", {d: `M ${a} A 240 240 0 0 1 ${b} L ${c} A 122 122 0 0 0 ${d} Z`, fill: hasGenofluCall(calls.get(segment)) ? "#8C1D40" : "#666"}));
       const [x, y] = point(181, (start + end) / 2);
       g.appendChild(svgEl("text", {x, y: y - 4, class: "genoflu-wheel-segment", "text-anchor": "middle"}, segment));
       g.appendChild(svgEl("text", {x, y: y + 19, class: "genoflu-wheel-annotation", "text-anchor": "middle"}, call.length > 12 ? call.slice(0, 11) + "…" : call));
