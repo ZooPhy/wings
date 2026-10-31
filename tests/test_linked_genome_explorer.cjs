@@ -82,7 +82,20 @@ const payload = JSON.parse(fixture.stdout);
     await page.selectOption(".wse-app-host", "ALL");
     await page.selectOption(".wse-app-sample", "complete");
     await page.locator('.wse-app-tab[data-tab="overview"]').click();
+    assert.equal(await page.locator('.wse-timeline-panel').isVisible(), false);
+    assert.equal(await page.locator('.wse-app-sample').isVisible(), false);
+    assert.equal(await page.locator('.wse-app-sample').inputValue(), 'complete');
+    await page.locator('.wse-app-tab[data-tab="coverage"]').click();
+    await page.waitForSelector('.wse-timeline-panel', {state: 'visible'});
+    assert.equal(await page.locator('.wse-app-sample').isVisible(), true);
     await page.locator('.wse-timeline-mark[data-sample-id="partial"]').click();
+    assert.equal(await page.locator('.wse-app-sample').inputValue(), 'partial');
+    // Returning to Sampling & Detections must not remove or duplicate the linked views.
+    await page.locator('.wse-app-tab[data-tab="overview"]').click();
+    await page.locator('.wse-app-tab[data-tab="coverage"]').click();
+    assert.equal(await page.locator('.wse-timeline-panel').count(), 1);
+    assert.equal(await page.locator('.wse-timeline-panel').isVisible(), true);
+    assert.equal(await page.locator('.wse-app-sample').inputValue(), 'partial');
     await page.locator('.wse-app-tab[data-tab="genome"]').click();
     assert.equal(await selected(), 5);
 
