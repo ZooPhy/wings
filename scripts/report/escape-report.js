@@ -327,7 +327,37 @@
     draw("depth");
   };
 
+  // WINGS_SUMMARY_CARDS_V1
+  const refreshSummaryCards = () => {
+    document.querySelectorAll(".metric-grid").forEach(grid => {
+      const cards = Array.from(grid.querySelectorAll(".metric-card"));
+      const label = card => (card.querySelector(".metric-label")?.textContent || "").trim().toUpperCase();
+      const screen = cards.find(card => label(card) === "H5 + NA SCREEN");
+      if (!screen) return;
+      grid.classList.add("escape-summary-grid");
+      cards.filter(card => label(card) === "REVIEW STATUS").forEach(card => card.remove());
+      if (screen.querySelector(".status-badge")?.textContent.trim().toUpperCase() !== "DETECTED") return;
+      let segments = [];
+      try { segments = JSON.parse(document.querySelector(".escape-segment-viz")?.dataset.escapeSegments || "{}").segments || []; } catch {}
+      const numbers = new Set(segments.filter(r => r.segment === "NA").map(r => String(r.contig || "").match(/(?:^|_)N([1-9][0-9]?)$/)?.[1]).filter(Boolean));
+      const detail = screen.querySelector(".metric-detail");
+      if (!detail) return;
+      detail.replaceChildren();
+      const subtype = document.createElement("div");
+      subtype.className = "escape-summary-subtype";
+      subtype.textContent = numbers.size === 1 ? `H5N${Array.from(numbers)[0]}` : "H5Nx (NA subtype unresolved)";
+      detail.appendChild(subtype);
+      const assignment = document.querySelector("#genoflu-genotype .download-status-pass")?.textContent.trim();
+      if (assignment) {
+        const genotype = document.createElement("div");
+        genotype.textContent = `Genotype: ${assignment}`;
+        detail.appendChild(genotype);
+      }
+    });
+  };
+
   const initialize = () => {
+    refreshSummaryCards();
     document.querySelectorAll("table").forEach(enhanceTable);
     document.querySelectorAll(".escape-read-viz").forEach(renderReadViz);
     document.querySelectorAll(".escape-segment-viz").forEach(renderSegmentViz);
