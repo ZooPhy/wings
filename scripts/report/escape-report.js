@@ -426,7 +426,35 @@
     select(0);
   };
 
+  // Present the Medaka status explanation as a concise list.
+  const simplifyMedakaExplanation = () => {
+    const section = document.querySelector("#consensus-and-variant-files");
+    if (!section) return;
+    const paragraph = Array.from(section.querySelectorAll("p")).find(p =>
+      p.textContent.trim().startsWith("Medaka processing is tracked explicitly for each segment."));
+    if (!paragraph) return;
+    const wrapper = document.createElement("div");
+    const heading = document.createElement("p");
+    const title = document.createElement("strong");
+    title.textContent = "Medaka status by segment";
+    heading.appendChild(title);
+    const list = document.createElement("ul");
+    const items = [["SUCCESS · MEDAKA", "Polishing completed."], ["FAILED · IRMA FALLBACK", "Polishing failed; the QC-passing IRMA consensus was retained."], ["UNPOLISHED · IRMA FALLBACK", "No model was available; the unpolished IRMA consensus was retained."], ["SKIPPED NO MODEL", "Not run because no model was available."], ["SKIPPED QC", "Not run because the segment failed QC."]];
+    items.forEach(([status, description]) => {
+      const item = document.createElement("li");
+      const label = document.createElement("strong");
+      label.textContent = status + ": ";
+      item.append(label, document.createTextNode(description));
+      list.appendChild(item);
+    });
+    const note = document.createElement("p");
+    note.textContent = "Variant-generation failures are flagged separately from successful runs with no variants.";
+    wrapper.append(heading, list, note);
+    paragraph.replaceWith(wrapper);
+  };
+
   const initialize = () => {
+    simplifyMedakaExplanation();
     renderGenofluWheel();
     refreshSummaryCards();
     document.querySelectorAll("table").forEach(enhanceTable);
