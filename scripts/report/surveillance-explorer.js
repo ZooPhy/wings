@@ -1085,6 +1085,7 @@
     const activate = (name, focus = false) => {
       if (!TAB_ORDER.includes(name)) return;
       active = name;
+      root.dataset.wseActiveTab = name;
       toolbar.hidden = name === "genotypes" || name === "overview";
       // Explicit display prevents the toolbar grid rule from overriding hidden.
       toolbar.style.display = toolbar.hidden ? "none" : "";
@@ -4396,7 +4397,7 @@
         if (!button) return;
         this.outbreakPage += Number(button.dataset.outbreakPage);
         this.renderOutbreak(true);
-        this.outbreakNode.querySelector(".wse-outbreak-records summary")?.focus({preventScroll: true});
+        this.outbreakNode.querySelector(".wse-outbreak-record-link")?.focus({preventScroll: true});
       });
     }
 
@@ -4489,7 +4490,7 @@
           ? ` on ${prettyOutbreakDate(this.outbreakSelectedStart)}`
           : ` from ${prettyOutbreakDate(this.outbreakSelectedStart)} through ${prettyOutbreakDate(this.outbreakSelectedEnd)}`;
 
-        outbreakTakeaway = `<strong>${formatNumber(resultRows.length)} APHIS wild-bird records</strong>${geography}${period}.`;
+        outbreakTakeaway = `<strong>${formatNumber(resultRows.length)} APHIS source records</strong>${geography}${period}.`;
       } else if (
         sample &&
         this.outbreakScope === "sample" &&
@@ -4497,17 +4498,18 @@
         sampleDate !== null &&
         this.outbreakFollow
       ) {
-        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS wild-bird records</strong> in ${esc(context.states[sampleState] || sampleState)} within ±${this.outbreakDays} days of ${esc(sample.sample_id)}'s collection date (${prettyOutbreakDate(sample.collection_date)}).`;
+        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS source records</strong> in ${esc(context.states[sampleState] || sampleState)} within ±${this.outbreakDays} days of ${esc(sample.sample_id)}'s collection date (${prettyOutbreakDate(sample.collection_date)}).`;
       } else if (view.code) {
-        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS wild-bird records</strong> in ${esc(context.states[view.code] || view.code)} from ${prettyOutbreakDate(this.outbreakStart)} through ${prettyOutbreakDate(this.outbreakEnd)}.`;
+        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS source records</strong> in ${esc(context.states[view.code] || view.code)} from ${prettyOutbreakDate(this.outbreakStart)} through ${prettyOutbreakDate(this.outbreakEnd)}.`;
       } else {
-        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS wild-bird records</strong> nationwide from ${prettyOutbreakDate(this.outbreakStart)} through ${prettyOutbreakDate(this.outbreakEnd)}.${sample ? "" : " Select a WINGS sample to focus on its state and collection date."}`;
+        outbreakTakeaway = `<strong>${formatNumber(view.rows.length)} APHIS source records</strong> nationwide from ${prettyOutbreakDate(this.outbreakStart)} through ${prettyOutbreakDate(this.outbreakEnd)}.${sample ? "" : " Select a WINGS sample to focus on its state and collection date."}`;
       }
 
       this.outbreakNode.innerHTML = `
+        <style>[data-wse-active-tab="outbreak"] .wse-title{font-size:26px!important}[data-wse-active-tab="outbreak"] .wse-heading{padding-top:12px;padding-bottom:12px}[data-wse-active-tab="outbreak"] .wse-eyebrow{display:none}[data-wse-active-tab="outbreak"] .wse-app-context{display:none}[data-wse-active-tab="outbreak"] .wse-app-toolbar{grid-template-columns:minmax(200px,1fr) minmax(160px,.7fr) auto}.wse-outbreak-takeaway{background:#111;color:#fff!important;padding:24px;border-radius:16px;border-top:6px solid #ffc627;font-size:21px!important;line-height:1.6}.wse-outbreak-takeaway strong{display:block;color:#ffc627;font-size:30px;margin-bottom:8px}.wse-outbreak-primary-controls{display:flex;flex-wrap:wrap;gap:20px;padding:18px 0}.wse-outbreak-primary-controls label{display:grid;gap:8px;font-size:18px}.wse-outbreak-primary-controls select{font:inherit;padding:10px 14px;border:1px solid #bbb;border-radius:10px;background:#fff}.wse-outbreak-bar{fill:#8c1d40!important}.wse-outbreak-bar.is-selected{stroke:#ffc627;stroke-width:3}.wse-outbreak-sample-date{stroke:#ffc627!important;stroke-width:3;stroke-dasharray:5 4}.wse-outbreak-record-link{display:inline-block;background:#8c1d40;color:#fff!important;border-top:5px solid #ffc627;border-radius:12px;padding:14px 20px;margin:18px 0;font-size:18px;font-weight:700;text-decoration:none}.wse-outbreak-axis{font-size:12px}@media(max-width:650px){[data-wse-active-tab="outbreak"] .wse-app-toolbar{grid-template-columns:1fr}.wse-outbreak-takeaway strong{font-size:25px}}</style>
         <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Outbreak context</span><h3>APHIS wild-bird detections</h3></div><a href="${esc(context.source_url)}" target="_blank" rel="noopener noreferrer">Open APHIS source table ↗</a></div>
         <div class="wse-outbreak-body">
-          <p class="wse-outbreak-caution"><strong>Context only:</strong> date and place overlap do not imply epidemiological linkage. Counts are APHIS source records, not unique outbreaks or prevalence.</p>
+          <p class="wse-outbreak-caution">Geographic and date overlap provide context; they do not establish a link to this sample.</p>
 
           <p class="wse-outbreak-takeaway" aria-live="polite">${outbreakTakeaway}</p>
 
@@ -4555,7 +4557,7 @@
 
           <details class="wse-outbreak-about"${aboutOpen ? " open" : ""}>
             <summary>About this context</summary>
-            <div class="wse-outbreak-about-body">
+            <div class="wse-outbreak-about-body"><p>Counts are APHIS source records, not unique outbreaks or prevalence.</p>
               <p>${esc(view.scopeLabel)} ${missingSampleDate ? "Sample collection date unavailable; displaying the snapshot's full date range." : this.outbreakFollow && !sample ? "No selected sample; displaying the snapshot's full date range." : ""}</p>
               <p>${formatNumber(view.undated)} records in this geographic scope lack a usable ${basisLabel} and are excluded.</p>
               <p>Source precision: county/state. Map: state-level aggregates; shaded areas are not exact detection locations. State matching also applies when sample coordinates are absent. No distance-based linkage is calculated.</p>
@@ -4566,12 +4568,34 @@
           </details>
           <details class="wse-outbreak-records"${recordsOpen ? " open" : ""}><summary>Source records (${formatNumber(resultRows.length)})</summary>
             <p>CSV data-record numbers refer to this snapshot. APHIS supplies no unique record IDs or record-specific URLs; each source link opens the APHIS table. Repeated rows are retained.</p>
-            <div class="wse-outbreak-table-wrap"><table><thead><tr><th>CSV record</th><th>State / county</th><th>Bird species</th><th>Collection date</th><th>Date detected</th><th>Source details</th></tr></thead><tbody>${rows.map(row => `
+            <div class="wse-outbreak-table-wrap"><table><thead><tr><th>CSV record</th><th>State / county</th><th>Bird species</th><th>Collection date</th><th>Date detected</th><th>Source details</th></tr></thead><tbody>${resultRows.map(row => `
               <tr><td>${row.source_row}</td><td>${esc(row.state)} / ${esc(row.county || "Not recorded")}<small>Source precision: ${esc(row.geographic_precision)}</small></td><td>${esc(row.species)}</td><td>${esc(row.collection_date_raw)}</td><td>${esc(row.detected_date_raw)}</td><td><details><summary>Details</summary><p>Strain: ${esc(row.strain)}<br>Classification: ${esc(row.classification)}<br>Sampling method: ${esc(row.sampling_method)}<br>Submitting agency: ${esc(row.submitting_agency)}</p><p>Snapshot reference: ${esc(context.sha256.slice(0,12))}:${row.source_row}</p></details><a href="${esc(context.source_url)}" target="_blank" rel="noopener noreferrer" aria-label="Open APHIS source table for CSV record ${row.source_row}">APHIS table ↗</a></td></tr>`).join("") || '<tr><td colspan="6">No dated records match these filters in this snapshot.</td></tr>'}</tbody></table></div>
             <div class="wse-outbreak-pagination"><button type="button" data-outbreak-page="-1"${this.outbreakPage === 0 ? " disabled" : ""}>Previous</button><span>Page ${this.outbreakPage + 1} of ${pages}</span><button type="button" data-outbreak-page="1"${this.outbreakPage >= pages - 1 ? " disabled" : ""}>Next</button></div>
           </details>
           <details class="wse-outbreak-provenance"><summary>Snapshot and source provenance</summary><p>${formatNumber(context.record_count)} source rows; ${formatNumber(context.repeated_rows_retained)} identical repeat rows retained. Snapshot supplied: ${esc(context.snapshot_supplied_date || "Not recorded")} (${esc(context.snapshot_date_basis)}). This is an offline snapshot, not a live feed.</p><p>${esc(basisLabel)} range: ${esc(range.min || "Unavailable")} to ${esc(range.max || "Unavailable")}. Latest detection date in file: ${esc(context.date_ranges.detected_date.max || "Unavailable")}.</p><p>File: ${esc(context.source_file)}<br>SHA-256: <code>${esc(context.sha256)}</code></p>${context.unmapped_states.length ? `<p>States that cannot be mapped: ${esc(context.unmapped_states.join(", "))}. Their records remain available in All U.S. states.</p>` : ""}<p>Reporting can lag collection. No matching records does not mean no infections or no surveillance activity. The positive-record CSV does not provide a testing denominator.</p></details>
         </div>`;
+      const records = this.outbreakNode.querySelector(".wse-outbreak-records");
+      if (records) {
+        records.querySelector(".wse-outbreak-pagination")?.remove();
+        const link = document.createElement("a");
+        link.className = "wse-outbreak-record-link";link.href = "about:blank";link.target = "_blank";link.rel = "noopener";
+        link.textContent = `View ${formatNumber(resultRows.length)} matching source records ↗`;
+        const notice = document.createElement("p");notice.setAttribute("role","status");
+        records.replaceWith(link);link.after(notice);
+        link.addEventListener("click", event => {
+          event.preventDefault();const win = window.open("about:blank", "_blank");
+          if (!win) { notice.textContent = "Allow this report to open a new tab, then select the link again.";return; }
+          win.opener = null;const doc = win.document;doc.title = "WINGS · APHIS source records";doc.documentElement.lang = "en";
+          const style = doc.createElement("style");style.textContent = "*{box-sizing:border-box}body{font:18px/1.6 system-ui,sans-serif;color:#111;background:#f6f6f6;margin:0}main{max-width:1500px;margin:28px auto;padding:24px}h1{background:#111;color:white;border-top:7px solid #ffc627;border-radius:16px;padding:24px;font-size:30px}table{width:100%;border-collapse:collapse;background:white;font-size:16px}th,td{padding:18px;text-align:left;vertical-align:top;border-bottom:1px solid #ddd}th{background:#8c1d40;color:white}small{display:block;margin-top:8px}a,summary{color:#8c1d40}summary{cursor:pointer;font-weight:700}.wse-outbreak-table-wrap{overflow:auto}details{margin:12px 0}p{margin:16px 0}";
+          const meta = doc.createElement("meta");meta.name="viewport";meta.content="width=device-width, initial-scale=1";doc.head.append(meta,style);
+          const main = doc.createElement("main"), title = doc.createElement("h1");title.textContent = "APHIS matching source records";
+          const contextNote = doc.createElement("p");contextNote.textContent = this.outbreakNode.querySelector(".wse-outbreak-takeaway").textContent;
+          const copy = doc.importNode(records,true);copy.open=true;
+          main.append(title,contextNote,copy);
+          const provenance = this.outbreakNode.querySelector(".wse-outbreak-provenance");if(provenance)main.append(doc.importNode(provenance,true));
+          doc.body.replaceChildren(main);notice.textContent="Matching source records opened in a new tab.";
+        });
+      }
       this.renderOutbreakTimeline(this.outbreakNode.querySelector(".wse-outbreak-timeline"), view);
       if (this.mapNode) {
         const focused = this.mapNode.contains?.(document.activeElement) ? document.activeElement : null;
@@ -4690,7 +4714,7 @@
       const max = Math.max(1, ...bins.values());
       const x = time => left + (time - view.start) / (view.end - view.start + 86400000) * (right - left);
       const label = (text, px, py, anchor = "middle") => { const node = svgEl("text", {x: px, y: py, "text-anchor": anchor, class: "wse-outbreak-axis"}); node.textContent = text; svg.appendChild(node); };
-      [0, max].forEach(count => {
+      Array.from(new Set([0, Math.ceil(max/2), max])).forEach(count => {
         const y = bottom - count / max * (bottom - top);
         svg.appendChild(svgEl("line", {x1:left, x2:right, y1:y, y2:y, class:"wse-outbreak-gridline"}));
         label(String(count), left - 8, y + 4, "end");
@@ -4730,17 +4754,25 @@
           this.outbreakPage = 0;
           this.renderOutbreak(true);
           this.outbreakNode
-            .querySelector(".wse-outbreak-records summary")
+            .querySelector(".wse-outbreak-record-link")
             ?.focus({preventScroll: true});
         };
         bar.addEventListener("click", choose);
         bar.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(); } });
         svg.appendChild(bar);
+        label(String(count), (x(from)+x(through))/2, bottom-count/max*(bottom-top)-7);
       });
       const sampleDate = this.outbreakEpoch(this.sampleById.get(this.selectedSampleId)?.collection_date);
       if (sampleDate !== null && sampleDate >= view.start && sampleDate <= view.end) {
         const line = svgEl("line", {x1:x(sampleDate + 43200000), x2:x(sampleDate + 43200000), y1:top - 6, y2:bottom, class:"wse-outbreak-sample-date"});
+        label(`Sample collected · ${this.sampleById.get(this.selectedSampleId).collection_date}`, Math.max(left+110,Math.min(right-110,x(sampleDate))), 12);
         const title = svgEl("title"); title.textContent = `Selected WINGS sample: ${this.selectedSampleId} · Collected: ${this.sampleById.get(this.selectedSampleId).collection_date}`; line.appendChild(title); svg.appendChild(line);
+      }
+      const spanDays=(view.end-view.start)/86400000;
+      const tickDays=spanDays<=42?7:spanDays<=90?14:Math.max(30,Math.ceil(spanDays/5));
+      for(let day=tickDays;day<spanDays-5;day+=tickDays){
+        const time=view.start+day*86400000;
+        label(new Date(time).toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"}),x(time),bottom+25);
       }
       label(this.outbreakStart, left, bottom + 25, "start");
       label(this.outbreakEnd, right, bottom + 25, "end");
