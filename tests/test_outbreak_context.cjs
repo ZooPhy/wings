@@ -77,7 +77,7 @@ test('rendered records disclose source precision, missing dates, repeats and sou
   a.outbreakContext.records[0].species='<img src=x>';
   a.renderOutbreak(); const html=a.outbreakNode.innerHTML;
   assert.match(html,/&lt;img src=x&gt;/); assert.doesNotMatch(html,/<img src=x>/);
-  assert.match(html,/do not imply epidemiological linkage/);
+  assert.match(html,/Geographic and date overlap provide context; they do not establish a link to this sample\./);
   assert.match(html,/no unique record IDs or record-specific URLs/);
   assert.match(html,/state-level aggregates/); assert.match(html,/1 records in this geographic scope lack/);
   assert.match(html,/identical repeat rows retained/);
