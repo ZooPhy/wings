@@ -4760,7 +4760,6 @@
         bar.addEventListener("click", choose);
         bar.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(); } });
         svg.appendChild(bar);
-        label(String(count), (x(from)+x(through))/2, bottom-count/max*(bottom-top)-7);
       });
       const sampleDate = this.outbreakEpoch(this.sampleById.get(this.selectedSampleId)?.collection_date);
       if (sampleDate !== null && sampleDate >= view.start && sampleDate <= view.end) {
