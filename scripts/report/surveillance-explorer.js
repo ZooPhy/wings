@@ -2432,8 +2432,6 @@
     }
     table.append(thead, tbody);
     wrap.append(table);
-    panel.append(wrap);
-
     const method = make("details", "wgec-method");
     const summary = make("summary", "", "Methods and interpretation guardrails");
     const body = make("div", "wgec-method-body");
@@ -2463,7 +2461,39 @@
     const outputs = make("p", "wgec-outputs", `Detailed outputs: ${(data.detailed_outputs || []).join(" · ")}`);
     body.append(outputs);
     method.append(summary, body);
-    panel.append(method);
+    const link = make("a", "wgec-statistics-link", "View detailed statistical comparisons ↗");
+    link.href = "about:blank";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.style.cssText = "display:inline-block;margin:20px 0;padding:14px 20px;background:#8c1d40;color:white;border-top:5px solid #ffc627;border-radius:12px;font-size:18px;font-weight:700;text-decoration:none";
+    const notice = make("p", "wgec-statistics-notice");
+    notice.setAttribute("role", "status");
+    link.addEventListener("click", event => {
+      event.preventDefault();
+      const win = window.open("about:blank", "_blank");
+      if (!win) { notice.textContent = "Allow this report to open a new tab, then select the link again."; return; }
+      win.opener = null;
+      const doc = win.document;
+      doc.title = "WINGS · Detailed statistical comparisons";
+      doc.documentElement.lang = "en";
+      const meta = doc.createElement("meta");meta.name = "viewport";meta.content = "width=device-width, initial-scale=1";
+      const style = doc.createElement("style");
+      style.textContent = `*{box-sizing:border-box}body{margin:0;background:#f6f6f6;color:#111;font:18px/1.55 system-ui,sans-serif}main{max-width:1600px;margin:32px auto;padding:0 24px}header{background:#111;color:white;border-top:7px solid #ffc627;border-radius:18px;padding:28px}header p{color:#ffc627;font-weight:800;letter-spacing:.08em;margin:0}h1{font-size:32px;line-height:1.2;margin:12px 0}h2{font-size:23px}.definitions,.wgec-method{background:white;border:1px solid #ddd;border-radius:16px;padding:24px;margin:24px 0}.wgec-table-wrap{overflow:auto;background:white;border:1px solid #ddd;border-radius:16px;margin:24px 0}table{width:100%;min-width:1050px;border-collapse:collapse;font-size:16px}th,td{padding:20px;text-align:left;vertical-align:top;border-bottom:1px solid #ddd}thead th{background:#8c1d40;color:white}tbody th{color:#8c1d40}tbody tr:nth-child(even){background:#fafafa}td p{margin:8px 0}.wgec-n{display:block;color:#555;margin-top:8px}summary{cursor:pointer;color:#8c1d40;font-weight:700}details{margin-top:12px}a{color:#8c1d40}.wgec-guardrail{border-left:5px solid #ffc627;padding-left:16px}@media(max-width:650px){main{padding:0 12px;margin:12px auto}header{padding:20px}h1{font-size:26px}}`;
+      doc.head.append(meta, style);
+      const main = doc.createElement("main");
+      const header = make("header");
+      header.append(make("p", "", "WINGS · CONCORDANCE"), make("h1", "", "Detailed statistical comparisons"), make("div", "", "Results from the report open in the original tab."));
+      const definitions = make("section", "definitions");
+      definitions.append(make("h2", "", "Reading the results"));
+      const list = make("ul");
+      ["ΔR²: additional variation explained when predictors are added to the comparison model.", "p: permutation-based statistical evidence before adjustment for multiple comparisons.", "q: the adjusted value reported after correction for multiple comparisons.", "Sample and pair counts show the observations included. Pairs sharing samples are not independent.", "Unavailable results include the reason a comparison could not be estimated."].forEach(text => list.append(make("li", "", text)));
+      definitions.append(list);
+      for (const node of [header, definitions, wrap, method]) main.append(doc.importNode(node, true));
+      main.querySelector(".wgec-method").open = true;
+      doc.body.replaceChildren(main);
+      notice.textContent = "Detailed comparisons opened in a new tab.";
+    });
+    panel.append(link, notice);
   }
 
   function mount(explorer, panel) {
