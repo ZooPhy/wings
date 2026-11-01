@@ -4775,7 +4775,10 @@
       }
       label(this.outbreakStart, left, bottom + 25, "start");
       label(this.outbreakEnd, right, bottom + 25, "end");
-      label(`Source records per ${daily ? "day" : "month"} · ${this.outbreakBasis === "collection_date" ? "collection date" : "detection date"}`, (left + right) / 2, height - 8);
+      const yTitle = svgEl("text", {x:16, y:(top+bottom)/2, "text-anchor":"middle", transform:`rotate(-90 16 ${(top+bottom)/2})`, class:"wse-outbreak-axis"});
+      yTitle.textContent = "APHIS source records";
+      svg.appendChild(yTitle);
+      label(`${this.outbreakBasis === "collection_date" ? "Collection date" : "Detection date"} · ${daily ? "daily" : "monthly"} totals`, (left + right) / 2, height - 8);
       if (!view.rows.length) label("No dated records match this window in the loaded snapshot", (left + right) / 2, 80);
       target.appendChild(svg);
     }
