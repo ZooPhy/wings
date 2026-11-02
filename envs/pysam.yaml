@@ -1,7 +1,8 @@
 name: pysam_env
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
+  - nodefaults
 dependencies:
   - python=3.10
   - pysam=0.24.0
