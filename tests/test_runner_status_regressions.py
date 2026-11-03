@@ -51,7 +51,7 @@ class RunnerStatusTests(unittest.TestCase):
 
     def test_resume_requires_saved_configuration(self):
         self.prepare_failed_run()
-        with patch.object(self.runner.shutil, "which", return_value="synthetic-scheduler"), patch.object(self.runner.subprocess, "Popen") as spawn:
+        with patch.object(self.runner, "runtime_preflight", return_value="synthetic-scheduler"), patch.object(self.runner.subprocess, "Popen") as spawn:
             with self.assertRaisesRegex(ValueError, "Saved execution_config"):
                 self.runner.launch_attempt("test-run", resume=True)
             spawn.assert_not_called()
@@ -64,7 +64,7 @@ class RunnerStatusTests(unittest.TestCase):
         old_log.write_text("prior attempt\n")
         process = Mock(pid=123)
         process.poll.return_value = None
-        with patch.object(self.runner.shutil, "which", return_value="synthetic-scheduler"), patch.object(self.runner, "workflow_command", return_value=["synthetic-scheduler"]), patch.object(self.runner, "build_config") as build, patch.object(self.runner, "capture_attempt_provenance", side_effect=lambda attempt_dir, *_: attempt_dir / "attempt-provenance.json"), patch.object(self.runner.subprocess, "Popen", return_value=process) as spawn, patch.object(self.runner.threading, "Thread"):
+        with patch.object(self.runner, "runtime_preflight", return_value="synthetic-scheduler"), patch.object(self.runner, "workflow_command", return_value=["synthetic-scheduler"]), patch.object(self.runner, "build_config") as build, patch.object(self.runner, "capture_attempt_provenance", side_effect=lambda attempt_dir, *_: attempt_dir / "attempt-provenance.json"), patch.object(self.runner.subprocess, "Popen", return_value=process) as spawn, patch.object(self.runner.threading, "Thread"):
             result = self.runner.launch_attempt("test-run", resume=True)
             try:
                 build.assert_not_called()
