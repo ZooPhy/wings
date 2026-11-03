@@ -7,6 +7,8 @@ import hashlib
 from http.client import HTTPConnection, HTTPException
 import json
 import os
+import platform
+import sys
 import re
 import shutil
 import subprocess
@@ -312,6 +314,36 @@ def execution_limits(payload: dict) -> tuple[int, int]:
     return cores, jobs
 
 
+
+def runtime_preflight() -> str:
+    """Validate the actual executables before creating workflow environments."""
+    machine = platform.machine().lower()
+    if platform.system() == "Darwin" and machine == "x86_64":
+        probe = subprocess.run(["/usr/sbin/sysctl", "-n", "hw.optional.arm64"],
+                               capture_output=True, text=True, timeout=10)
+        if probe.stdout.strip() == "1":
+            raise ValueError("Apple Silicon is running Intel Python. Start WINGS from a native ARM64 environment; see docs/native-runner.md.")
+    executable = shutil.which("snakemake")
+    if not executable:
+        raise ValueError("snakemake was not found in PATH")
+    if Path(executable).resolve().parent != Path(sys.executable).resolve().parent:
+        raise ValueError("Runner Python and Snakemake come from different environments. Use scripts/start_wings.sh; see docs/native-runner.md.")
+    conda = shutil.which("conda")
+    if not conda:
+        raise ValueError("conda was not found in PATH")
+    info = subprocess.run([conda, "info", "--json"], capture_output=True, text=True, timeout=30)
+    if info.returncode:
+        raise ValueError("Conda health check failed. Check the Conda installation selected by PATH.")
+    root = Path(json.loads(info.stdout)["root_prefix"]).resolve()
+    prefix = Path(sys.prefix).resolve()
+    if prefix != root and root not in prefix.parents:
+        raise ValueError(f"PATH selects Conda from {root}, but runner Python is in {prefix}. Use scripts/start_wings.sh with the matching Conda installation.")
+    expected = {("Darwin", "arm64"): "osx-arm64", ("Darwin", "x86_64"): "osx-64",
+                ("Linux", "x86_64"): "linux-64", ("Linux", "aarch64"): "linux-aarch64"}.get((platform.system(), machine))
+    if expected and json.loads(info.stdout).get("subdir") != expected:
+        raise ValueError(f"Conda target platform must be {expected}. Check CONDA_SUBDIR and your Conda configuration.")
+    return executable
+
 def workflow_command(executable: str, config_path: Path, state: dict) -> list[str]:
     cores, jobs = execution_limits(state)
     return [
@@ -319,6 +351,8 @@ def workflow_command(executable: str, config_path: Path, state: dict) -> list[st
         "--snakefile", str(REPO_ROOT / "Snakefile"),
         "--configfile", str(config_path),
         "--use-conda",
+        "--conda-prefix", str(REPO_ROOT / ".snakemake" / "conda-platforms" /
+                              (platform.system().lower() + "-" + platform.machine().lower())),
         "--cores", str(cores),
         "--resources", f"wings_task_slots={jobs}",
         "--default-resources", "wings_task_slots=1",
@@ -770,9 +804,7 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
         if resume and state.get("status") not in {"failed", "stopped", "interrupted"}:
             raise ValueError("Resume requires a failed or stopped run")
         resume = resume or state.get("status") in {"failed", "stopped", "interrupted"}
-        executable = shutil.which("snakemake")
-        if not executable:
-            raise ValueError("snakemake was not found in PATH")
+        executable = runtime_preflight()
         directory = run_dir(run_id)
         if resume:
             config_path = (directory / "execution_config.yaml").resolve()
