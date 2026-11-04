@@ -12,6 +12,7 @@ import sys
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -31,7 +32,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNS_ROOT = Path(os.environ.get("WINGS_RUNS_DIR", "~/.wings/runs")).expanduser().resolve()
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 PROCESSES: dict[str, subprocess.Popen[str]] = {}
-LOCK = threading.Lock()
+LOCK = threading.RLock()
+# Bind known run IDs to their original storage for this server session.
+RUN_LOCATIONS: dict[str, Path] = {}
+STORAGE_REVISION = uuid.uuid4().hex
+CURRENT_CACHE_DIR: str | None = None
 
 STAGE_ORDER = [
     "inputs", "read_qc", "assembly", "polishing", "characterization", "phylogeny", "surveillance", "reporting"
@@ -140,8 +145,12 @@ def atomic_json(path: Path, payload: dict) -> None:
 def run_dir(run_id: str) -> Path:
     if not RUN_ID_RE.fullmatch(run_id):
         raise ValueError("Invalid run ID")
-    path = (RUNS_ROOT / run_id).resolve()
-    path.relative_to(RUNS_ROOT)
+    with LOCK:
+        root = RUN_LOCATIONS.get(run_id, RUNS_ROOT)
+        path = (root / run_id).resolve()
+        path.relative_to(root)
+        if path.is_dir():
+            RUN_LOCATIONS.setdefault(run_id, root)
     return path
 
 
@@ -833,6 +842,11 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
             attempt_dir, command, config_path, started, resume
         )
         environment = os.environ.copy()
+        if "conda_pkgs_dirs" in state:
+            if state["conda_pkgs_dirs"]:
+                environment["CONDA_PKGS_DIRS"] = state["conda_pkgs_dirs"]
+            else:
+                environment.pop("CONDA_PKGS_DIRS", None)
         environment["WINGS_ATTEMPT_PROVENANCE"] = str(attempt_provenance)
         log_handle = log_path.open("x", encoding="utf-8")
         try:
@@ -897,22 +911,24 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if parsed.path == "/api/health":
                 snakemake = shutil.which("snakemake")
-                usage = shutil.disk_usage(RUNS_ROOT.parent if RUNS_ROOT.parent.exists() else Path.home())
+                storage = storage_settings()
                 self.json_response({
                     "status": "ready",
                     "repo_root": str(REPO_ROOT),
-                    "runs_root": str(RUNS_ROOT),
+                    **storage,
                     "snakemake": snakemake,
                     "snakemake_available": bool(snakemake),
                     "config_yaml_present": (REPO_ROOT / "config.yaml").is_file(),
                     "config_yaml_path": str(REPO_ROOT / "config.yaml"),
-                    "free_bytes": usage.free,
                 })
                 return
             if parsed.path == "/api/runs":
-                RUNS_ROOT.mkdir(parents=True, exist_ok=True)
+                with LOCK:
+                    root = RUNS_ROOT
+                    root.mkdir(parents=True, exist_ok=True)
+                    register_runs(root)
                 rows = []
-                for path in sorted(RUNS_ROOT.glob("*/state.json"), reverse=True):
+                for path in sorted(root.glob("*/state.json"), reverse=True):
                     try:
                         rows.append(reconcile_state(path.parent.name))
                     except (OSError, json.JSONDecodeError):
@@ -1039,6 +1055,14 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = self.parsed()
         try:
+            if parsed.path == "/api/storage":
+                origin = self.headers.get("Origin")
+                expected_origin = f"http://{self.headers.get('Host', '')}"
+                if self.headers.get_content_type() != "application/json" or (origin and origin != expected_origin):
+                    self.error_response("Use the local WINGS portal to change storage settings.", 403)
+                    return
+                self.json_response(update_storage(self.read_json()))
+                return
             if parsed.path == "/api/briefing/check":
                 payload = self.read_json()
                 self.json_response(check_briefing_model(payload.get("model", "")))
@@ -1052,9 +1076,14 @@ class Handler(SimpleHTTPRequestHandler):
                 require_briefing_model({"public_health_interpretation": interpretation})
                 name = str(payload.get("name", "")).strip() or "WINGS run"
                 cores, max_parallel_jobs = execution_limits(payload)
-                run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
-                directory = run_dir(run_id)
-                (directory / "inputs" / "reads").mkdir(parents=True, exist_ok=False)
+                with LOCK:
+                    if payload.get("storage_revision", STORAGE_REVISION) != STORAGE_REVISION:
+                        raise ValueError("Storage settings changed in another tab. Reload and review storage before starting.")
+                    run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
+                    directory = run_dir(run_id)
+                    (directory / "inputs" / "reads").mkdir(parents=True, exist_ok=False)
+                    RUN_LOCATIONS[run_id] = RUNS_ROOT
+                    cache = CURRENT_CACHE_DIR or os.environ.get("CONDA_PKGS_DIRS")
                 state = {
                     "format": "WINGS_LOCAL_RUN",
                     "schema_version": 1,
@@ -1069,6 +1098,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "options": payload.get("options") or {},
                     "sample_count": 0,
                     "results_dir": str(directory / "results"),
+                    "conda_pkgs_dirs": cache,
                 }
                 write_state(run_id, state)
                 self.json_response({"run_id": run_id}, HTTPStatus.CREATED)
@@ -1096,17 +1126,89 @@ class Handler(SimpleHTTPRequestHandler):
         self.error_response("Unknown endpoint", 404)
 
 
+def prepare_storage_directory(value: str) -> Path:
+    """Resolve, create and check a writable directory without moving existing data."""
+    directory = Path(value).expanduser().resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(dir=directory) as probe:
+        probe.write(b"WINGS storage check\n")
+        probe.flush()
+    return directory
+
+
+def register_runs(root: Path) -> None:
+    """Reject copied IDs rather than silently switching an existing run's files."""
+    runs = [path.parent.name for path in root.glob("*/state.json")]
+    for run_id in runs:
+        if run_id in RUN_LOCATIONS and RUN_LOCATIONS[run_id] != root:
+            raise ValueError(f"Run ID {run_id} also exists in another selected directory. Restart the runner with the intended --runs-dir.")
+    for run_id in runs:
+        RUN_LOCATIONS[run_id] = root
+
+
+def storage_settings() -> dict:
+    with LOCK:
+        root = RUNS_ROOT
+        parent = root
+        while not parent.exists():
+            parent = parent.parent
+        return {"runs_root": str(root), "conda_pkgs_dir": CURRENT_CACHE_DIR or "",
+                "conda_pkgs_default": os.environ.get("CONDA_PKGS_DIRS") or "Conda configuration default",
+                "storage_revision": STORAGE_REVISION, "free_bytes": shutil.disk_usage(parent).free}
+
+
+def update_storage(payload: dict) -> dict:
+    global RUNS_ROOT, CURRENT_CACHE_DIR, STORAGE_REVISION
+    if not isinstance(payload, dict):
+        raise ValueError("Storage settings must be an object")
+    paths = []
+    for key in ("runs_dir", "conda_pkgs_dir"):
+        value = payload.get(key, "")
+        if not isinstance(value, str):
+            raise ValueError("Storage paths must be text")
+        value = value.strip()
+        if not value and key == "conda_pkgs_dir":
+            paths.append(None)
+            continue
+        if not value or not Path(value).expanduser().is_absolute():
+            raise ValueError("Enter an absolute path on the runner machine (or a path starting with ~/).")
+        paths.append(value)
+    with LOCK:
+        if payload.get("storage_revision") != STORAGE_REVISION:
+            raise ValueError("Storage settings changed. Reload the page and review the current paths.")
+        root = prepare_storage_directory(paths[0])
+        cache = str(prepare_storage_directory(paths[1])) if paths[1] else None
+        # Keep uploads, monitoring and completion callbacks bound to their original paths.
+        register_runs(RUNS_ROOT)
+        register_runs(root)
+        RUNS_ROOT, CURRENT_CACHE_DIR = root, cache
+        STORAGE_REVISION = uuid.uuid4().hex
+        return storage_settings()
+
+
 def main() -> int:
+    global RUNS_ROOT, CURRENT_CACHE_DIR
     parser = argparse.ArgumentParser(description="Run the local-first WINGS portal and Snakemake launcher.")
     parser.add_argument("--host", default="127.0.0.1", help="Bind address. Keep 127.0.0.1 for local-only operation.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--runs-dir", default=str(RUNS_ROOT),
+                        help="Run storage directory; overrides WINGS_RUNS_DIR (default: ~/.wings/runs). Existing runs are not moved.")
+    parser.add_argument("--conda-pkgs-dir",
+                        help="Conda download cache directory; overrides CONDA_PKGS_DIRS for this runner and its subprocesses.")
     args = parser.parse_args()
 
     if args.host not in {"127.0.0.1", "localhost"}:
         raise SystemExit("For safety, the WINGS local runner only binds to localhost.")
 
-    RUNS_ROOT.mkdir(parents=True, exist_ok=True)
+    try:
+        RUNS_ROOT = prepare_storage_directory(args.runs_dir)
+        if args.conda_pkgs_dir:
+            cache_directory = prepare_storage_directory(args.conda_pkgs_dir)
+            os.environ["CONDA_PKGS_DIRS"] = str(cache_directory)
+            CURRENT_CACHE_DIR = str(cache_directory)
+    except OSError as error:
+        parser.error(f"Cannot prepare storage directory: {error}")
     for saved in RUNS_ROOT.glob("*/state.json"):
         try:
             reconcile_state(saved.parent.name)
@@ -1117,6 +1219,7 @@ def main() -> int:
     print(f"WINGS local runner: {url}")
     print(f"Repository: {REPO_ROOT}")
     print(f"Run storage: {RUNS_ROOT}")
+    print(f"Conda package cache: {os.environ.get('CONDA_PKGS_DIRS') or 'Conda configuration default'}")
     print("Sequence data remain on this computer; the server is bound to localhost only.")
     if not args.no_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
