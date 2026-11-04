@@ -85,6 +85,23 @@
             <input id="maxParallelJobs" type="number" min="1" max="64" value="1">
             <div class="help">Keep at 1 to process one task at a time. Higher values can use more RAM; the CPU limit still applies.</div>
           </div>
+          <details id="storageSettings">
+            <summary>Storage locations</summary>
+            <p class="help">Paths are on the computer running WINGS. On an HPC desktop, use project storage. Applying changes sets the locations for new runs in this runner session; existing runs keep their original locations.</p>
+            <div class="field">
+              <label for="runsDirectory">Run storage directory</label>
+              <input id="runsDirectory" type="text" autocomplete="off" spellcheck="false" placeholder="Connect to the runner to see its directory">
+              <div class="help">Uploaded inputs, run records and results. Enter an absolute path or a path beginning with ~/.</div>
+            </div>
+            <div class="field">
+              <label for="condaCacheDirectory">Conda package cache directory</label>
+              <input id="condaCacheDirectory" type="text" autocomplete="off" spellcheck="false" placeholder="Use launcher / Conda default">
+              <div id="condaCacheDefault" class="help">Optional. Leave blank to use the runner's inherited Conda cache settings.</div>
+            </div>
+            <button id="applyStorage" class="btn btn-secondary" type="button" disabled>Validate and apply locations</button>
+            <p id="storageMessage" class="help" role="status">Connect to the local runner to configure storage.</p>
+            <p class="help">New directories are created if needed. Files are not moved. Saved runs are listed from the selected run directory. Settings reset to the launch options when the runner restarts.</p>
+          </details>
         </section>
 
         <section class="wizard-step" data-step-panel="1" hidden>
@@ -208,6 +225,6 @@
   </section>
 </main>
 
-<script src="assets/wings-run.js?v=20261029-briefing-2"></script>
+<script src="assets/wings-run.js?v=20261103-browser-storage"></script>
 </body>
 </html>

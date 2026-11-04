@@ -852,6 +852,17 @@ snakemake \
 
 ## Running on a Linux ARM64 SLURM cluster
 
+For the browser interface inside an HPC compute allocation, use
+[`--runs-dir` and `--conda-pkgs-dir`](docs/native-runner.md#explicit-run-storage-and-conda-package-cache)
+to select project storage for runs and Conda downloads. These are independent
+locations; changing the run directory alone does not move the package cache.
+The options are also available on Mac and Linux/WSL; omitting them preserves
+existing defaults. Windows/WSL workflow validation remains pending.
+
+The browser also supports **Run details → Storage locations → Validate and apply
+locations**. Enter paths on the runner machine. These settings apply to new runs
+for the current runner session; use launch options for repeatable defaults.
+
 The following submission script reflects the validated Linux ARM64 configuration used for WINGS testing. Adjust the SLURM account, node, paths, and environment name for your cluster as needed.
 
 ```bash

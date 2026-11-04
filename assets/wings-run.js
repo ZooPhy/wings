@@ -33,6 +33,63 @@
   };
 
   const $ = (id) => document.getElementById(id);
+  const escapeText = value => String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+  let storageDirty = false;
+  let storagePending = false;
+  let storageRevision = null;
+
+  function syncStorage() {
+    if (!$("runsDirectory")) return;
+    const available = Boolean(state.runner?.storage_revision);
+    $("applyStorage").disabled = !available || storagePending;
+    if (!available) {
+      $("storageMessage").textContent = "Connect to an updated local runner to configure storage.";
+      return;
+    }
+    if (!storageDirty && !storagePending) {
+      $("runsDirectory").value = state.runner.runs_root;
+      $("condaCacheDirectory").value = state.runner.conda_pkgs_dir || "";
+      storageRevision = state.runner.storage_revision;
+      $("storageMessage").textContent = `Current run directory: ${state.runner.runs_root} · ${formatBytes(state.runner.free_bytes)} free. Quotas and required working space may differ.`;
+    }
+    $("condaCacheDefault").textContent = `Leave blank to use: ${state.runner.conda_pkgs_default}. Package downloads are separate from run storage.`;
+  }
+
+  async function applyStorage() {
+    if (!state.runner || storagePending) return;
+    storagePending = true;
+    $("applyStorage").disabled = true;
+    $("runsDirectory").disabled = true;
+    $("condaCacheDirectory").disabled = true;
+    $("storageMessage").textContent = "Checking directories on the runner…";
+    try {
+      const response = await fetch(`${localOrigin}/api/storage`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({runs_dir: $("runsDirectory").value.trim(),
+          conda_pkgs_dir: $("condaCacheDirectory").value.trim(), storage_revision: storageRevision})
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Storage validation failed.");
+      Object.assign(state.runner, result);
+      storageDirty = false;
+      storagePending = false;
+      syncStorage();
+      // Refresh only the saved-run list; do not automatically open an old run.
+      restorePending = false;
+      await refreshRuns();
+    } catch (error) {
+      storageDirty = true;
+      $("storageMessage").textContent = error.message;
+    } finally {
+      storagePending = false;
+      $("applyStorage").disabled = !state.runner;
+      $("runsDirectory").disabled = false;
+      $("condaCacheDirectory").disabled = false;
+      if (state.step === 4) renderPreflight();
+    }
+  }
   // A cached page may predate the optional activity indicator.
   function setActivity(status) {
     const activity = $("statusActivity");
@@ -130,6 +187,7 @@
       $("runnerText").textContent = localMode ? "Local runner unavailable" : "Open local runner to execute";
       $("openLocalRunner").hidden = localMode;
     }
+    syncStorage();
     if (state.step === 4) renderPreflight();
   }
 
@@ -318,6 +376,10 @@
     return [
       ...(briefing.briefing ? [[Boolean(briefingReady), "Local agency briefing", briefingReady ? "Selected model is installed." : "Use Check local model under Analysis before starting."]] : []),
       [runnerOk, "Local WINGS runner", runnerDetail],
+      [Boolean(state.runner?.storage_revision && !storageDirty && !storagePending && storageRevision === state.runner.storage_revision), "Storage locations",
+        storageDirty || storagePending ? "Validate and apply your edited locations under Run details." : state.runner?.storage_revision
+          ? `Runs: ${state.runner.runs_root} · Conda cache: ${state.runner.conda_pkgs_dir || state.runner.conda_pkgs_default}`
+          : "Connect to an updated local runner to verify storage."],
       [readsOk, "Sequence inputs", readsOk ? `${state.reads.length} FASTQ file(s) selected` : "Select FASTQ files with one consistent extension"],
       [metadataOk, "Metadata structure", metadataOk ? `${state.metadataIds.length} sample rows detected` : (state.metadataError || "Select metadata.tsv")],
       [match.ok, "Sample matching", match.detail],
@@ -330,7 +392,7 @@
     $("preflightList").innerHTML = rows.map(([ok, label, detail]) => `
       <li class="preflight-item">
         <span class="status-icon ${ok ? "status-ok" : "status-error"}" aria-hidden="true">${ok ? "✓" : "×"}</span>
-        <div><strong>${label}</strong><div class="timeline-meta">${detail}</div></div>
+        <div><strong>${escapeText(label)}</strong><div class="timeline-meta">${escapeText(detail)}</div></div>
         <span>${ok ? "Ready" : "Needs attention"}</span>
       </li>`).join("");
 
@@ -358,6 +420,7 @@
   }
 
   async function startRun() {
+    if (!preflightRows().every(row => row[0])) { renderPreflight(); return; }
     $("startRun").disabled = true;
     $("startRun").textContent = "Preparing local run…";
     try {
@@ -368,6 +431,7 @@
           name: $("runName").value.trim(),
           cores: Number($("cores").value || 1),
           max_parallel_jobs: Number($("maxParallelJobs").value || 1),
+          storage_revision: storageRevision,
           options: {
             genoflu: $("optGenoflu").checked,
             vadr: $("optVadr").checked,
@@ -763,6 +827,12 @@
   $("briefingAudience")?.addEventListener("change", () => { if (state.step === 4) renderPreflight(); });
   syncBriefing();
   $("startRun").addEventListener("click", startRun);
+  $("applyStorage")?.addEventListener("click", applyStorage);
+  ["runsDirectory", "condaCacheDirectory"].forEach(id => $(id)?.addEventListener("input", () => {
+    storageDirty = true;
+    $("storageMessage").textContent = "Locations edited. Validate and apply before starting a run.";
+    if (state.step === 4) renderPreflight();
+  }));
   $("stopRun").addEventListener("click", stopRun);
   // Keep updated JavaScript compatible with an older cached run page.
   if (!$("resumeRun")) {
