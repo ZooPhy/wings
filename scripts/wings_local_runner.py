@@ -343,14 +343,16 @@ def runtime_preflight() -> str:
     info = subprocess.run([conda, "info", "--json"], capture_output=True, text=True, timeout=30)
     if info.returncode:
         raise ValueError("Conda health check failed. Check the Conda installation selected by PATH.")
-    root = Path(json.loads(info.stdout)["root_prefix"]).resolve()
+    conda_info = json.loads(info.stdout)
+    root = Path(conda_info["root_prefix"]).resolve()
     prefix = Path(sys.prefix).resolve()
     if prefix != root and root not in prefix.parents:
         raise ValueError(f"PATH selects Conda from {root}, but runner Python is in {prefix}. Use scripts/start_wings.sh with the matching Conda installation.")
     expected = {("Darwin", "arm64"): "osx-arm64", ("Darwin", "x86_64"): "osx-64",
                 ("Linux", "x86_64"): "linux-64", ("Linux", "aarch64"): "linux-aarch64"}.get((platform.system(), machine))
-    if expected and json.loads(info.stdout).get("subdir") != expected:
-        raise ValueError(f"Conda target platform must be {expected}. Check CONDA_SUBDIR and your Conda configuration.")
+    target = conda_info.get("platform") or conda_info.get("subdir")
+    if expected and target != expected:
+        raise ValueError(f"Conda target platform must be {expected}; Conda reports {target or 'unknown'}. Check CONDA_SUBDIR and your Conda configuration.")
     return executable
 
 def workflow_command(executable: str, config_path: Path, state: dict) -> list[str]:
