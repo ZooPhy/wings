@@ -863,7 +863,7 @@ The browser also supports **Run details → Storage locations → Validate and a
 locations**. Enter paths on the runner machine. These settings apply to new runs
 for the current runner session; use launch options for repeatable defaults.
 
-The following submission script reflects the validated Linux ARM64 configuration used for WINGS testing. Adjust the SLURM account, node, paths, and environment name for your cluster as needed.
+The following submission script provides a Linux ARM64 configuration for WINGS. Adjust the SLURM account, node, paths, and environment name for your cluster as needed.
 
 ```bash
 #!/bin/bash
@@ -887,6 +887,7 @@ source "$HOME/miniforge3/etc/profile.d/conda.sh"
 conda activate wings_snakemake_new
 hash -r
 
+export SLURM_EXPORT_ENV=ALL
 export CONDA_PKGS_DIRS=/data/pipp2/Scotch/Snakemake/conda_pkgs
 export XDG_CACHE_HOME=/data/pipp2/Scotch/Snakemake/cache
 export TMPDIR=/data/pipp2/Scotch/Snakemake/tmp
@@ -894,11 +895,13 @@ export TEMP="$TMPDIR"
 export TMP="$TMPDIR"
 
 mkdir -p "$CONDA_PKGS_DIRS" "$XDG_CACHE_HOME" "$TMPDIR"
+export APPTAINER_BINDPATH="${APPTAINER_BINDPATH:+${APPTAINER_BINDPATH},}${TMPDIR}:${TMPDIR}"
 
 cd /data/pipp2/Scotch/Snakemake/wings/
 
 snakemake \
   --configfile config.yaml \
+  --config run_vadr=false \
   --sdm conda \
   --printshellcmds \
   --cores "$SLURM_CPUS_PER_TASK" \
@@ -911,6 +914,8 @@ snakemake \
 The cache and temporary-directory overrides keep large Conda package caches and transient files on a writable project filesystem rather than a space-limited home or runtime filesystem. The repo-local Quarto installation at `software/quarto-1.9.38/bin/quarto` is detected automatically, so no Quarto `PATH` override is required.
 
 Set `irma_runtime` in the cluster `config.yaml` to `apptainer` or `singularity` as appropriate. The current Snakefile invokes the selected IRMA runtime directly, so a separate Snakemake container deployment flag is not required for IRMA. On Linux ARM64, keep `run_vadr: false` unless a compatible ARM64 VADR image is provided.
+
+The command-line `run_vadr=false` setting explicitly skips VADR annotation for this ARM64 example. Installing the separate VADR model library resolves missing model files but does not make an incompatible container executable on ARM64. Enable VADR only with a compatible runtime and the required models.
 
 ## Output structure
 
