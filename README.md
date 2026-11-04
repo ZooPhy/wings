@@ -1592,3 +1592,47 @@ The optional local public-health briefing is a separate, user-enabled runtime
 use of a language model. It produces a narrative from existing WINGS evidence;
 it does not replace the analytical pipeline. Passing the automated briefing
 checks does not mean a human has reviewed or endorsed the generated conclusions.
+
+
+## Recovering local browser runs
+
+### Incompatible Porechop Counter build
+
+If a run reports `Counter build belongs to another conda environment`,
+set the following in the configuration used by that run to use the
+installed backend:
+
+```yaml
+porechop_counter_build: ""
+```
+
+For new runs, update your local `config.yaml`. For an existing browser run,
+back up and update its `execution_config.yaml` while the run is stopped,
+then retry. Changing the repository's local configuration alone may not
+update a saved run's configuration. If retry regenerates the setting,
+inspect the generated configuration before retrying again.
+
+Keep machine-specific Counter manifest paths out of shared configuration.
+The local `config.yaml` is intentionally ignored by Git.
+
+### Finding runs after changing storage
+
+The runner defaults to `~/.wings/runs`. To reopen runs stored elsewhere,
+start it from the repository with the directory containing the individual
+run folders:
+
+```bash
+python scripts/wings_local_runner.py --runs-dir /path/to/wings/runs
+```
+
+The expected layout is `<runs-dir>/<run-id>/state.json`. Select the `runs`
+directory, not its parent. Existing runs are not moved when the storage
+setting changes. Refresh the saved-run list after restarting the runner.
+
+### Working-directory locks
+
+A lock can indicate another active Snakemake run using the same repository,
+even when its outputs are stored elsewhere. Check for active processes
+before unlocking. Let the other run finish, or stop it and confirm its
+worker processes have exited. Only then, if a stale lock remains, use
+`--unlock` with the affected run's Snakefile and configuration.

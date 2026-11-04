@@ -14,6 +14,9 @@ segment_max_n_fraction: 0.01
 
 # Porechop ABI
 porechop_command: "porechop_abi"
+# Optional accelerated Counter build; leave empty for the installed backend.
+# Build manifests are specific to the Conda environment that created them.
+porechop_counter_build: ""
 porechop_mem_mb: 12000
 porechop_time_min: 240
 
