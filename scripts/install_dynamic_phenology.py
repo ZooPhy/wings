@@ -218,6 +218,13 @@ def patch_builder(text: str) -> str:
 
 def plan(repo: Path) -> dict[str, bytes]:
     repo = repo.resolve()
+    # WINGS_CANONICAL_ASSETS_GUARD_V1
+    if (repo / "scripts/report/explorer-assets.json").is_file():
+        raise ValueError(
+            "This legacy installer is disabled for canonical Explorer assets. "
+            "Edit the standalone modules/templates, then run "
+            "python scripts/build_explorer_assets.py --write."
+        )
     if not (repo / "Snakefile").is_file():
         raise ValueError("--repo must point to the WINGS repository root")
     required = [

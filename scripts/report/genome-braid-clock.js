@@ -361,6 +361,11 @@
     build() {
       this.root.classList.add('wbc');
       this.root.innerHTML=`
+        <style>
+          .wbc .wbc-strand,.wbc .wbc-strand:focus,.wbc .wbc-strand:focus-visible{outline:none!important}
+          .wbc .wbc-focus-marker{opacity:0;pointer-events:none}
+          .wbc .wbc-strand:focus-visible .wbc-focus-marker{opacity:1}
+        </style>
         <style data-wbc-seasonal-timing>
           /* WINGS_COLLECTION_CONTEXT_CSS */
           .wbc .wbc-timing-fields{margin:12px 0 0;font-size:12px;line-height:1.45;overflow-wrap:anywhere}
@@ -475,6 +480,8 @@
           const attrs={fill:this.color(e),stroke:active?'#fff':'none','stroke-width':1.6};
           group.append(e.kind==='reference'?svg('rect',{x:p.x-4,y:p.y-4,width:8,height:8,...attrs}):svg('circle',{cx:p.x,cy:p.y,r:active?5:3,...attrs}));
         }
+        const focusPoint=SEGMENTS.map(segment=>positions[segment].get(id)).find(Boolean);
+        if(focusPoint)group.append(svg('circle',{class:'wbc-focus-marker',cx:focusPoint.x,cy:focusPoint.y,r:9,fill:'none',stroke:'#bd811f','stroke-width':2,'aria-hidden':'true'}));
         buttonNode(group,`${e.kind==='sample'?'Sample':'Public reference'} ${e.label}. ${SEGMENTS.filter(s=>presence(this.m,id,s).status==='PRESENT').length} of 8 segment trees.`,()=>this.choose(id));
         el.append(group);
       }

@@ -1,0 +1,58 @@
+name: Provenance and missing-segment regressions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Synthetic integration / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      TMPDIR: ${{ runner.temp }}/wings-regression-artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare temporary test directory
+        run: mkdir -p "$TMPDIR"
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: wings_regression
+          python-version: "3.12"
+          channels: conda-forge,bioconda
+          channel-priority: strict
+          auto-activate-base: false
+      - name: Install Snakemake
+        shell: bash -el {0}
+        run: conda install -y -c conda-forge -c bioconda snakemake=9.24.0
+      - name: Portable provenance checks
+        shell: bash -el {0}
+        run: python -m unittest discover -s tests -p test_provenance_accuracy.py -v
+      - name: Provenance rerun integration
+        shell: bash -el {0}
+        run: python tests/integration_provenance.py --repo .
+      - name: Missing-segment integration with negative control
+        shell: bash -el {0}
+        run: python tests/integration_missing_segments.py --repo .
+      - name: Retain synthetic test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-evidence-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/wings-regression-artifacts/**/snakemake*.log
+            ${{ runner.temp }}/wings-regression-artifacts/**/test_summary.json
+            ${{ runner.temp }}/wings-regression-artifacts/**/command.json
+          if-no-files-found: ignore
+          retention-days: 14
