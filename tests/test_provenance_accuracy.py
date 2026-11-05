@@ -43,14 +43,14 @@ class ProvenanceAccuracyTests(unittest.TestCase):
         expression, _ = effective_rule_parts()
         a = {"public_health_interpretation": {"audience": "wildlife"}}
         b = {"public_health_interpretation": {"audience": "public_health"}}
-        render = lambda c: eval(expression, {"json": json, "config": c})
+        render = lambda c: eval(expression, {"json": json, "config": c})(SimpleNamespace())
         self.assertNotEqual(render(a), render(b))
         self.assertEqual(render({"a": 1, "b": 2}), render({"b": 2, "a": 1}))
 
     def test_written_config_is_exact_tracked_parameter(self):
         expression, body = effective_rule_parts()
         config = {"coverage_min_depth": 75, "nested": {"enabled": False}}
-        serialized = eval(expression, {"json": json, "config": config})
+        serialized = eval(expression, {"json": json, "config": config})(SimpleNamespace())
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "nested/config.json"
             exec(compile(body, "Snakefile:effective_run_config", "exec"), {
@@ -184,6 +184,37 @@ class ProvenanceAccuracyTests(unittest.TestCase):
                 self.assertEqual("database_prefix" in data["blast"], bool(options))
                 if options:
                     self.assertEqual(data["blast"]["database_files"]["avian.nin"]["sha256"], writer.sha256_file(root / "avian.nin"))
+
+
+    # WINGS_LITERAL_CONFIG_PARAMS_TESTS_V1
+    def test_literal_placeholders_are_preserved_in_effective_config(self):
+        expression, body = effective_rule_parts()
+        config = {"phylogeny": {"tree_pattern": "{segment}_Tree.newick"},
+                  "literal": ["{sample}", "${HOME}", "{{braces}}", r"\d{2,4}"]}
+        parameter = eval(expression, {"json": json, "config": config})
+        self.assertTrue(callable(parameter), "Serialized config must be a params function")
+        value = parameter(SimpleNamespace())
+        self.assertEqual(json.loads(value), config)
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "config.json"
+            exec(compile(body, "Snakefile:literal_config", "exec"), {
+                "Path": Path, "output": SimpleNamespace(json=output),
+                "params": SimpleNamespace(serialized=value),
+            })
+            self.assertEqual(json.loads(output.read_text()), config)
+
+    def test_ebird_json_parameters_preserve_literal_braces(self):
+        rule = SOURCE.split("    rule ebird_context_status:\n", 1)[1].split("        run:\n", 1)[0]
+        block = rule.split("        params:\n", 1)[1]
+        values = {"EBIRD_PACKAGE_STATUS": {"reason": "missing /cache/{segment}"},
+                  "EBIRD_CONFIG": {"note": "keep {sample} and {segment} literally"}}
+        for name, key in (("serialized", "EBIRD_PACKAGE_STATUS"), ("settings", "EBIRD_CONFIG")):
+            with self.subTest(parameter=name):
+                expression = re.search(r"^\s*" + name + r"=(.*)$", block, re.M).group(1).rstrip(",")
+                self.assertIsInstance(ast.parse(expression, mode="eval").body, ast.Lambda)
+                fn = eval(expression, {"json": json, **values})
+                self.assertEqual(json.loads(fn(SimpleNamespace())), values[key])
+
 
 
 if __name__ == "__main__":

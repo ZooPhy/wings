@@ -1,0 +1,24 @@
+name: eBird context packages
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  context:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install workflow engine
+        run: python -m pip install snakemake==9.24.0
+      - name: Test portable packages and report integration
+        run: python -m unittest discover -s tests -p test_ebird_context_package.py -v
+      - name: Run isolated production Snakemake rules
+        run: python tests/integration_ebird_context.py

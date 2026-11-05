@@ -77,7 +77,8 @@ BLAST_MAX_HSPS = 1
     (database / "avian.nsq").write_bytes(b"sequence-index-fixture")
     (database / "unrelated.nin").write_bytes(b"do not capture")
     (database / "database_manifest.tsv").write_text("database_name\ncustom_fixture\n")
-    config = {"blast_db": "references/custom db/avian", "nested": {"audience": "wildlife"}}
+    config = {"blast_db": "references/custom db/avian", "nested": {"audience": "wildlife"},
+              "phylogeny": {"tree_pattern": "{segment}_Tree.newick"}}
     (root / "fixture.json").write_text(json.dumps(config, indent=2))
     return config
 
@@ -98,6 +99,32 @@ def execute(root, executable, label):
     return json.loads((root / "results/run_summary/run_provenance.json").read_text())
 
 
+def negative_control(root, executable):
+    """Demonstrate that the original scalar parameter rejects literal braces."""
+    directory = root / "literal-negative-control"
+    directory.mkdir()
+    source = (root / "Snakefile").read_text()
+    production = rule(source, "effective_run_config")
+    expected = "serialized=lambda wildcards: json.dumps(dict(config), indent=2, sort_keys=True)"
+    require(expected in production, "Literal-config correction missing from production rule")
+    broken = production.replace(expected, "serialized=json.dumps(dict(config), indent=2, sort_keys=True)", 1)
+    header = 'import json\nfrom pathlib import Path\nconfigfile: "fixture.json"\nEFFECTIVE_CONFIG_JSON = "effective.json"\n'
+    (directory / "Snakefile").write_text(header + broken)
+    shutil.copyfile(root / "fixture.json", directory / "fixture.json")
+    env = os.environ.copy()
+    for key in list(env):
+        if key.startswith("SNAKEMAKE_"):
+            env.pop(key)
+    process = subprocess.run([executable, "--cores", "1", "--profile", "none",
+                              "--workflow-profile", "none", "--dry-run", "effective.json"],
+                             cwd=directory, env=env, capture_output=True, text=True)
+    log = process.stdout + "\n" + process.stderr
+    (directory / "snakemake-negative.log").write_text(log)
+    require(process.returncode != 0 and "WildcardError" in log,
+            "Old scalar parameter did not reproduce WildcardError; inspect " + str(directory))
+    print("PASS: old scalar parameter reproduces the literal-brace WildcardError.", flush=True)
+
+
 def refresh_input(path, content, root):
     path.write_text(content)
     # Ensure timestamp ordering on coarse-resolution filesystems without sleeping.
@@ -116,7 +143,11 @@ def main():
     root = Path(tempfile.mkdtemp(prefix="wings-provenance-integration-")).resolve()
     print("Test directory: " + str(root), flush=True)
     config = prepare(repo, root)
+    negative_control(root, executable)
     record = execute(root, executable, "initial")
+    effective = root / "results/run_summary/effective_config.json"
+    require(json.loads(effective.read_text()) == config, "Literal-brace configuration was not preserved.")
+    print("PASS: literal {segment} is preserved in effective configuration and provenance.", flush=True)
     require(record["blast"]["database"]["database_name"] == "custom_fixture", "Custom manifest not used.")
     require(record["blast"]["database_prefix"] == config["blast_db"], "Wrong database prefix.")
     expected_files = {"references/custom db/avian.nin", "references/custom db/avian.nsq"}
@@ -127,6 +158,7 @@ def main():
     config_path = root / "fixture.json"
     before = config_path.stat()
     config["nested"]["audience"] = "public_health"
+    config["phylogeny"]["tree_pattern"] = "{segment}_updated.newick"
     config_path.write_text(json.dumps(config, indent=2))
     os.utime(config_path, ns=(before.st_atime_ns, before.st_mtime_ns))
     previous_hash = record["workflow"]["config_sha256"]
@@ -158,7 +190,7 @@ def main():
     require(record["blast"]["database"]["database_name"] == "explicit_override", "Explicit manifest override ignored.")
     require(record["blast"]["database_manifest_sha256"] == digest(manifest), "Explicit manifest hash wrong.")
     print("PASS: explicit manifest override recorded.", flush=True)
-    summary = {"passed": True, "checks": 5, "source_snakefile_sha256": digest(repo / "Snakefile"),
+    summary = {"passed": True, "checks": 7, "source_snakefile_sha256": digest(repo / "Snakefile"),
                "scope": "isolated production provenance rules; synthetic input files"}
     (root / "test_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print("PASS: provenance integration test.\nSummary: " + str(root / "test_summary.json"))

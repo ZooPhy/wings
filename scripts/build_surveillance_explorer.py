@@ -717,6 +717,7 @@ def build_payload(
     reference_loader: Path | None = None,
     phenology: Path | None = None,
     surveillance_effort: Path | None = None,
+    ebird_status: Path | None = None,
 ) -> dict[str, Any]:
     metadata_rows = read_metadata(metadata)
     summary_rows = read_sample_summaries(summaries)
@@ -730,6 +731,15 @@ def build_payload(
         references = runpy.run_path(str(loader))["attach_reference_context"](
             tree_records, samples, reference_manifest, reference_provenance, warnings)
     attach_genome_evidence(samples, summary_rows, coverage, genoflu, tree_records, warnings)
+    # WINGS_EBIRD_PACKAGE_REPORT_V1
+    package_status = None
+    if ebird_status is not None:
+        package_status = json.loads(Path(ebird_status).read_text(encoding="utf-8"))
+        if package_status.get("schema") != "wings.ebird-status.v1" or package_status.get("status") not in {"READY", "UNAVAILABLE", "DISABLED"}:
+            raise ValueError("Invalid eBird context status record")
+        if package_status["status"] != "READY":
+            ebird_samples = ebird_terms = ebird_citation = None
+            warnings.append("eBird context " + package_status["status"].lower() + ": " + package_status.get("reason", "No reason recorded"))
     ebird_contexts = build_ebird_contexts(samples, ebird_samples, warnings)
     ebird_attribution = None
     if ebird_contexts:
@@ -772,6 +782,7 @@ def build_payload(
         "trees": tree_records,
         "ebird_contexts": ebird_contexts,
         "ebird_attribution": ebird_attribution,
+        "ebird_status": package_status,
         "outbreak_context": build_outbreak_context(aphis_csv, aphis_provenance),
         "ecological_context": ecology,
         "ecological_clock": clock,
@@ -880,6 +891,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ebird-samples", type=Path)
     parser.add_argument("--ebird-terms", type=Path)
     parser.add_argument("--ebird-citation", type=Path)
+    parser.add_argument("--ebird-status", type=Path)
     parser.add_argument("--coverage", type=Path, action="append", default=[],
                         help="Existing per-sample coverage TSV (repeat for each sample).")
     parser.add_argument("--genoflu", type=Path, action="append", default=[],
@@ -898,6 +910,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     if "snakemake" in globals():
         metadata, summaries, trees, output, ebird, terms, citation = _paths_from_snakemake()
+        status_inputs = list(getattr(snakemake.input, "ebird_status", []))
+        ebird_status = Path(status_inputs[0]) if status_inputs else None
         refs = list(getattr(snakemake.input, "reference_manifest", []))
         ref_prov = list(getattr(snakemake.input, "reference_provenance", []))
         reference_manifest = Path(refs[0]) if refs else None
@@ -918,6 +932,7 @@ def main() -> None:
         surveillance_effort = Path(surveillance_effort_inputs[0]) if surveillance_effort_inputs else None
     else:
         args = parse_args()
+        ebird_status = args.ebird_status
         reference_manifest, reference_provenance, reference_loader = args.reference_manifest, args.reference_provenance, None
         metadata, summaries, trees, output, ebird, terms, citation = (
             args.metadata, args.summary, args.tree, args.output, args.ebird_samples,
@@ -935,7 +950,8 @@ def main() -> None:
                             ecological_context=ecological_context, ecological_loader=ecological_loader,
                             reference_manifest=reference_manifest, reference_provenance=reference_provenance,
                             reference_loader=reference_loader,
-                            phenology=phenology, surveillance_effort=surveillance_effort)
+                            phenology=phenology, surveillance_effort=surveillance_effort,
+                            ebird_status=ebird_status)
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.

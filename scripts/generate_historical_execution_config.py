@@ -648,12 +648,16 @@ def main() -> int:
         # eBird summary/attribution is frozen. Disable all cache-building
         # dependencies and remove external filesystem paths.
         #
-        if "ebird_context" in replay_inputs:
+        # WINGS_EBIRD_PACKAGE_REPLAY_V1
+        if "ebird_context" in replay_inputs or "ebird_status" in replay_inputs:
             ebird = historical_config.get("ebird") or {}
             if not isinstance(ebird, dict):
                 ebird = {}
 
             ebird = dict(ebird)
+            ebird["mode"] = "off"
+            ebird["required"] = False
+            ebird.pop("context_dir", None)
             ebird["enabled"] = False
             ebird["build_cache"] = False
 
