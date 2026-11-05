@@ -599,32 +599,66 @@ if not isinstance(EBIRD_CONFIG, dict):
     raise ValueError("config key 'ebird' must be a mapping")
 EBIRD_ENABLED = as_bool(EBIRD_CONFIG.get("enabled", False))
 EBIRD_BUILD_CACHE = as_bool(EBIRD_CONFIG.get("build_cache", False))
+# WINGS_EBIRD_PACKAGE_V1
+# Explicit package modes never schedule original-download cache builders.
+import runpy as _ebird_runpy
+EBIRD_PACKAGE_API = _ebird_runpy.run_path(
+    str(Path(workflow.basedir) / "scripts/ebird_context_package.py")
+)
+EBIRD_PACKAGE_MODE = str(EBIRD_CONFIG.get("mode", "legacy")).lower()
+if EBIRD_PACKAGE_MODE not in {"legacy", "reuse", "off"}:
+    raise ValueError("ebird.mode must be legacy, reuse, or off")
+FROZEN_EBIRD_STATUS = frozen_reexecution_input("ebird_status")
+EBIRD_PACKAGE_STATUS = None
+if FROZEN_EBIRD_CONTEXT or FROZEN_EBIRD_STATUS:
+    EBIRD_PACKAGE_MODE = "frozen"
+    EBIRD_ENABLED = False
+    EBIRD_BUILD_CACHE = False
+    EBIRD_DECLARED = True
+elif EBIRD_PACKAGE_MODE != "legacy":
+    EBIRD_PACKAGE_STATUS = EBIRD_PACKAGE_API["resolve_context"](
+        EBIRD_CONFIG, Path(METADATA_FILE), Path(workflow.basedir)
+    )
+    EBIRD_ENABLED = EBIRD_PACKAGE_STATUS["status"] == "READY"
+    EBIRD_BUILD_CACHE = False
+    EBIRD_DECLARED = True
+    if EBIRD_PACKAGE_STATUS["status"] == "UNAVAILABLE":
+        print("WARNING: eBird context unavailable: " + EBIRD_PACKAGE_STATUS["reason"], file=sys.stderr)
+EBIRD_PACKAGE_REUSE = EBIRD_PACKAGE_MODE == "reuse"
+EBIRD_STATUS_FILE = FROZEN_EBIRD_STATUS or f"{RESULTS}/run_summary/ebird/context_status.json"
+EBIRD_STATUS_INPUT = [EBIRD_STATUS_FILE] if (EBIRD_PACKAGE_STATUS is not None or FROZEN_EBIRD_STATUS) else []
+
 if EBIRD_BUILD_CACHE and not EBIRD_ENABLED:
     raise ValueError("ebird.build_cache requires ebird.enabled: true")
 
 if EBIRD_ENABLED:
-    EBIRD_CACHE = Path(str(EBIRD_CONFIG.get("cache_dir") or "")).expanduser().resolve()
-    EBIRD_SOURCE = str(EBIRD_CONFIG.get("observations_file") or "")
-    EBIRD_SAMPLING = str(EBIRD_CONFIG.get("sampling_file") or "")
-    EBIRD_RELEASE_DIR = Path(str(EBIRD_CONFIG.get("release_dir") or "")).expanduser().resolve()
-    if (not EBIRD_CONFIG.get("cache_dir") or not EBIRD_SAMPLING
-            or not EBIRD_CONFIG.get("release_dir")):
-        raise ValueError("eBird requires cache_dir, sampling_file, and release_dir")
-    if EBIRD_BUILD_CACHE and not EBIRD_SOURCE:
-        raise ValueError("ebird.build_cache requires observations_file")
-    if not all(Path(str(EBIRD_CONFIG[key])).expanduser().is_absolute()
-               for key in ("cache_dir", "sampling_file", "release_dir")):
-        raise ValueError("eBird paths must be absolute (use /Users/... instead of ~)")
-    if EBIRD_BUILD_CACHE and not Path(EBIRD_SOURCE).expanduser().is_absolute():
-        raise ValueError("ebird.observations_file must be an absolute path")
-    if Path(workflow.basedir).resolve() in (EBIRD_CACHE, *EBIRD_CACHE.parents):
-        raise ValueError("ebird.cache_dir must be outside the WINGS repository")
-    if EBIRD_CACHE == EBIRD_RELEASE_DIR:
-        raise ValueError("ebird.cache_dir must differ from release_dir")
-    if Path(EBIRD_SAMPLING).expanduser().resolve() == EBIRD_CACHE / "sampling.txt":
-        raise ValueError("ebird.sampling_file must be a source outside cache_dir")
-    if EBIRD_RELEASE_DIR == Path(f"{RESULTS}/run_summary/ebird").resolve():
-        raise ValueError("ebird.release_dir must differ from the output directory")
+    if EBIRD_PACKAGE_REUSE:
+        EBIRD_CACHE = Path(EBIRD_PACKAGE_STATUS["context_dir"])
+        EBIRD_SOURCE = EBIRD_SAMPLING = ""
+        EBIRD_RELEASE_DIR = EBIRD_CACHE
+    else:
+        EBIRD_CACHE = Path(str(EBIRD_CONFIG.get("cache_dir") or "")).expanduser().resolve()
+        EBIRD_SOURCE = str(EBIRD_CONFIG.get("observations_file") or "")
+        EBIRD_SAMPLING = str(EBIRD_CONFIG.get("sampling_file") or "")
+        EBIRD_RELEASE_DIR = Path(str(EBIRD_CONFIG.get("release_dir") or "")).expanduser().resolve()
+        if (not EBIRD_CONFIG.get("cache_dir") or not EBIRD_SAMPLING
+                or not EBIRD_CONFIG.get("release_dir")):
+            raise ValueError("eBird requires cache_dir, sampling_file, and release_dir")
+        if EBIRD_BUILD_CACHE and not EBIRD_SOURCE:
+            raise ValueError("ebird.build_cache requires observations_file")
+        if not all(Path(str(EBIRD_CONFIG[key])).expanduser().is_absolute()
+                   for key in ("cache_dir", "sampling_file", "release_dir")):
+            raise ValueError("eBird paths must be absolute (use /Users/... instead of ~)")
+        if EBIRD_BUILD_CACHE and not Path(EBIRD_SOURCE).expanduser().is_absolute():
+            raise ValueError("ebird.observations_file must be an absolute path")
+        if Path(workflow.basedir).resolve() in (EBIRD_CACHE, *EBIRD_CACHE.parents):
+            raise ValueError("ebird.cache_dir must be outside the WINGS repository")
+        if EBIRD_CACHE == EBIRD_RELEASE_DIR:
+            raise ValueError("ebird.cache_dir must differ from release_dir")
+        if Path(EBIRD_SAMPLING).expanduser().resolve() == EBIRD_CACHE / "sampling.txt":
+            raise ValueError("ebird.sampling_file must be a source outside cache_dir")
+        if EBIRD_RELEASE_DIR == Path(f"{RESULTS}/run_summary/ebird").resolve():
+            raise ValueError("ebird.release_dir must differ from the output directory")
     EBIRD_DAYS = int(EBIRD_CONFIG.get("days", 30))
     if not 0 <= EBIRD_DAYS <= 365:
         raise ValueError("ebird.days must be between 0 and 365")
@@ -653,7 +687,8 @@ if EBIRD_ENABLED:
     EBIRD_SED_CACHE = str(EBIRD_CACHE / "sampling.txt")
     EBIRD_SED_MANIFEST = str(EBIRD_CACHE / "sampling_manifest.json")
     EBIRD_OUTPUT = f"{RESULTS}/run_summary/ebird"
-    EBIRD_RELEASE = str(EBIRD_CONFIG.get("release", "unspecified"))
+    EBIRD_RELEASE = (EBIRD_PACKAGE_STATUS["release"] if EBIRD_PACKAGE_REUSE
+                     else str(EBIRD_CONFIG.get("release", "unspecified")))
 
 VADR_IMAGE = str(config.get("vadr_image", "docker://staphb/vadr:1.7"))
 VADR_RUNTIME = str(config.get("vadr_runtime", "auto")).strip().lower()
@@ -2812,62 +2847,92 @@ rule phylogeny_complete:
 # Generated trees are dependencies when phylogeny is enabled; otherwise,
 # existing external trees are included when available.
 # -----------------------------------------------------------------------------
+# WINGS_EBIRD_PACKAGE_STATUS_RULE_V1
+if EBIRD_PACKAGE_STATUS is not None:
+    rule ebird_context_status:
+        input:
+            metadata=METADATA_FILE,
+            script="scripts/ebird_context_package.py",
+            filter="scripts/filter_ebird_for_wings.py",
+            package=(
+                [str(EBIRD_CACHE / name) for name in (*EBIRD_PACKAGE_API["FILES"], EBIRD_PACKAGE_API["MANIFEST"])]
+                if EBIRD_ENABLED else []
+            )
+        output:
+            json=EBIRD_STATUS_FILE
+        params:
+            serialized=lambda wildcards: json.dumps(EBIRD_PACKAGE_STATUS, sort_keys=True),
+            settings=lambda wildcards: json.dumps(EBIRD_CONFIG, sort_keys=True)
+        run:
+            expected = json.loads(params.serialized)
+            current = EBIRD_PACKAGE_API["resolve_context"](
+                json.loads(params.settings), Path(input.metadata), Path(workflow.basedir)
+            )
+            if current != expected:
+                raise ValueError("eBird context changed after preflight; restart the workflow")
+            path = Path(output.json)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(current, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 if EBIRD_ENABLED:
-    if EBIRD_BUILD_CACHE:
-        rule ebird_observation_cache:
+    if not EBIRD_PACKAGE_REUSE:
+        if EBIRD_BUILD_CACHE:
+            rule ebird_observation_cache:
+                input:
+                    metadata=METADATA_FILE,
+                    observations=EBIRD_SOURCE,
+                    script="scripts/build_ebird_cache.py"
+                output:
+                    observations=EBIRD_OBS_CACHE,
+                    catalog=EBIRD_CATALOG,
+                    manifest=EBIRD_MANIFEST
+                params:
+                    cache=str(EBIRD_CACHE),
+                    days=EBIRD_DAYS
+                threads: 1
+                resources: mem_mb=4000
+                log:
+                    f"{RESULTS}/run_summary/ebird/cache.log"
+                shell:
+                    r"""
+                    set -euo pipefail
+                    mkdir -p "$(dirname {log:q})"
+                    python {input.script:q} --metadata {input.metadata:q} \
+                      --observations {input.observations:q} --cache-dir {params.cache:q} \
+                      --days {params.days} 2>&1 | tee {log:q}
+                    """
+
+        rule ebird_sampling_cache:
             input:
                 metadata=METADATA_FILE,
-                observations=EBIRD_SOURCE,
-                script="scripts/build_ebird_cache.py"
-            output:
+                sampling=EBIRD_SAMPLING,
                 observations=EBIRD_OBS_CACHE,
                 catalog=EBIRD_CATALOG,
-                manifest=EBIRD_MANIFEST
+                manifest=EBIRD_MANIFEST,
+                script="scripts/build_ebird_cache.py"
+            output:
+                sampling=EBIRD_SED_CACHE,
+                manifest=EBIRD_SED_MANIFEST
             params:
                 cache=str(EBIRD_CACHE),
                 days=EBIRD_DAYS
             threads: 1
             resources: mem_mb=4000
             log:
-                f"{RESULTS}/run_summary/ebird/cache.log"
+                f"{RESULTS}/run_summary/ebird/sampling.log"
             shell:
                 r"""
                 set -euo pipefail
                 mkdir -p "$(dirname {log:q})"
                 python {input.script:q} --metadata {input.metadata:q} \
-                  --observations {input.observations:q} --cache-dir {params.cache:q} \
-                  --days {params.days} 2>&1 | tee {log:q}
+                  --sampling {input.sampling:q} --sampling-only --replace-sampling \
+                  --cache-dir {params.cache:q} --days {params.days} 2>&1 | tee {log:q}
                 """
-
-    rule ebird_sampling_cache:
-        input:
-            metadata=METADATA_FILE,
-            sampling=EBIRD_SAMPLING,
-            observations=EBIRD_OBS_CACHE,
-            catalog=EBIRD_CATALOG,
-            manifest=EBIRD_MANIFEST,
-            script="scripts/build_ebird_cache.py"
-        output:
-            sampling=EBIRD_SED_CACHE,
-            manifest=EBIRD_SED_MANIFEST
-        params:
-            cache=str(EBIRD_CACHE),
-            days=EBIRD_DAYS
-        threads: 1
-        resources: mem_mb=4000
-        log:
-            f"{RESULTS}/run_summary/ebird/sampling.log"
-        shell:
-            r"""
-            set -euo pipefail
-            mkdir -p "$(dirname {log:q})"
-            python {input.script:q} --metadata {input.metadata:q} \
-              --sampling {input.sampling:q} --sampling-only --replace-sampling \
-              --cache-dir {params.cache:q} --days {params.days} 2>&1 | tee {log:q}
-            """
 
     rule ebird_summary:
         input:
+            context_status=EBIRD_STATUS_INPUT,
             metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
             observations=EBIRD_OBS_CACHE,
             sampling=EBIRD_SED_CACHE,
@@ -2980,6 +3045,9 @@ rule metadata_ecological_context:
 
 rule surveillance_explorer_data:
     input:
+        ebird_status=EBIRD_STATUS_INPUT,
+        ebird_package_loader="scripts/ebird_context_package.py",
+        explorer_builder="scripts/build_surveillance_explorer.py",
         reference_manifest=([REFERENCE_MANIFEST] if REFERENCE_ENABLED else []),
         reference_provenance=([REFERENCE_PROVENANCE] if REFERENCE_ENABLED else []),
         reference_loader="scripts/public_reference_context.py",
@@ -3566,6 +3634,9 @@ if OUTBREAK_ENABLED:
             ("aphis_provenance", APHIS_PROVENANCE)
         )
 
+if EBIRD_STATUS_INPUT:
+    REPLAY_INPUT_SPECS.append(("ebird_status", EBIRD_STATUS_FILE))
+
 REPLAY_EBIRD_CONTEXT = (
     FROZEN_EBIRD_CONTEXT
     or f"{RESULTS}/run_summary/ebird/ebird_samples.tsv"
@@ -3635,7 +3706,7 @@ rule effective_run_config:
         json=EFFECTIVE_CONFIG_JSON
     params:
         # Snakemake tracks this value, including nested and CLI overrides.
-        serialized=json.dumps(dict(config), indent=2, sort_keys=True)
+        serialized=lambda wildcards: json.dumps(dict(config), indent=2, sort_keys=True)
     run:
         path = Path(output.json)
         path.parent.mkdir(parents=True, exist_ok=True)
