@@ -1,0 +1,30 @@
+name: Explorer assets
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  explorer:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check generated assets
+        run: python scripts/build_explorer_assets.py --check
+      - name: Test builder and legacy installer guards
+        run: python -m unittest discover -s tests -p test_explorer_asset_build.py -v
+      - name: Test Explorer modules and tab integration
+        run: node --test tests/test_explorer_module_runtime.cjs tests/test_explorer_tabs.cjs tests/test_genome_braid_clock.cjs tests/test_genomic_ecological_concordance_ui.cjs tests/test_tree_studio.cjs

@@ -45,6 +45,16 @@
   border-radius: .7rem .7rem 0 0;
   background: #f7faf9;
 }
+.wse-tabs-mounted .wse-app-shell > .wse-subtitle {
+  box-sizing: border-box;
+  margin: 0;
+  max-width: none;
+  padding: .65rem .85rem;
+  border-right: 1px solid #d8e0e1;
+  border-bottom: 1px solid #d8e0e1;
+  border-left: 1px solid #d8e0e1;
+  background: #fff;
+}
 .wse-app-control { display: grid; gap: .25rem; min-width: 0; }
 .wse-app-control-label {
   color: #52656d;

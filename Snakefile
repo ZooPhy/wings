@@ -23,6 +23,7 @@ import subprocess
 import sys
 import platform
 from pathlib import Path
+from types import SimpleNamespace
 from importlib.metadata import version, PackageNotFoundError
 
 try:
@@ -807,6 +808,20 @@ def segments_for_sample(wildcards):
         if fasta.is_file() and fasta.stat().st_size > 0 and bam.is_file() and bam.stat().st_size > 0:
             ready.append(segment)
     return sorted(ready, key=lambda segment: SEGMENT_SEQUENCE.index(segment))
+
+
+def run_medaka_status_inputs(_wildcards, status_filename):
+    """Schedule report statuses only for normalized, available segments.
+
+    Use the IRMA checkpoint for each sample so Snakemake re-evaluates these
+    inputs after assembly. QC-failed but available segments remain included;
+    truly absent segments remain represented in the coverage summary.
+    """
+    return [
+        f"{RESULTS}/{sample}/medaka/{segment}/{status_filename}"
+        for sample in SAMPLES
+        for segment in segments_for_sample(SimpleNamespace(sample=sample))
+    ]
 
 
 def bam_path(wildcards):
@@ -3304,20 +3319,14 @@ rule run_summary_html:
             if RUN_VADR
             else []
         ),
-        medaka_inference_status=expand(
-            f"{RESULTS}/{{sample}}/medaka/{{segment}}/inference.status.tsv",
-            sample=SAMPLES,
-            segment=SEGMENT_SEQUENCE,
+        medaka_inference_status=lambda wildcards: run_medaka_status_inputs(
+            wildcards, "inference.status.tsv"
         ),
-        medaka_consensus_status=expand(
-            f"{RESULTS}/{{sample}}/medaka/{{segment}}/consensus.status.tsv",
-            sample=SAMPLES,
-            segment=SEGMENT_SEQUENCE,
+        medaka_consensus_status=lambda wildcards: run_medaka_status_inputs(
+            wildcards, "consensus.status.tsv"
         ),
-        medaka_variant_status=expand(
-            f"{RESULTS}/{{sample}}/medaka/{{segment}}/variants.status.tsv",
-            sample=SAMPLES,
-            segment=SEGMENT_SEQUENCE,
+        medaka_variant_status=lambda wildcards: run_medaka_status_inputs(
+            wildcards, "variants.status.tsv"
         ),
         # WINGS_STAGED_REPORT_LOGO_V1
         report_logo="assets/wings_logo.jpg",
@@ -3596,20 +3605,41 @@ if FROZEN_EBIRD_CONTEXT or EBIRD_ENABLED or (
         )
 
 
+# WINGS_PROVENANCE_ACCURACY_V1_BEGIN
+# These are environment definitions, not proof that every tool executed.
+# Keep the declared DAG inputs and recorded definitions in one mapping.
+PROVENANCE_ENVIRONMENTS = {
+    "blast": "envs/blast.yaml",
+    "coverage": "envs/coverage.yaml",
+    "fastplong": "envs/fastplong.yaml",
+    "genoflu": "envs/genoflu.yaml",
+    "medaka": "envs/medaka.yaml",
+    "nanoplot": "envs/nanoplot.yaml",
+    "phenology": "envs/phenology.yaml",
+    "phylogeny": "envs/phylogeny.yaml",
+    "porechop": "envs/porechop.yaml",
+    "py-tools": "envs/py-tools.yaml",
+    "pysam": "envs/pysam.yaml",
+    "reporting": REPORTING_ENV,
+    "seqtk": "envs/seqtk.yaml",
+}
+BLAST_DB_MANIFEST = str(Path(str(
+    config.get("blast_db_manifest")
+    or (Path(BLAST_DB).parent / "database_manifest.tsv")
+)).expanduser())
+# WINGS_PROVENANCE_ACCURACY_V1_END
+
+
 rule effective_run_config:
     output:
         json=EFFECTIVE_CONFIG_JSON
+    params:
+        # Snakemake tracks this value, including nested and CLI overrides.
+        serialized=json.dumps(dict(config), indent=2, sort_keys=True)
     run:
         path = Path(output.json)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(
-                dict(config),
-                indent=2,
-                sort_keys=True,
-            ) + "\n",
-            encoding="utf-8",
-        )
+        path.write_text(params.serialized + "\n", encoding="utf-8")
 
 
 rule run_provenance:
@@ -3621,25 +3651,14 @@ rule run_provenance:
             else []
         ),
         snakefile="Snakefile",
-        blast_manifest="resources/flu_db/database_manifest.tsv",
+        blast_manifest=BLAST_DB_MANIFEST,
+        blast_database=blast_db_files,
         script="scripts/write_run_provenance.py",
         primary_inputs=[
             path for _, path in PRIMARY_INPUT_SPECS
         ],
         replay_inputs=[path for _, path in REPLAY_INPUT_SPECS],
-        envs=[
-            "envs/blast.yaml",
-            "envs/coverage.yaml",
-            "envs/fastplong.yaml",
-            "envs/genoflu.yaml",
-            "envs/medaka.yaml",
-            "envs/nanoplot.yaml",
-            "envs/porechop.yaml",
-            "envs/py-tools.yaml",
-            "envs/pysam.yaml",
-            "envs/seqtk.yaml",
-            REPORTING_ENV,
-        ]
+        envs=list(PROVENANCE_ENVIRONMENTS.values())
     output:
         tsv=f"{RESULTS}/run_summary/run_provenance.tsv",
         json=f"{RESULTS}/run_summary/run_provenance.json"
@@ -3663,7 +3682,11 @@ rule run_provenance:
         blast_min_query_coverage=BLAST_MIN_QUERY_COVERAGE,
         blast_max_target_seqs=BLAST_MAX_TARGET_SEQS,
         blast_max_hsps=BLAST_MAX_HSPS,
-        reporting_env=REPORTING_ENV,
+        blast_db_prefix=BLAST_DB,
+        env_args=" ".join(
+            "--env " + shlex.quote(f"{label}={path}")
+            for label, path in PROVENANCE_ENVIRONMENTS.items()
+        ),
         replay_args=" ".join(
             "--replay-input " + shlex.quote(f"{label}={path}")
             for label, path in REPLAY_INPUT_SPECS
@@ -3684,6 +3707,7 @@ rule run_provenance:
           --config {input.config:q} \
           --snakefile {input.snakefile:q} \
           --blast-manifest {input.blast_manifest:q} \
+          --blast-db-prefix {params.blast_db_prefix:q} \
           {params.primary_args} \
           {params.replay_args} \
           --sample-count {params.sample_count} \
@@ -3704,17 +3728,7 @@ rule run_provenance:
           --blast-min-query-coverage {params.blast_min_query_coverage} \
           --blast-max-target-seqs {params.blast_max_target_seqs} \
           --blast-max-hsps {params.blast_max_hsps} \
-          --env blast=envs/blast.yaml \
-          --env coverage=envs/coverage.yaml \
-          --env fastplong=envs/fastplong.yaml \
-          --env genoflu=envs/genoflu.yaml \
-          --env medaka=envs/medaka.yaml \
-          --env nanoplot=envs/nanoplot.yaml \
-          --env porechop=envs/porechop.yaml \
-          --env py-tools=envs/py-tools.yaml \
-          --env pysam=envs/pysam.yaml \
-          --env reporting={params.reporting_env:q} \
-          --env seqtk=envs/seqtk.yaml
+          {params.env_args}
         """
 
 

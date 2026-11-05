@@ -212,6 +212,7 @@
 
     const timeline = shell.querySelector(".wse-timeline-panel");
     const mainGrid = shell.querySelector(".wse-main-grid");
+    const subtitle = shell.querySelector(".wse-subtitle");
     const braid = shell.querySelector(".wbc-embedded");
     const genome = shell.querySelector(".wse-genome-panel");
     const genomeFooter = shell.querySelector(".wse-footer-note");
@@ -283,7 +284,7 @@
       panels[name] = panel;
     });
 
-    panels.overview.append(timeline, mainGrid);
+    panels.coverage.append(timeline, mainGrid);
 
     const shared = make("div", "wse-app-shared");
     shared.hidden = true;
@@ -311,12 +312,11 @@
 
       const module = globalThis.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE;
 
-      if (module?.mount) module.mount(explorer, panels.concordance);
+      if (module?.mount) explorer.concordanceController = module.mount(explorer, panels.concordance);
 
       else panels.concordance.append(make("p", "wse-app-empty", "Genomic–Ecological Concordance is unavailable for this report."));
 
     }
-    panels.coverage.append(renderCoveragePanel(explorer));
 
     if (outbreak) {
       panels.outbreak.append(outbreak);
@@ -325,7 +325,11 @@
     }
 
     root.insertBefore(nav, shell);
-    app.append(toolbar, shared, views);
+    globalThis.WINGS_EVIDENCE_SYNTHESIS.mount(explorer, app);
+    const overviewBrief = app.querySelector(".wse-evidence-synthesis");
+    app.append(toolbar);
+    if (subtitle) app.append(subtitle);
+    app.append(shared, views);
     shell.append(app);
 
     loadPhenology.addEventListener("click", () => {
@@ -353,9 +357,14 @@
     const activate = (name, focus = false) => {
       if (!TAB_ORDER.includes(name)) return;
       active = name;
-      toolbar.hidden = name === "genotypes";
-      if (subtitle) subtitle.hidden = name === "genotypes";
+      root.dataset.wseActiveTab = name;
+      toolbar.hidden = name === "genotypes" || name === "overview";
+      // Explicit display prevents the toolbar grid rule from overriding hidden.
+      toolbar.style.display = toolbar.hidden ? "none" : "";
+      if (subtitle) subtitle.hidden = name !== "coverage";
       if (name === "genotypes") requestAnimationFrame(() => genotypeDashboard?.refresh());
+      // Keep the run brief above the shared controls, but only on Overview.
+      if (overviewBrief) overviewBrief.hidden = name !== "overview";
       for (const key of TAB_ORDER) {
         const selected = key === name;
         buttons[key].setAttribute("aria-selected", String(selected));
@@ -363,7 +372,7 @@
         panels[key].hidden = !selected;
       }
       if (focus) buttons[name].focus();
-      if (name === "overview") {
+      if (name === "coverage") {
         requestAnimationFrame(() => {
           explorer.renderMap?.();
           explorer.updateEmphasis?.();
@@ -373,9 +382,6 @@
       shared.hidden = !showShared;
       if (braid) braid.dataset.wseLens = showShared ? name : "";
       placeTreeStudio();
-      if (name === "coverage") {
-        panels.coverage.replaceChildren(renderCoveragePanel(explorer));
-      }
       if (showShared) {
         requestAnimationFrame(() => explorer.braidClock?.refresh?.());
       }
@@ -414,12 +420,12 @@
         explorer.updateSelection();
       }
 
-      panels.coverage.replaceChildren(renderCoveragePanel(explorer));
     });
 
     clearButton.addEventListener("click", () => {
       explorer.selectedSampleId = null;
       explorer.selectedReferenceId = null;
+      explorer.selectedTreeTip = null;
       explorer.hoverSampleId = null;
       explorer.updateSelection();
     });
@@ -447,13 +453,16 @@
     const sync = () => {
       syncSampleOptions();
       hostSelect.value = explorer.hostFilter || "ALL";
-      clearButton.disabled = !explorer.selectedSampleId && !explorer.selectedReferenceId;
+      clearButton.disabled = !explorer.selectedSampleId && !explorer.selectedReferenceId && !explorer.selectedTreeTip;
       const sample = explorer.selectedSampleId ? explorer.sampleById?.get(explorer.selectedSampleId) : null;
-      if (sample) {
+      if (explorer.selectedTreeTip) {
+        context.textContent = `Tree tip: ${explorer.selectedTreeTip.name} · ${explorer.selectedTreeTip.segment}`;
+      } else if (explorer.selectedReferenceId) {
+        const reference = explorer.referenceById?.get(explorer.selectedReferenceId);
+        context.textContent = `Public reference: ${reference?.isolate || explorer.selectedReferenceId}${sample ? ` · WINGS comparison: ${sample.sample_id}` : ""}`;
+      } else if (sample) {
         const parts = [sample.sample_id, sample.host, sample.collection_date, sample.genotype?.call].filter(Boolean);
         context.textContent = parts.join(" · ");
-      } else if (explorer.selectedReferenceId) {
-        context.textContent = `Public reference: ${explorer.selectedReferenceId}`;
       } else {
         context.textContent = "No sample selected";
       }

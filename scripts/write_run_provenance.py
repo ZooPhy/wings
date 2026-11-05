@@ -81,6 +81,29 @@ def parse_primary_input_arg(item: str) -> tuple[str, Path]:
     return parse_labeled_path(item, "--primary-input")
 
 
+def capture_blast_database(prefix: Path, repo: Path) -> dict:
+    """Fingerprint the index files under the prefix actually used by BLAST."""
+    # Canonicalize both sides before computing relative paths (macOS /var aliases).
+    repo = repo.resolve()
+    prefix = (repo / prefix).resolve() if not prefix.is_absolute() else prefix.resolve()
+    paths = sorted(
+        (path for path in prefix.parent.glob(prefix.name + '.*') if path.is_file()),
+        key=lambda path: path.name,
+    )
+    if not paths:
+        raise ValueError(f"No BLAST database files found for prefix {prefix}")
+    return {
+        'database_prefix': os.path.relpath(prefix, repo),
+        'database_files': {
+            os.path.relpath(path, repo): {
+                'sha256': sha256_file(path),
+                'size_bytes': path.stat().st_size,
+            }
+            for path in paths
+        },
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description='Write WINGS run-level provenance records.')
     ap.add_argument('--output-tsv', required=True, type=Path)
@@ -89,6 +112,7 @@ def main() -> None:
     ap.add_argument('--config', required=True, type=Path)
     ap.add_argument('--snakefile', required=True, type=Path)
     ap.add_argument('--blast-manifest', required=True, type=Path)
+    ap.add_argument('--blast-db-prefix', type=Path, help='Actual BLAST index prefix; record its files and SHA-256 hashes.')
     ap.add_argument('--sample-count', required=True, type=int)
     ap.add_argument('--snakemake-version', required=True)
     ap.add_argument('--irma-image', required=True)
@@ -230,6 +254,9 @@ def main() -> None:
         'replay_inputs': replay_inputs,
         'launcher_attempt': load_attempt_provenance(),
     }
+
+    if args.blast_db_prefix is not None:
+        provenance['blast'].update(capture_blast_database(args.blast_db_prefix, repo))
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     with args.output_json.open('w', encoding='utf-8') as f:

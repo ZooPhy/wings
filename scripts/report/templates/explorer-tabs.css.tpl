@@ -1,0 +1,254 @@
+/* WINGS Surveillance Explorer tabbed application shell. */
+.wse-tabs-mounted .wse-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem 1rem;
+  margin: .65rem 0 .8rem;
+  padding: .5rem .75rem;
+  border: 1px solid #dde3e6;
+  border-radius: .55rem;
+  background: #f7f9f9;
+}
+.wse-tabs-mounted .wse-metric {
+  display: flex;
+  align-items: baseline;
+  gap: .35rem;
+  min-width: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: #263b43;
+}
+.wse-tabs-mounted .wse-metric span {
+  display: inline;
+  color: #6a777d;
+  font-size: .67rem;
+  letter-spacing: .04em;
+}
+.wse-tabs-mounted .wse-metric strong {
+  display: inline;
+  margin: 0;
+  font-size: .86rem;
+  color: #263b43;
+}
+.wse-tabs-mounted .wse-selected { margin: .55rem 0 .75rem; }
+
+.wse-app-shell { margin-top: .45rem; }
+.wse-app-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, .7fr) auto minmax(220px, 1.4fr);
+  gap: .7rem;
+  align-items: end;
+  padding: .75rem .85rem;
+  border: 1px solid #d8e0e1;
+  border-radius: .7rem .7rem 0 0;
+  background: #f7faf9;
+}
+.wse-tabs-mounted .wse-app-shell > .wse-subtitle {
+  box-sizing: border-box;
+  margin: 0;
+  max-width: none;
+  padding: .65rem .85rem;
+  border-right: 1px solid #d8e0e1;
+  border-bottom: 1px solid #d8e0e1;
+  border-left: 1px solid #d8e0e1;
+  background: #fff;
+}
+.wse-app-control { display: grid; gap: .25rem; min-width: 0; }
+.wse-app-control-label {
+  color: #52656d;
+  font-size: .69rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.wse-app-control select {
+  width: 100%;
+  max-width: 100%;
+  padding: .48rem .55rem;
+  border: 1px solid #b9c6ca;
+  border-radius: .42rem;
+  background: white;
+  color: #263b43;
+}
+.wse-app-clear {
+  min-height: 39px;
+  padding: .48rem .75rem;
+  border: 1px solid #8c1d40;
+  border-radius: .42rem;
+  background: white;
+  color: #8c1d40;
+  font-weight: 750;
+  cursor: pointer;
+}
+.wse-app-clear:disabled { opacity: .4; cursor: default; }
+.wse-app-context {
+  align-self: center;
+  min-width: 0;
+  color: #52656d;
+  font-size: .79rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.wse-app-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  margin: 0;
+  padding: 0 1rem;
+  border: 0;
+  border-bottom: 1px solid #dee2e6;
+  background: white;
+  overflow-x: auto;
+}
+
+.wse-app-tab {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-bottom: -1px;
+  padding: .72rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: .25rem .25rem 0 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 1rem;
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wse-app-tab:hover {
+  color: #1d4ed8;
+  border-color: #e9ecef #e9ecef #dee2e6;
+  background: transparent;
+}
+
+.wse-app-tab[aria-selected="true"] {
+  color: #212529;
+  border-color: #dee2e6 #dee2e6 #fff;
+  background: #fff;
+  font-weight: 400;
+}
+
+.wse-app-tab:focus-visible {
+  outline: 3px solid #ffc627;
+  outline-offset: -3px;
+}
+
+.wse-app-views {
+  border: 1px solid #d8e0e1;
+  border-top: 0;
+  border-radius: 0 0 .7rem .7rem;
+  background: #fff;
+  padding: .9rem;
+}
+.wse-app-view[hidden] { display: none !important; }
+.wse-app-view > * + * { margin-top: .9rem; }
+
+.wse-tabs-mounted .wbc-embedded { margin: 0; }
+.wse-tabs-mounted .wbc-embedded .wbc-tools > label,
+.wse-tabs-mounted .wbc-embedded .wbc-tools > .wbc-clear { display: none; }
+.wse-tabs-mounted .wbc-embedded .wbc-file-tools { margin-left: auto; }
+.wse-tabs-mounted .wse-duplicate-sample-control,
+.wse-tabs-mounted .wse-genome-controls .wse-clear-selection { display: none !important; }
+
+.wse-genome-details {
+  border: 1px solid #d8e0e1;
+  border-radius: .65rem;
+  background: #fafcfc;
+}
+.wse-genome-details-summary {
+  cursor: pointer;
+  padding: .75rem .9rem;
+  color: #30464e;
+  font-weight: 800;
+}
+.wse-genome-details[open] > .wse-genome-details-summary { border-bottom: 1px solid #d8e0e1; }
+.wse-genome-details > .wse-genome-panel { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+
+#wse-view-outbreak .wse-outbreak-panel { margin: 0; border: 0; }
+#wse-view-outbreak .wse-outbreak-panel[hidden]::before {
+  content: "Outbreak context is not available for this run.";
+  display: block;
+  padding: 1rem;
+  color: #65747a;
+}
+
+@media (max-width: 980px) {
+  .wse-app-toolbar { grid-template-columns: 1fr 1fr auto; }
+  .wse-app-context { grid-column: 1 / -1; }
+}
+@media (max-width: 680px) {
+  .wse-app-toolbar { grid-template-columns: 1fr; }
+  .wse-app-context { grid-column: auto; }
+  .wse-app-tab { min-width: 130px; }
+  .wse-app-views { padding: .55rem; }
+}
+
+/* Genome Braid and Ecological Clock share one live component but appear in
+   different application lenses. Keeping a single DOM instance preserves
+   synchronized selection, phenology imports, and evidence state. */
+.wse-app-shared[hidden] { display: none !important; }
+.wse-app-shared { border: 1px solid #d8e0e1; border-top: 0; background: #fff; padding: .9rem .9rem 0; }
+.wse-app-shared + .wse-app-views { border-top: 0; }
+
+.wse-app-shared .wbc-embedded { margin: 0; }
+.wse-app-shared .wbc-embedded .wbc-tools > label,
+.wse-app-shared .wbc-embedded .wbc-tools > .wbc-clear,
+.wse-app-shared .wbc-embedded .wbc-file-tools { display: none !important; }
+
+/* Genome lens: Genome Braid + evidence only. */
+.wse-app-shared .wbc-embedded[data-wse-lens="genome"] .wbc-clock-card { display: none !important; }
+.wse-app-shared .wbc-embedded[data-wse-lens="genome"] .wbc-audit,
+.wse-app-shared .wbc-embedded[data-wse-lens="genome"] .wbc-footer { display: none !important; }
+
+/* Ecology lens: Ecological Clock only; the older eBird/BirdCast/weather panel
+   follows immediately below in the Ecology tab. */
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-masthead,
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-banner,
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-tools,
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-stats,
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-workbench,
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-audit,
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-footer { display: none !important; }
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-clock-card { margin-top: 0; }
+
+.wse-ecology-clock-actions {
+  display: none;
+  justify-content: flex-end;
+  gap: .55rem;
+  margin: 0 0 .7rem;
+}
+.wse-app-shared:has(.wbc-embedded[data-wse-lens="ecology"]) .wse-ecology-clock-actions { display: flex; }
+.wse-ecology-clock-action {
+  padding: .45rem .7rem;
+  border: 1px solid #b9c6ca;
+  border-radius: .42rem;
+  background: #fff;
+  color: #30464e;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wse-ecology-clock-action:hover { background: #f5f9f8; border-color: #70878f; }
+
+@media (max-width: 680px) {
+  .wse-app-shared { padding: .55rem .55rem 0; }
+  .wse-ecology-clock-actions { justify-content: stretch; }
+  .wse-ecology-clock-action { flex: 1 1 0; }
+}
+
+/* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_BEGIN */
+.wse-coverage{display:grid;gap:1rem;color:#263b43}.wse-coverage-head{display:flex;justify-content:space-between;align-items:start}.wse-coverage-head h3{margin:.1rem 0 0;font-size:1.45rem}.wse-coverage-kicker{font-size:.68rem;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:#007c83}.wse-coverage-note,.wse-coverage-caution,.wse-signal-interpretation{margin:0;color:#5f7178;line-height:1.5}.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}.wse-coverage-card{display:grid;gap:.2rem;padding:.85rem;border:1px solid #d7e0e1;border-radius:.6rem;background:#fbfdfd}.wse-coverage-card span{font-size:.7rem;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:#61747b}.wse-coverage-card strong{font-size:1.55rem;color:#263b43}.wse-coverage-card small{color:#6a7b81;line-height:1.35}.wse-coverage-section{display:grid;gap:.75rem;padding:1rem;border:1px solid #d8e0e1;border-radius:.7rem;background:#fff}.wse-coverage-section h4{margin:0;color:#30464e}.wse-coverage-empty{margin:0;padding:.8rem;background:#f5f8f8;border:1px dashed #bfd0d0;border-radius:.5rem;color:#5f7178}.wse-coverage-table{width:100%;border-collapse:collapse;font-size:.78rem}.wse-coverage-table th,.wse-coverage-table td{padding:.55rem;border-bottom:1px solid #e2e8e8;text-align:left}.wse-coverage-table th{background:#f5f8f8;color:#4c6068}.wse-signal-interpretation{font-weight:700;color:#30464e}@media(max-width:900px){.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{grid-template-columns:1fr}.wse-coverage-section{overflow-x:auto}}
+/* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_END */
+
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_BEGIN */
+@@WINGS:scripts/report/genomic-ecological-concordance.css#base@@
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_END */
+
+/* WINGS_COMPACT_CONCORDANCE_SUMMARY_BEGIN */
+@@WINGS:scripts/report/genomic-ecological-concordance.css#summary@@
+/* WINGS_COMPACT_CONCORDANCE_SUMMARY_END */
+
+@@WINGS:scripts/report/genomic-ecological-concordance.css#takeaway@@

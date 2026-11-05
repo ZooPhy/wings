@@ -1,0 +1,19 @@
+{
+  "schema": "wings.explorer-assets.v1",
+  "sources": [
+    "scripts/report/migration-weave.js",
+    "scripts/report/evidence-synthesis.js",
+    "scripts/report/explorer-tabs.js",
+    "scripts/report/tree-studio.js",
+    "scripts/report/genomic-ecological-concordance.js",
+    "scripts/report/genome-braid-clock.js",
+    "scripts/report/genomic-ecological-concordance.css",
+    "scripts/report/genome-braid-clock.css",
+    "scripts/report/tree-studio.css"
+  ],
+  "outputs": {
+    "scripts/report/explorer-tabs.css": "scripts/report/templates/explorer-tabs.css.tpl",
+    "scripts/report/surveillance-explorer.js": "scripts/report/templates/surveillance-explorer.js.tpl",
+    "scripts/report/surveillance-explorer.css": "scripts/report/templates/surveillance-explorer.css.tpl"
+  }
+}

@@ -1,0 +1,728 @@
+.wings-surveillance-explorer {
+  margin: 1rem 0 2.25rem;
+}
+.wse-shell {
+  background: #fff;
+  border: 1px solid #d8d8d8;
+  border-top: 8px solid #000;
+  border-radius: .95rem;
+  box-shadow: 0 14px 34px rgba(0,0,0,.10);
+  overflow: hidden;
+  padding: 1.15rem 1.2rem 1.25rem;
+}
+.wse-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+.wse-eyebrow,
+.wse-panel-kicker {
+  color: #8C1D40;
+  font-size: .74rem;
+  font-weight: 900;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+}
+.wse-title {
+  color: #000;
+  font-size: clamp(1.45rem, 2.6vw, 2.15rem);
+  font-weight: 900;
+  letter-spacing: -.025em;
+  line-height: 1.05;
+  margin-top: .2rem;
+}
+.wse-subtitle {
+  color: #4a4a4a;
+  font-size: .92rem;
+  margin-top: .35rem;
+  max-width: 62rem;
+}
+.wse-heading-accent {
+  background: #FFC627;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: .55rem;
+  margin-top: .25rem;
+  width: 5rem;
+}
+.wse-metrics {
+  display: grid;
+  gap: .65rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 1rem 0;
+}
+.wse-metric {
+  background: #000;
+  border-bottom: 5px solid #FFC627;
+  border-radius: .65rem;
+  color: #fff;
+  min-width: 0;
+  padding: .7rem .8rem;
+}
+.wse-metric span {
+  color: #FFC627;
+  display: block;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.wse-metric strong {
+  display: block;
+  font-size: 1.2rem;
+  margin-top: .12rem;
+  overflow-wrap: anywhere;
+}
+.wse-report-link {
+  background: #8C1D40;
+  border: 2px solid #8C1D40;
+  border-radius: 999px;
+  color: #fff !important;
+  cursor: pointer;
+  font-size: .75rem;
+  font-weight: 900;
+  padding: .48rem .8rem;
+  text-decoration: none;
+}
+.wse-report-link:hover,
+.wse-report-link:focus-visible {
+  background: #5C1229;
+  border-color: #5C1229;
+  outline: none;
+}
+.wse-selected {
+  align-items: center;
+  background: linear-gradient(100deg,#111,#000);
+  border-top: 6px solid #FFC627;
+  border-radius: .75rem;
+  color: #fff;
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: 10px minmax(0,1fr) auto auto;
+  margin: .9rem 0 1rem;
+  padding: .75rem .85rem;
+}
+.wse-selected[hidden] { display: none; }
+.wse-selected-color {
+  background: var(--host-color);
+  border-radius: 999px;
+  height: 100%;
+  min-height: 54px;
+}
+.wse-selected-main {
+  display: grid;
+  min-width: 0;
+}
+.wse-selected-kicker {
+  color: #FFC627;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.wse-selected-main strong {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.wse-selected-main small {
+  color: #d8d8d8;
+  font-size: .76rem;
+}
+.wse-selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  justify-content: flex-end;
+}
+.wse-selected-tags span {
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 800;
+  padding: .3rem .5rem;
+}
+.wse-selected-tags .is-detected { background: #B3261E; }
+.wse-selected-tags .is-clear { background: #176B3A; }
+.wse-selected-tags .is-indeterminate { background: #7a6500; }
+.wse-panel {
+  background: #fff;
+  border: 1px solid #d8d8d8;
+  border-radius: .8rem;
+  box-shadow: 0 6px 18px rgba(0,0,0,.06);
+  min-width: 0;
+  overflow: hidden;
+}
+.wse-panel-heading {
+  align-items: flex-start;
+  border-bottom: 1px solid #e2e2e2;
+  display: flex;
+  gap: .8rem;
+  justify-content: space-between;
+  padding: .8rem .9rem .65rem;
+}
+.wse-panel-heading h3 {
+  color: #000;
+  font-size: 1.1rem;
+  font-weight: 900;
+  margin: .05rem 0 0;
+}
+.wse-panel-note {
+  color: #666;
+  font-size: .72rem;
+  font-weight: 700;
+  text-align: right;
+}
+.wse-timeline-panel { margin-bottom: .9rem; }
+.wse-timeline { min-height: 170px; padding: .3rem .6rem .1rem; }
+.wse-timeline svg,
+.wse-map svg,
+.wse-tree svg { display: block; width: 100%; }
+.wse-axis-line,
+.wse-axis-tick { stroke: #8f949a; stroke-width: 1.2; }
+.wse-axis-label { fill: #555; font-size: 12px; font-weight: 700; }
+.wse-sample-mark { cursor: pointer; stroke: #fff; stroke-width: 1.8; transition: r .12s ease, stroke-width .12s ease; }
+.wse-sample-mark:hover,
+.wse-sample-mark.is-selected { r: 9; stroke: #FFC627; stroke-width: 4; }
+.wse-main-grid {
+  display: grid;
+  gap: .9rem;
+  grid-template-columns: minmax(320px,.82fr) minmax(460px,1.18fr);
+}
+.wse-map { padding: .3rem .55rem 0; }
+.wse-map svg { height: 460px; overflow: hidden; }
+.wse-map-toolbar { display: flex; align-items: center; padding: .7rem .9rem; background: #fafafa; }
+.wse-map-toolbar label { font-size: .8rem; font-weight: 700; }
+.wse-map-view { padding: .35rem .5rem; margin-left: .4rem; border: 1px solid #aeb4bc; border-radius: .4rem; background: white; color: #202124; }
+.wse-map-attribution { padding: .4rem .9rem .8rem; font-size: .75rem; color: #555; }
+.wse-country-boundary { fill: #f1f3f4; stroke: #89919a; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.wse-region-boundary { fill: #f1f3f4; stroke: #89919a; stroke-width: .8; vector-effect: non-scaling-stroke; }
+.wse-map-region-label { font-family: system-ui, sans-serif; fill: #535b64; font-size: 12px; font-weight: 600; paint-order: stroke; stroke: white; stroke-width: 2.5px; stroke-linejoin: round; pointer-events: none; }
+@media (max-width: 540px) { .wse-map svg { height: 300px; } }
+
+.wse-map-cluster { cursor: pointer; outline: none; }
+.wse-map-halo {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 3;
+}
+.wse-map-bubble {
+  opacity: .9;
+  stroke: #fff;
+  stroke-width: 2.5;
+  transition: stroke-width .13s ease, opacity .13s ease;
+}
+.wse-map-cluster:hover .wse-map-bubble,
+.wse-map-cluster:focus-visible .wse-map-bubble {
+  opacity: 1;
+  stroke: #FFC627;
+  stroke-width: 6;
+}
+.wse-map-cluster-count {
+  fill: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  pointer-events: none;
+}
+.wse-map-empty {
+  fill: #666;
+  font-size: 16px;
+  font-weight: 800;
+}
+.wse-host-legend {
+  display: grid;
+  gap: .3rem;
+  padding: .25rem .75rem .8rem;
+}
+.wse-host-distribution-title {
+  color: #333;
+  font-size: .78rem;
+  font-weight: 900;
+  margin-bottom: .1rem;
+}
+.wse-host-row {
+  align-items: center;
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: .35rem;
+  color: #444;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: .76rem;
+  gap: .6rem;
+  grid-template-columns: minmax(4.5rem, 6rem) minmax(0, 1fr) 2rem;
+  padding: .18rem .35rem;
+  text-align: left;
+  width: 100%;
+}
+.wse-host-row:hover,
+.wse-host-row.is-active { background: #fff8df; border-color: #8C1D40; }
+.wse-host-row:focus-visible { outline: 2px solid #8C1D40; outline-offset: 2px; }
+.wse-host-label { align-items: center; display: flex; font-weight: 800; gap: .35rem; }
+.wse-host-label i {
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 .65rem;
+  height: .65rem;
+}
+.wse-host-track { background: #ebedf0; border-radius: .35rem; height: .55rem; overflow: hidden; }
+.wse-host-fill { border-radius: .35rem; display: block; height: 100%; }
+.wse-host-row strong { font-size: .78rem; text-align: right; }
+
+.wse-segment-tabs {
+  align-items: center;
+  border-top: 1px solid #e2e2e2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: .65rem .85rem .35rem;
+}
+
+.wse-segment-tab {
+  background: #fff;
+  border: 1px solid #b7bbc0;
+  border-radius: 999px;
+  color: #333;
+  cursor: pointer;
+  font-size: .76rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: .48rem .72rem;
+}
+
+.wse-segment-tab:hover:not(:disabled) {
+  border-color: #8C1D40;
+  color: #8C1D40;
+}
+
+.wse-segment-tab.is-active {
+  background: #8C1D40;
+  border-color: #8C1D40;
+  box-shadow: 0 0 0 2px #FFC627;
+  color: #fff;
+}
+
+.wse-segment-tab:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}
+
+.wse-tree {
+  max-height: 690px;
+  overflow: auto;
+  padding: .2rem .25rem .35rem;
+}
+.wse-tree-branch {
+  stroke: #6d7278;
+  stroke-width: 1.35;
+}
+.wse-tree-branch.is-selected { stroke: #FFC627; stroke-width: 3.2; }
+.wse-tree-tip { cursor: pointer; outline: none; }
+.wse-tree-tip.is-filtered { opacity: .16; pointer-events: none; }
+.wse-tree-tip-label {
+  fill: #202124;
+  font-size: 12px;
+  font-weight: 700;
+}
+.wse-tree-tip-dot { stroke: #fff; stroke-width: 1.2; }
+.wse-tree-tip:hover .wse-tree-tip-label,
+.wse-tree-tip:focus-visible .wse-tree-tip-label,
+.wse-tree-tip.is-selected .wse-tree-tip-label {
+  fill: #8C1D40;
+  font-weight: 900;
+}
+.wse-tree-tip.is-selected .wse-tree-tip-dot {
+  r: 7;
+  stroke: #FFC627;
+  stroke-width: 3;
+}
+.wse-support-label { fill: #7a7f85; font-size: 9px; }
+.wse-tree-scale { stroke: #000; stroke-width: 2; }
+.wse-tree-scale-label { fill: #444; font-size: 10px; font-weight: 700; }
+.wse-empty,
+.wse-error {
+  color: #666;
+  font-size: .88rem;
+  padding: 1.3rem;
+  text-align: center;
+}
+.wse-footer-note {
+  color: #666;
+  font-size: .72rem;
+  margin-top: .7rem;
+  padding: 0 .15rem;
+}
+
+.wse-ebird-panel[hidden] { display: none; }
+.wse-ebird-legal {
+  border-top: 1px solid #e3d4da;
+  font-size: .85rem;
+  line-height: 1.5;
+  margin-top: 1.25rem;
+  padding-top: .9rem;
+}
+.wse-ebird-legal p { margin: .4rem 0; overflow-wrap: anywhere; }
+.wse-ebird-legal summary { cursor: pointer; font-weight: 600; }
+.wse-ebird-legal pre {
+  font: inherit;
+  max-height: 28rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wse-ebird-note {
+  color: #555;
+  font-size: .88rem;
+  line-height: 1.5;
+  margin: .25rem 0 1rem;
+}
+.wse-ebird-grid { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+.wse-ebird-card {
+  background: #faf7f8;
+  border: 1px solid #e3d4da;
+  border-radius: .7rem;
+  color: #202124;
+  display: grid;
+  gap: .35rem;
+  padding: .9rem;
+}
+.wse-ebird-card.is-selected { border-color: #8C1D40; box-shadow: inset 0 0 0 1px #8C1D40; }
+.wse-ebird-card-heading { align-items: center; display: flex; justify-content: space-between; }
+.wse-ebird-card-heading span { color: #8C1D40; font-size: 1.5rem; font-weight: 900; }
+.wse-ebird-card small { color: #555; line-height: 1.45; overflow-wrap: anywhere; }
+.wse-ebird-track { background: #e8dce1; border-radius: 999px; height: .4rem; overflow: hidden; }
+.wse-ebird-track span { background: #8C1D40; display: block; height: 100%; }
+
+@media (max-width: 1100px) {
+  .wse-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .wse-main-grid { grid-template-columns: 1fr; }
+  .wse-tree { max-height: 620px; }
+}
+@media (max-width: 760px) {
+  .wse-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .wse-selected { grid-template-columns: 8px minmax(0,1fr); }
+  .wse-selected-tags,
+  .wse-report-link { grid-column: 2; justify-self: start; }
+  .wse-selected-tags { justify-content: flex-start; }
+}
+@media (max-width: 540px) {
+  .wse-shell { padding: .8rem; }
+  .wse-metrics { grid-template-columns: 1fr; }
+  .wse-panel-heading { flex-direction: column; }
+  .wse-panel-note { text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wse-sample-mark,
+  .wse-map-bubble { transition: none; }
+}
+
+/* Keep the active segment label visible across browser/Quarto button styles. */
+.wse-segment-tab.is-active {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+}
+
+/* Linked eight-segment evidence and trees. */
+.wse-genome-panel { margin-bottom: 1rem; }
+.wse-genome-evidence, .wse-tree-grid { padding: .8rem; }
+.wse-genome-panel [hidden] { display: none !important; }
+.wse-main-grid { grid-template-columns: minmax(0, 1fr); }
+.wse-tree-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.wse-segment-tree { border: 1px solid #ddd; border-radius: .65rem; padding: .8rem; min-width: 0; }
+.wse-segment-tree h4 { margin: 0; color: #8C1D40; font-size: 1.05rem; }
+.wse-segment-tree .wse-tree { max-height: 310px; }
+.wse-segment-tree .wse-tree svg { min-width: 540px; }
+.wse-tree-presence { font-size: .8rem; color: #555; margin: .4rem 0; }
+.wse-genotype { display: grid; gap: .3rem; margin: .5rem 0 1rem; padding: .8rem; background: #faf7f8; border-left: 4px solid #8C1D40; overflow-wrap: anywhere; }
+.wse-genotype span, .wse-evidence-note, .wse-filter-notice { font-size: .8rem; color: #555; }
+.wse-evidence-note { margin: .8rem 0; }
+.wse-filter-notice { background: #fff4cc; padding: .6rem; }
+.wse-evidence-scroll { overflow: auto; }
+.wse-evidence-table { border-collapse: collapse; font-size: .78rem; width: 100%; min-width: 780px; }
+.wse-evidence-table caption { caption-side: top; text-align: left; color: #333; font-weight: 700; padding: .4rem 0; }
+.wse-evidence-table th, .wse-evidence-table td { border-bottom: 1px solid #ddd; text-align: left; vertical-align: top; padding: .65rem .5rem; }
+.wse-evidence-table thead { background: #f4f4f4; }
+.wse-evidence-table details { max-width: 23rem; }
+.wse-evidence-table details div { min-width: 14rem; padding-top: .4rem; overflow-wrap: anywhere; }
+.wse-evidence-table summary { cursor: pointer; color: #8C1D40; font-weight: 700; }
+.wse-qc { display: inline-block; border-radius: .3rem; padding: .15rem .35rem; font-size: .7rem; font-weight: 700; }
+.wse-qc-pass { background: #e5f3e8; color: #176B3A; }
+.wse-qc-fail { background: #fce8e6; color: #a32119; }
+.wse-qc-unknown { background: #f2eee2; color: #655400; }
+.wse-tree-tip.is-filtered.is-selected { opacity: 1; pointer-events: auto; }
+.wse-tree-tip.is-hovered .wse-tree-tip-label { text-decoration: underline; }
+.wse-genome-panel :focus-visible { outline: 2px solid #8C1D40; outline-offset: 2px; }
+.wse-genome-controls { display: flex; flex-wrap: wrap; gap: .8rem; align-items: end; padding: .8rem; background: #f7f7f7; }
+.wse-genome-controls label { display: grid; gap: .3rem; min-width: 0; font-size: .78rem; font-weight: 700; }
+.wse-genome-controls select { max-width: 100%; padding: .5rem; border: 1px solid #aeb4bc; border-radius: .4rem; background: #fff; color: #202124; }
+.wse-clear-selection { padding: .5rem .8rem; border: 1px solid #8C1D40; border-radius: .4rem; background: #fff; color: #8C1D40; cursor: pointer; }
+.wse-clear-selection:hover { background: #faf0f3; }
+@media (max-width: 900px) { .wse-tree-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Immediate feedback for map selection and colocated samples. */
+.wse-map-selection { margin: .6rem .9rem; padding: .75rem .9rem; background: #f8f8fa; border: 1px solid #d7dbe0; border-radius: .5rem; font-size: .85rem; overflow-wrap: anywhere; }
+.wse-map-selection p { margin: .3rem 0; }
+.wse-map-selection-heading { color: #202124; }
+.wse-map-sample-choices { display: flex; flex-wrap: wrap; gap: .4rem; margin: .55rem 0; }
+.wse-map-sample-choice { cursor: pointer; border: 1px solid #777; border-radius: .35rem; padding: .4rem .6rem; background: white; color: #202124; font: inherit; overflow-wrap: anywhere; max-width: 100%; }
+.wse-map-sample-choice[aria-pressed="true"] { background: #8c1d40; border-color: #8c1d40; color: white; font-weight: 700; }
+.wse-map-sample-choice:focus-visible { outline: 3px solid #202124; outline-offset: 2px; }
+.wse-map-cluster.is-selected .wse-map-halo { stroke: #202124; stroke-width: 2; }
+.wse-map-cluster.is-selected .wse-map-bubble { opacity: 1; stroke: #FFC627; stroke-width: 6; }
+.wse-map-report-link { display: inline-block; margin-top: .35rem; font-weight: 700; }
+
+/* Offline map navigation; ordinary wheel scrolling remains page scrolling. */
+.wse-map-toolbar { flex-wrap: wrap; gap: .6rem; }
+.wse-map-navigation { display: flex; gap: .3rem; }
+.wse-map-navigation button { border: 1px solid #aeb4bc; border-radius: .35rem; background: white; color: #202124; padding: .4rem .6rem; min-width: 36px; min-height: 36px; font: inherit; cursor: pointer; }
+.wse-map-help { flex-basis: 100%; font-size: .75rem; color: #555; }
+.wse-map { overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
+.wse-map.is-panning, .wse-map.is-panning * { cursor: grabbing; }
+.wse-map:focus-visible, .wse-map-navigation button:focus-visible { outline: 3px solid #8c1d40; outline-offset: -3px; }
+
+/* Dated APHIS context, separate from WINGS samples and their evidence. */
+.wse-outbreak-body { padding: .7rem 1rem 1rem; }
+.wse-outbreak-body p { font-size: .85rem; margin: .6rem 0; }
+.wse-outbreak-caution { border-left: 4px solid #8c1d40; padding: .5rem .75rem; background: #fcf6f8; }
+.wse-outbreak-controls { display: flex; flex-wrap: wrap; gap: .7rem 1rem; margin: 1rem 0; }
+.wse-outbreak-controls label { display: flex; align-items: center; gap: .35rem; font-size: .8rem; }
+.wse-outbreak-controls input, .wse-outbreak-controls select, .wse-outbreak-pagination button { font: inherit; padding: .4rem; border: 1px solid #aeb4bc; border-radius: .3rem; background: white; color: #202124; }
+.wse-outbreak-map svg, .wse-outbreak-timeline svg { width: 100%; height: auto; display: block; overflow: hidden; }
+.wse-outbreak-state { cursor: pointer; }
+.wse-outbreak-state:hover, .wse-outbreak-state:focus-visible, .wse-outbreak-state[aria-pressed="true"] { stroke: #8c1d40; stroke-width: 2.5; outline: none; }
+.wse-outbreak-scale, .wse-outbreak-map-key, .wse-outbreak-timeline-note { color: #555; }
+.wse-outbreak-axis { font: 12px system-ui, sans-serif; fill: #42484f; }
+.wse-outbreak-gridline { stroke: #d8dde1; }
+.wse-outbreak-bar { fill: #147d78; cursor: pointer; }
+.wse-outbreak-bar:hover, .wse-outbreak-bar:focus-visible { fill: #8c1d40; outline: none; }
+.wse-outbreak-sample-date { stroke: #8c1d40; stroke-width: 2; stroke-dasharray: 5 3; pointer-events: none; }
+.wse-outbreak-sample-label { display: flex; align-items: baseline; gap: .6rem; margin: .8rem 0 .2rem; color: #8c1d40; font-size: .9rem; overflow-wrap: anywhere; }
+.wse-outbreak-sample-swatch { display: inline-block; flex: 0 0 1.8rem; border-top: 2px dashed #8c1d40; align-self: center; }
+.wse-outbreak-records, .wse-outbreak-provenance { margin-top: .8rem; padding: .65rem; border: 1px solid #d8dde1; border-radius: .4rem; }
+.wse-outbreak-records summary, .wse-outbreak-provenance summary { cursor: pointer; font-weight: 700; }
+.wse-outbreak-table-wrap { overflow-x: auto; }
+.wse-outbreak-records table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.wse-outbreak-records th, .wse-outbreak-records td { text-align: left; vertical-align: top; border-bottom: 1px solid #d8dde1; padding: .55rem; }
+.wse-outbreak-records td small { display: block; color: #555; }
+.wse-outbreak-pagination { display: flex; gap: 1rem; align-items: center; justify-content: center; margin-top: .75rem; }
+.wse-outbreak-provenance { overflow-wrap: anywhere; }
+
+/* Shared sample / APHIS map: independent symbols and geographic scope. */
+.wse-map-layers { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .6rem .9rem; font-size: .8rem; align-items: center; }
+.wse-map-layers[hidden], .wse-map-layer-legend[hidden] { display: none; }
+.wse-map-layers label { font-weight: 700; }
+.wse-map-layer-legend { padding: .6rem .9rem; background: #f7faf9; font-size: .78rem; line-height: 1.5; }
+.wse-map-layer-legend > div + div { margin-top: .3rem; }
+.wse-aphis-gradient { display: inline-block; vertical-align: middle; width: 5rem; height: .7rem; margin: 0 .3rem; background: linear-gradient(to right, hsl(178 48% 88%), hsl(178 48% 35%)); }
+.wse-map [data-context-state="true"] { stroke: #30363c; stroke-width: 2; stroke-dasharray: 5 3; }
+.wse-map [data-sample-state="true"] { stroke: #8c1d40; stroke-width: 3; stroke-dasharray: none; }
+.wse-map-navigation button:disabled { opacity: .45; cursor: default; }
+.wse-map-panel > .wse-outbreak-panel { border-top: 1px solid #d8dde1; margin-top: .6rem; }
+
+.wse-map-navigation { flex-wrap: wrap; }
+
+.wse-context-state-outline { fill: none; stroke: #30363c; stroke-width: 2; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; }
+.wse-sample-state-outline { fill: none; stroke: #8c1d40; stroke-width: 3; vector-effect: non-scaling-stroke; }
+
+/* State-click feedback stays visible alongside the map. */
+.wse-map-frame { position: relative; }
+.wse-map-state-card { position: absolute; z-index: 2; top: .75rem; left: .9rem; width: min(17rem, calc(100% - 1.8rem)); box-sizing: border-box; padding: .85rem; border: 1px solid #aeb4bc; border-radius: .5rem; background: white; color: #202124; box-shadow: 0 2px 12px #0002; font-size: .8rem; line-height: 1.35; }
+.wse-map-state-card[hidden] { display: none; }
+.wse-map-state-card > strong { display: block; font-size: 1rem; padding-right: 1.5rem; }
+.wse-map-state-card p { margin: .5rem 0; }
+.wse-state-card-value { font-weight: 700; color: #126c67; margin-top: .4rem; font-size: .95rem; }
+.wse-state-card-close { position: absolute; top: .3rem; right: .3rem; border: none; padding: .25rem .5rem; background: transparent; font-size: 1.25rem; cursor: pointer; color: #202124; }
+.wse-state-card-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.wse-state-card-actions button { font: inherit; padding: .35rem .5rem; border: 1px solid #999; border-radius: .3rem; background: #fafafa; color: #202124; cursor: pointer; }
+.wse-map-state-card button:focus-visible { outline: 3px solid #8c1d40; outline-offset: 1px; }
+@media (max-width: 540px) { .wse-map-state-card { position: relative; top: auto; left: auto; width: auto; margin: .5rem .9rem; } }
+
+/* Ecological sources share chart bounds, while retaining their own units. */
+.wse-ecology-panel { margin-top: 1rem; }
+.wse-ecology-panel .wse-panel-heading { flex-wrap: wrap; gap: .7rem; }
+.wse-ecology-panel select { padding: .3rem; border: 1px solid #aeb4bc; border-radius: .3rem; background: white; }
+.wse-ecology-intro, .wse-ecology-provenance { padding: .3rem 1rem; }
+.wse-ecology-intro p + p, .wse-ecology-provenance { font-size: .87rem; color: #555; }
+.wse-ecology-source { padding: .75rem 1rem; border-top: 1px solid #dfe3e8; }
+.wse-ecology-source h4 { margin: .2rem 0 .8rem; font-size: 1.05rem; }
+.wse-ecology-source p { font-size: .87rem; line-height: 1.5; }
+.wse-ecology-source .wse-ebird { padding: 0; }
+.wse-ecology-source details { margin: .7rem 0; font-size: .85rem; }
+.wse-ecology-source summary, .wse-ecology-provenance summary { cursor: pointer; }
+.wse-ecology-source code, .wse-ecology-provenance code { overflow-wrap: anywhere; }
+.wse-ecology-plot { display: block; width: 100%; height: auto; }
+.wse-ecology-table { overflow-x: auto; max-height: 20rem; }
+.wse-ecology-table table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.wse-ecology-table td, .wse-ecology-table th { padding: .4rem .6rem; text-align: left; border-bottom: 1px solid #e4e7eb; }
+@media (max-width: 600px) { .wse-ecology-source { padding: .6rem; } .wse-ecology-panel .wse-panel-heading { align-items: flex-start; } }
+/* Public reference metadata are separate from WINGS sample QC. */
+.wse-reference-details { margin: .8rem 0; font-size: .82rem; }
+.wse-reference-empty, .wse-reference-legend { color: #5f6368; }
+.wse-reference-card { border: 1px solid #007c83; border-left: 5px solid #007c83; border-radius: .5rem; padding: .9rem; background: #f5fbfb; }
+.wse-reference-card h4 { margin: 0 0 .5rem; }
+.wse-reference-card p { margin: .45rem 0; }
+.wse-reference-segments { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .6rem; margin-top: .8rem; }
+.wse-reference-segments > div { display: flex; flex-direction: column; gap: .35rem; padding: .6rem; background: #fff; border: 1px solid #c8dede; border-radius: .3rem; overflow-wrap: anywhere; }
+.wse-reference-provenance { margin-top: .7rem; color: #454b50; overflow-wrap: anywhere; }
+.wse-reference-provenance summary { cursor: pointer; }
+.wse-reference-provenance code { font-size: .72rem; white-space: normal; }
+.wse-public-tip.is-selected .wse-tree-tip-dot { stroke: #003c40; stroke-width: 3; }
+.wse-tree-tip[role="img"] { cursor: default; }
+
+/* WINGS_BRAID_CLOCK_CSS_BEGIN */
+@@WINGS:scripts/report/genome-braid-clock.css@@
+/* WINGS_BRAID_CLOCK_CSS_END */
+
+
+
+
+/* WINGS_TREE_STUDIO_CSS_BEGIN */
+@@WINGS:scripts/report/tree-studio.css@@
+/* WINGS_TREE_STUDIO_CSS_END */
+
+/* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_BEGIN */
+.wse-coverage{display:grid;gap:1rem;color:#263b43}.wse-coverage-head{display:flex;justify-content:space-between;align-items:start}.wse-coverage-head h3{margin:.1rem 0 0;font-size:1.45rem}.wse-coverage-kicker{font-size:.68rem;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:#007c83}.wse-coverage-note,.wse-coverage-caution,.wse-signal-interpretation{margin:0;color:#5f7178;line-height:1.5}.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}.wse-coverage-card{display:grid;gap:.2rem;padding:.85rem;border:1px solid #d7e0e1;border-radius:.6rem;background:#fbfdfd}.wse-coverage-card span{font-size:.7rem;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:#61747b}.wse-coverage-card strong{font-size:1.55rem;color:#263b43}.wse-coverage-card small{color:#6a7b81;line-height:1.35}.wse-coverage-section{display:grid;gap:.75rem;padding:1rem;border:1px solid #d8e0e1;border-radius:.7rem;background:#fff}.wse-coverage-section h4{margin:0;color:#30464e}.wse-coverage-empty{margin:0;padding:.8rem;background:#f5f8f8;border:1px dashed #bfd0d0;border-radius:.5rem;color:#5f7178}.wse-coverage-table{width:100%;border-collapse:collapse;font-size:.78rem}.wse-coverage-table th,.wse-coverage-table td{padding:.55rem;border-bottom:1px solid #e2e8e8;text-align:left}.wse-coverage-table th{background:#f5f8f8;color:#4c6068}.wse-signal-interpretation{font-weight:700;color:#30464e}@media(max-width:900px){.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.wse-coverage-cards,.wse-coverage-funnel,.wse-signal-summary{grid-template-columns:1fr}.wse-coverage-section{overflow-x:auto}}
+/* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_END */
+
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_BEGIN */
+@@WINGS:scripts/report/genomic-ecological-concordance.css#base@@
+/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_END */
+
+/* WINGS_COMPACT_CONCORDANCE_SUMMARY_BEGIN */
+@@WINGS:scripts/report/genomic-ecological-concordance.css#summary@@
+/* WINGS_COMPACT_CONCORDANCE_SUMMARY_END */
+
+@@WINGS:scripts/report/genomic-ecological-concordance.css#takeaway@@
+
+/* WINGS_COMPACT_OUTBREAK_CONTEXT_BEGIN */
+.wse-outbreak-takeaway {
+  margin:.75rem 0 .8rem !important;
+  padding:.15rem 0;
+  color:#263b43;
+  font-size:.95rem !important;
+  line-height:1.45;
+}
+
+.wse-outbreak-takeaway strong {
+  color:#263b43;
+  font-weight:800;
+}
+
+.wse-outbreak-primary-controls {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:.6rem 1rem;
+  margin:.65rem 0 .55rem;
+}
+
+.wse-outbreak-primary-controls label {
+  display:flex;
+  align-items:center;
+  gap:.4rem;
+  font-size:.8rem;
+  font-weight:700;
+}
+
+.wse-outbreak-primary-controls select {
+  font:inherit;
+  font-weight:400;
+  padding:.35rem .45rem;
+  border:1px solid #aeb4bc;
+  border-radius:.3rem;
+  background:white;
+  color:#202124;
+}
+
+.wse-outbreak-advanced,
+.wse-outbreak-about {
+  margin:.45rem 0 .7rem;
+}
+
+.wse-outbreak-advanced > summary,
+.wse-outbreak-about > summary {
+  cursor:pointer;
+  color:#52656d;
+  font-size:.78rem;
+  font-weight:700;
+}
+
+.wse-outbreak-advanced .wse-outbreak-controls {
+  margin:.55rem 0 .25rem;
+  padding:.55rem .65rem;
+  background:#f7f9f9;
+  border-radius:.4rem;
+}
+
+.wse-outbreak-about-body {
+  margin-top:.45rem;
+  padding:.45rem .65rem;
+  background:#f7f9f9;
+  border-radius:.4rem;
+  color:#596a71;
+}
+
+.wse-outbreak-about-body p {
+  margin:.4rem 0;
+  font-size:.78rem;
+  line-height:1.4;
+}
+/* WINGS_COMPACT_OUTBREAK_CONTEXT_END */
+
+/* WINGS_OUTBREAK_PERIOD_SELECTION_BEGIN */
+.wse-outbreak-bar.is-selected {
+  fill:#8c1d40;
+  stroke:#5c102a;
+  stroke-width:2px;
+}
+
+.wse-outbreak-period-filter {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:.45rem .8rem;
+  margin:.45rem 0 .6rem;
+  padding:.45rem .6rem;
+  border-radius:.4rem;
+  background:#f7f9f9;
+  color:#52656d;
+  font-size:.78rem;
+}
+
+.wse-outbreak-period-filter button {
+  border:1px solid #8c1d40;
+  border-radius:.3rem;
+  padding:.3rem .5rem;
+  background:white;
+  color:#8c1d40;
+  font:inherit;
+  font-weight:700;
+  cursor:pointer;
+}
+/* WINGS_OUTBREAK_PERIOD_SELECTION_END */
+
+/* WINGS_EXPLORER_TABS_CSS_BEGIN */
+@@WINGS:scripts/report/explorer-tabs.css@@
+/* WINGS_EXPLORER_TABS_CSS_END */
+.wse-evidence-synthesis { min-width: 0; margin: 0 0 1rem; padding: 1.25rem; border: 1px solid #bdceca; border-radius: 12px; background: #f5faf8; color: #163c37; overflow-wrap: anywhere; }
+.wse-evidence-synthesis[hidden] { display: none !important; }
+.wse-evidence-synthesis h2 { margin: .15rem 0 1rem; font-size: 1.4rem; line-height: 1.35; }
+.wse-evidence-kicker { margin: 0; color: #47716a; font-size: .75rem; font-weight: 750; letter-spacing: .12em; }
+.wse-evidence-findings-title { margin: 0 0 .6rem; font-size: 1rem; line-height: 1.4; }
+/* Narrative and source findings use full-width rows, including on small screens. */
+.wse-evidence-story { display: grid; grid-template-columns: minmax(0,1fr); gap: .75rem; }
+.wse-evidence-story > section, .wse-evidence-meaning { min-width: 0; padding: .85rem; border-radius: 8px; background: #fff; }
+.wse-evidence-story h3, .wse-evidence-meaning h3, .wse-evidence-action h3 { margin: 0 0 .35rem; font-size: .95rem; }
+.wse-evidence-story p, .wse-evidence-meaning p, .wse-evidence-action p { margin: 0; line-height: 1.45; }
+.wse-evidence-action ul { margin: 0; padding-left: 1.2rem; }
+.wse-evidence-action li + li { margin-top: .35rem; }
+.wse-evidence-bullets { margin: 0; padding-left: 1.25rem; line-height: 1.5; }
+.wse-evidence-bullets li + li { margin-top: .45rem; }
+.wse-evidence-meaning { margin: 0 0 1rem; border-left: 4px solid #FFC627; }
+.wse-evidence-action { margin-top: .8rem; padding: 1rem; border-left: 5px solid #2b786b; background: #e6f2ed; }
+.wse-evidence-scope, .wse-evidence-synthesis small { display: block; font-size: .85rem; margin: .75rem 0; }
+.wse-evidence-meaning .wse-evidence-scope { margin: .8rem 0 0; color: #47716a; }
+.wse-evidence-synthesis :focus-visible { outline: 3px solid #216b79; outline-offset: 3px; }
