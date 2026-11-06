@@ -18,8 +18,9 @@
     days:Number($('contextDays').value),network:$('contextNetwork').checked,
     phenology:$('contextPhenology').checked,phenology_year:Number($('contextYear').value),
     ebird_package:$('contextPackage').value.trim(),ebird_source:$('contextSource').value.trim(),
-    all_species_confirmed:$('contextCoverage').checked,outbreak_file:$('contextOutbreak').value.trim(),
-    global_genotypes:$('contextGlobal').checked,required:[]
+    all_species_confirmed:$('contextCoverage').checked,outbreak_file:'',
+    // Keep the full public reference available; users filter it in the report.
+    global_genotypes:true,required:[]
   });
   async function input() {
     const file = $('metadataFile').files[0];
@@ -47,7 +48,7 @@
     const number = key => Number.isInteger(record[key]) && record[key]>=0;
     if(name==='ecology' && number('weather_ready') && number('migration_ready') && number('sample_count')) return `Weather ${record.weather_ready}/${record.sample_count} · Migration ${record.migration_ready}/${record.sample_count}`;
     if(name==='phenology' && number('ready_profiles') && number('sample_count')) return `${record.ready_profiles}/${record.sample_count} profiles available`;
-    if(name==='public_genotypes' && number('included_runs')) return `${record.included_runs} public SRA records`;
+    if(name==='public_genotypes' && number('included_runs')) return `${record.included_runs} public sequencing runs`;
     if(name==='outbreak' && record.status==='READY') {
       const date=/^\d{4}-\d{2}-\d{2}/.exec(record.retrieved_at || record.snapshot_date || '')?.[0];
       const basis=record.retrieved_at?'Retrieved':'Snapshot';
@@ -65,18 +66,13 @@
       const state=$('contextState-'+name);state.textContent=labels[record.status] || 'Not prepared';
       state.dataset.tone=record.status==='READY'?'ready':['PARTIAL','NEEDS_IMPORT','NEEDS_ACCESS','UNAVAILABLE'].includes(record.status)?'attention':'neutral';
       if(name==='outbreak' && record.status==='READY') {
-        state.textContent=({download:'Downloaded',cache:'Cached snapshot',bundled:'Bundled snapshot',user:'Your CSV'})[record.source_mode] || 'Ready';
+        state.textContent=({download:'Ready',cache:'Cached snapshot',bundled:'Bundled snapshot',user:'Your CSV'})[record.source_mode] || 'Ready';
         if(record.source_mode==='cache' || record.source_mode==='bundled')state.dataset.tone='attention';
       }
       const count=$('contextCount-'+name);count.textContent=countText(name,record);count.hidden=!count.textContent;
       const action=$('contextAction-'+name);action.hidden=true;
-      if(selected && !preparing && ['NEEDS_IMPORT','NEEDS_ACCESS'].includes(record.status)) {
-        if(name==='ebird'){action.textContent='Import data';action.hidden=false;}
-        if(name==='outbreak'){action.textContent='Supply snapshot';action.hidden=false;}
-        if(name==='phenology'){action.textContent='Set up access';action.hidden=false;}
-      }
-      if(name==='outbreak' && selected && !preparing && record.status==='UNAVAILABLE') {
-        action.textContent='Use your CSV';action.hidden=false;
+      if(name==='ebird' && selected && !preparing && record.status==='NEEDS_IMPORT') {
+        action.textContent='Import data';action.hidden=false;
       }
     }
   }
@@ -94,26 +90,37 @@
     else if(['FAILED','BLOCKED','INTERRUPTED'].includes(data.status)) status.textContent='Preparation could not finish. Check the runner log, then try again.';
   }
   function showRequest(request) {
-    const groups=new Map();
-    for(const w of request.windows || []) {
-      const key=JSON.stringify([w.country,w.state]);
-      if(!groups.has(key))groups.set(key,[]);
-      groups.get(key).push({...w});
-    }
-    const windows=[];
-    for(const list of groups.values()) {
-      list.sort((a,b)=>a.date_from.localeCompare(b.date_from));let current;
-      for(const w of list) {
-        if(current && Date.parse(w.date_from)<=Date.parse(current.date_to)+86400000) {
-          if(w.date_to>current.date_to)current.date_to=w.date_to;
-        } else {current={...w};windows.push(current);}
-      }
-    }
     const target=$('contextRequest');target.replaceChildren();
-    const text=document.createElement('p');text.textContent=windows.length?'Required regions and dates:':'Provide collection dates and regions to plan an eBird request.';target.append(text);
-    const list=document.createElement('ul');
-    for(const w of windows){const item=document.createElement('li');item.textContent=`${w.country} / ${w.state}: ${w.date_from} through ${w.date_to}`;list.append(item);}
-    target.append(list);
+    const windows=Array.isArray(request.windows)?request.windows:[];
+    const text=document.createElement('p');target.append(text);
+    if(!windows.length) {
+      text.textContent='Provide collection dates and regions to plan an eBird request.';
+      return;
+    }
+    const validDate=value=>typeof value==='string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value;
+    if(windows.some(w=>!w || !validDate(w.date_from) || !validDate(w.date_to) || w.date_from>w.date_to)) {
+      text.textContent='Update collection dates and prepare context again to plan an eBird download.';
+      return;
+    }
+    // eBird accepts one inclusive month/year range. Keep exact matching windows unchanged.
+    const first=windows.reduce((date,w)=>w.date_from<date?w.date_from:date,windows[0].date_from);
+    const last=windows.reduce((date,w)=>w.date_to>date?w.date_to:date,windows[0].date_to);
+    const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const monthLabel=date=>`${months[Number(date.slice(5,7))-1]} ${date.slice(0,4)}`;
+    text.textContent='On eBird, select “Choose date range”:';
+    const dates=document.createElement('div');dates.className='context-settings-grid';
+    for(const [label,date] of [['From',first],['To',last]]) {
+      const row=document.createElement('p');
+      const title=document.createElement('strong');title.textContent=label+': ';
+      const value=document.createElement('span');value.textContent=monthLabel(date);
+      row.append(title,value);dates.append(row);
+    }
+    const regions=[...new Set(windows.map(w=>[w.country,w.state].filter(v=>typeof v==='string' && v.trim()).join(' / ')))].filter(Boolean).sort();
+    const places=document.createElement('p');places.textContent='Regions: '+regions.join('; ');
+    const note=document.createElement('p');note.className='context-note';
+    note.textContent='WINGS filters the download to each sample’s original matching window.';
+    target.append(dates,places,note);
   }
   async function review() {
     const value=await input();
@@ -183,8 +190,6 @@
   $('contextSetup').addEventListener('input',invalidate);
   $('metadataFile').addEventListener('change',()=>{invalidate();$('contextRequest').textContent='Prepare context to determine the required regions and dates.';});
   $('contextAction-ebird').addEventListener('click',()=>openSettings('contextEbirdImport','contextSource'));
-  $('contextAction-phenology').addEventListener('click',()=>openSettings('contextPhenologyAccess'));
-  $('contextAction-outbreak').addEventListener('click',()=>openSettings('contextAphisImport','contextOutbreak'));
   $('contextPrepare').addEventListener('click',()=>prepareOnly().catch(report));
   renderCards();
   window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings};

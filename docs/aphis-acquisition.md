@@ -1,8 +1,8 @@
 # Automatic APHIS context
 
 Select **APHIS detections** and **Allow context downloads**, then select
-**Prepare context**. No file selection is needed. Clear any previous CSV override
-to use automatic retrieval. No sample metadata is sent to APHIS.
+**Prepare context**. The launcher uses automatic acquisition and provides no manual
+CSV chooser. No sample metadata is sent to APHIS.
 
 WINGS retrieves the full CSV once per preparation from
 https://www.aphis.usda.gov/sites/default/files/hpai-wild-birds.csv.
@@ -12,10 +12,10 @@ HTTP failures, including 403 responses, are handled without replacing valid data
 
 | Card | Meaning |
 | --- | --- |
-| Downloaded | This preparation retrieved and validated the official CSV. |
+| Ready | This preparation retrieved and validated the official CSV. |
 | Cached snapshot | Uses a previously validated download; original retrieval date remains visible. |
 | Bundled snapshot | Uses the repository snapshot; its recorded import date remains visible. |
-| Your CSV | Uses the explicit file selected in Advanced settings; no download occurs. |
+| Your CSV | Uses an explicit file supplied through terminal/API options; no download occurs. |
 | Unavailable | No usable source was found. Optional APHIS context does not block sequencing. |
 
 With downloads disabled, preparation makes no APHIS request. WINGS tries a valid
@@ -40,8 +40,8 @@ outcome, and any fallback reason. A failed refresh never changes the original
 retrieval date. The Explorer payload carries acquisition metadata; the run's
 configuration pins these files. Reusing prepared context does not refresh it.
 
-**Advanced settings → Use your own APHIS CSV** remains available for offline or
-historical work. A supplied provenance sidecar must match the CSV hash. A missing
+Terminal/API callers can supply `outbreak_file` for offline or historical work.
+The browser has no CSV override section. A supplied provenance sidecar must match the CSV hash. A missing
 or invalid explicit override is reported rather than silently replaced. User CSVs
 never replace the official-download cache.
 

@@ -6,7 +6,7 @@
   <title>Run WINGS Pipeline</title>
   <meta name="description" content="Prepare, validate, launch, and monitor a local WINGS Snakemake run.">
   <link rel="stylesheet" href="assets/wings-portal.css">
-  <link rel="stylesheet" href="assets/wings-context-layout.css?v=3">
+  <link rel="stylesheet" href="assets/wings-context-layout.css?v=4">
 </head>
 <body>
 <header class="portal-header">
@@ -138,7 +138,7 @@
                 <div class="context-card-footer"><span id="contextState-phenology" class="context-badge">Not prepared</span><p id="contextCount-phenology" class="context-count" hidden></p><button id="contextAction-phenology" type="button" class="context-link" hidden></button></div>
               </article>
               <article class="context-card" data-provider="public_genotypes">
-                <label class="context-choice" for="contextGenotypes"><input id="contextGenotypes" type="checkbox" data-context-source="public_genotypes" checked><span><strong>Public genotypes</strong><span class="context-description">Compare with public records matched by host, region and month.</span></span></label>
+                <label class="context-choice" for="contextGenotypes"><input id="contextGenotypes" type="checkbox" data-context-source="public_genotypes" checked><span><strong>Public genotypes</strong><span class="context-description">Include the full public reference. Filter by host, location, and date in the report.</span></span></label>
                 <div class="context-card-footer"><span id="contextState-public_genotypes" class="context-badge">Not prepared</span><p id="contextCount-public_genotypes" class="context-count" hidden></p><button id="contextAction-public_genotypes" type="button" class="context-link" hidden></button></div>
               </article>
               <article class="context-card" data-provider="ebird">
@@ -160,9 +160,6 @@
                 <div class="field"><label for="contextDays">Days before and after collection</label><input id="contextDays" type="number" min="1" max="365" value="30"></div>
                 <div class="field"><label for="contextYear">eBird seasonal reference</label><select id="contextYear"><option value="2023">2023 — released 2025</option></select><p class="context-note">Supported reference for this WINGS version.</p></div>
               </div>
-              <label class="context-check"><input id="contextGlobal" type="checkbox"><span>Use a global public genotype comparison</span></label>
-              <p class="context-note">Public frequencies describe included SRA records, not population prevalence.</p>
-              <details id="contextPhenologyAccess" class="context-nested"><summary>Seasonal bird data access</summary><p>Use an approved eBird Status and Trends key in <code>EBIRDST_ACCESS_KEY</code> before starting the runner, or reuse cached rasters. The reference describes an annual cycle, not observed migration in the sample year.</p></details>
               <details id="contextEbirdImport" class="context-nested"><summary>Import eBird data</summary>
                 <p>Choose your extracted eBird download. WINGS automatically reuses compatible data it has prepared before.</p>
                 <div class="field"><label for="contextSource">Downloaded eBird folder</label>
@@ -174,15 +171,9 @@
                     <div class="context-picker-field"><button type="button" class="btn" data-context-pick="ebird_package" data-context-target="contextPackage">Choose folder…</button><input id="contextPackage" type="text" placeholder="Automatic cache reuse" aria-label="Previously prepared eBird data path"><button type="button" class="context-link" data-context-clear="contextPackage">Clear</button></div>
                   </div>
                 </details>
-                <label id="contextCoverageRow" class="context-check" hidden><input id="contextCoverage" type="checkbox"><span>This download includes all species and every requested region and date window.</span></label>
+                <label id="contextCoverageRow" class="context-check" hidden><input id="contextCoverage" type="checkbox"><span>This download includes all species, all listed regions, and the date range shown.</span></label>
                 <p><a href="https://ebird.org/data/download" target="_blank" rel="noopener">Request eBird data</a>: choose all species, include sampling-event data, and retain the terms and citation files. Use a release covering the dates below.</p>
                 <div id="contextRequest">Prepare context to determine the required regions and dates.</div>
-              </details>
-              <details id="contextAphisImport" class="context-nested"><summary>Use your own APHIS CSV (optional)</summary>
-                <p>With downloads allowed, WINGS retrieves the official APHIS CSV during preparation. If retrieval fails or downloads are off, it uses a validated saved snapshot and shows its date. Each run keeps its own copy.</p>
-                <p>Choose a CSV only to override automatic retrieval. Keep the original APHIS headers.</p>
-                <div class="field"><label for="contextOutbreak">Your APHIS CSV (optional)</label><div class="context-picker-field"><button type="button" class="btn" data-context-pick="aphis_csv" data-context-target="contextOutbreak">Choose CSV…</button><input id="contextOutbreak" type="text" placeholder="Automatic APHIS download" aria-label="APHIS CSV path"><button type="button" class="context-link" data-context-clear="contextOutbreak">Clear</button></div></div>
-                <a href="docs/outbreak-context.md">CSV format and provenance</a>
               </details>
             </details>
             <p id="contextPickerNotice" class="context-note" role="status" aria-live="polite" hidden></p>
@@ -295,7 +286,7 @@
 </main>
 
 <script src="assets/wings-context-picker.js?v=1"></script>
-<script src="assets/wings-context-setup.js?v=6"></script>
+<script src="assets/wings-context-setup.js?v=10"></script>
 <script src="assets/wings-run.js?v=20261103-browser-storage&wings_context=3"></script>
 </body>
 </html>

@@ -3,6 +3,9 @@
 The Metadata step uses the same card pattern as Analysis: a checkbox, a title,
 a short description, and a concise status. Checked means include the source.
 Unchecked means skip its acquisition and omit its evidence from the prepared run.
+Selecting **Public genotypes** automatically retains the full public reference.
+There is no separate global-comparison checkbox. Users can filter the reference
+by host, location, and date in the report; counts remain sequencing runs.
 
 One **Prepare context** action plans the scope and prepares the selected sources.
 Technical provider reasons and per-sample warning lists are not rendered in this
@@ -11,10 +14,13 @@ coverage, Import needed, Access key needed, Unavailable, or Not selected. Covera
 counts are structured provider metrics, not interpreted diagnostic text.
 
 Advanced settings contain matching windows, the supported seasonal reference,
-and folder/file chooser buttons. Local Macs use a native chooser; Linux and SSH
+and eBird folder chooser buttons. Local Macs use a native chooser; Linux and SSH
 sessions browse folders on the runner computer. Manual paths remain available.
 The download folder is the primary eBird import; prepared eBird data is a secondary
 option, and compatible caches are reused automatically by default.
+There are no separate seasonal-data access or manual APHIS CSV panels in this
+interface. Seasonal access requirements remain documented in the setup guide;
+APHIS uses automatic retrieval and validated cached/bundled fallback.
 There is no browser UI for required-source launch gates. Terminal callers retain
 that option. Missing optional data does not prevent genomic analysis. All sources
 can be unchecked; preparation still validates metadata and pins an explicit empty
