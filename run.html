@@ -6,6 +6,7 @@
   <title>Run WINGS Pipeline</title>
   <meta name="description" content="Prepare, validate, launch, and monitor a local WINGS Snakemake run.">
   <link rel="stylesheet" href="assets/wings-portal.css">
+  <link rel="stylesheet" href="assets/wings-context-layout.css?v=3">
 </head>
 <body>
 <header class="portal-header">
@@ -34,7 +35,7 @@
   </p>
 
   <div class="local-note">
-    <strong>Local-first:</strong> sequencing files and metadata are sent only to the WINGS runner on this computer and stored under your local WINGS run directory. They are not uploaded to the WINGS website or a remote service.
+    <strong>Local-first:</strong> sequencing files and metadata are sent only to the WINGS runner on this computer and stored under your local WINGS run directory. FASTQ files and the complete metadata file are not uploaded to the WINGS website. Context downloads can send selected coordinates, dates, regions, or species to their data providers when enabled.
   </div>
 
   <section id="savedRuns" class="panel" aria-labelledby="savedRunsTitle" hidden>
@@ -124,6 +125,78 @@
             </div>
           </div>
           <div id="metadataSummary" class="summary-box">No metadata file selected.</div>
+          <div id="contextSetup" class="context-panel">
+            <h3>Surveillance context</h3>
+            <p class="context-intro">Choose the sources to include in your report.</p>
+            <div class="context-card-grid">
+              <article class="context-card" data-provider="ecology">
+                <label class="context-choice" for="contextEcology"><input id="contextEcology" type="checkbox" data-context-source="ecology" checked><span><strong>Weather and migration</strong><span class="context-description">Weather and BirdCast activity matched to collection dates and locations.</span></span></label>
+                <div class="context-card-footer"><span id="contextState-ecology" class="context-badge">Not prepared</span><p id="contextCount-ecology" class="context-count" hidden></p><button id="contextAction-ecology" type="button" class="context-link" hidden></button></div>
+              </article>
+              <article class="context-card" data-provider="phenology">
+                <label class="context-choice" for="contextPhenology"><input id="contextPhenology" type="checkbox" data-context-source="phenology" checked><span><strong>Seasonal bird patterns</strong><span class="context-description">When bird abundance rises and falls through the year.</span></span></label>
+                <div class="context-card-footer"><span id="contextState-phenology" class="context-badge">Not prepared</span><p id="contextCount-phenology" class="context-count" hidden></p><button id="contextAction-phenology" type="button" class="context-link" hidden></button></div>
+              </article>
+              <article class="context-card" data-provider="public_genotypes">
+                <label class="context-choice" for="contextGenotypes"><input id="contextGenotypes" type="checkbox" data-context-source="public_genotypes" checked><span><strong>Public genotypes</strong><span class="context-description">Compare with public records matched by host, region and month.</span></span></label>
+                <div class="context-card-footer"><span id="contextState-public_genotypes" class="context-badge">Not prepared</span><p id="contextCount-public_genotypes" class="context-count" hidden></p><button id="contextAction-public_genotypes" type="button" class="context-link" hidden></button></div>
+              </article>
+              <article class="context-card" data-provider="ebird">
+                <label class="context-choice" for="contextEbird"><input id="contextEbird" type="checkbox" data-context-source="ebird" checked><span><strong>eBird observations and effort</strong><span class="context-description">Local bird observations and checklist sampling effort.</span></span></label>
+                <div class="context-card-footer"><span id="contextState-ebird" class="context-badge">Not prepared</span><p id="contextCount-ebird" class="context-count" hidden></p><button id="contextAction-ebird" type="button" class="context-link" hidden></button></div>
+              </article>
+              <article class="context-card" data-provider="outbreak">
+                <label class="context-choice" for="contextAphis"><input id="contextAphis" type="checkbox" data-context-source="outbreak" checked><span><strong>APHIS detections</strong><span class="context-description">Automatically retrieve reported wild-bird detections.</span></span></label>
+                <div class="context-card-footer"><span id="contextState-outbreak" class="context-badge">Not prepared</span><p id="contextCount-outbreak" class="context-count" hidden></p><button id="contextAction-outbreak" type="button" class="context-link" hidden></button></div>
+              </article>
+            </div>
+            <div class="context-consent">
+              <label class="context-check"><input id="contextNetwork" type="checkbox" checked><span><strong>Allow context downloads</strong><span class="context-description">Coordinates, dates, regions and species may be sent to providers.</span></span></label>
+            </div>
+            <div class="context-action-row"><button id="contextPrepare" type="button" class="btn context-primary">Prepare context</button><p id="contextStatus" role="status" aria-live="polite">Selected sources will be checked during preparation.</p></div>
+            <p class="context-note">Missing context will not prevent genomic analysis. Sequencing starts later.</p>
+            <details id="contextAdvanced" class="context-advanced"><summary>Advanced settings</summary>
+              <div class="context-settings-grid">
+                <div class="field"><label for="contextDays">Days before and after collection</label><input id="contextDays" type="number" min="1" max="365" value="30"></div>
+                <div class="field"><label for="contextYear">eBird seasonal reference</label><select id="contextYear"><option value="2023">2023 — released 2025</option></select><p class="context-note">Supported reference for this WINGS version.</p></div>
+              </div>
+              <label class="context-check"><input id="contextGlobal" type="checkbox"><span>Use a global public genotype comparison</span></label>
+              <p class="context-note">Public frequencies describe included SRA records, not population prevalence.</p>
+              <details id="contextPhenologyAccess" class="context-nested"><summary>Seasonal bird data access</summary><p>Use an approved eBird Status and Trends key in <code>EBIRDST_ACCESS_KEY</code> before starting the runner, or reuse cached rasters. The reference describes an annual cycle, not observed migration in the sample year.</p></details>
+              <details id="contextEbirdImport" class="context-nested"><summary>Import eBird data</summary>
+                <p>Choose your extracted eBird download. WINGS automatically reuses compatible data it has prepared before.</p>
+                <div class="field"><label for="contextSource">Downloaded eBird folder</label>
+                  <div class="context-picker-field"><button type="button" class="btn" data-context-pick="ebird_download" data-context-target="contextSource">Choose folder…</button><input id="contextSource" type="text" placeholder="No folder selected" aria-label="Downloaded eBird folder path"><button type="button" class="context-link" data-context-clear="contextSource">Clear</button></div>
+                </div>
+                <details class="context-nested"><summary>Use previously prepared eBird data</summary>
+                  <p>This is a reusable eBird dataset created by WINGS, containing observations, sampling effort, citations and coverage information. It is separate from your .wings report bundle.</p>
+                  <div class="field"><label for="contextPackage">Previously prepared eBird data</label>
+                    <div class="context-picker-field"><button type="button" class="btn" data-context-pick="ebird_package" data-context-target="contextPackage">Choose folder…</button><input id="contextPackage" type="text" placeholder="Automatic cache reuse" aria-label="Previously prepared eBird data path"><button type="button" class="context-link" data-context-clear="contextPackage">Clear</button></div>
+                  </div>
+                </details>
+                <label id="contextCoverageRow" class="context-check" hidden><input id="contextCoverage" type="checkbox"><span>This download includes all species and every requested region and date window.</span></label>
+                <p><a href="https://ebird.org/data/download" target="_blank" rel="noopener">Request eBird data</a>: choose all species, include sampling-event data, and retain the terms and citation files. Use a release covering the dates below.</p>
+                <div id="contextRequest">Prepare context to determine the required regions and dates.</div>
+              </details>
+              <details id="contextAphisImport" class="context-nested"><summary>Use your own APHIS CSV (optional)</summary>
+                <p>With downloads allowed, WINGS retrieves the official APHIS CSV during preparation. If retrieval fails or downloads are off, it uses a validated saved snapshot and shows its date. Each run keeps its own copy.</p>
+                <p>Choose a CSV only to override automatic retrieval. Keep the original APHIS headers.</p>
+                <div class="field"><label for="contextOutbreak">Your APHIS CSV (optional)</label><div class="context-picker-field"><button type="button" class="btn" data-context-pick="aphis_csv" data-context-target="contextOutbreak">Choose CSV…</button><input id="contextOutbreak" type="text" placeholder="Automatic APHIS download" aria-label="APHIS CSV path"><button type="button" class="context-link" data-context-clear="contextOutbreak">Clear</button></div></div>
+                <a href="docs/outbreak-context.md">CSV format and provenance</a>
+              </details>
+            </details>
+            <p id="contextPickerNotice" class="context-note" role="status" aria-live="polite" hidden></p>
+            <dialog id="contextFolderDialog" aria-labelledby="contextFolderTitle">
+              <h3 id="contextFolderTitle">Choose a folder</h3>
+              <p class="context-note">Browsing files on the computer running WINGS. Selecting a path does not upload or import data.</p>
+              <div class="field"><label for="contextFolderRoot">Location</label><select id="contextFolderRoot"></select></div>
+              <p id="contextFolderPath" class="context-folder-path"></p>
+              <p id="contextFolderMessage" role="status" aria-live="polite"></p>
+              <div class="context-folder-navigation"><button id="contextFolderUp" type="button" class="btn">Up one folder</button><button id="contextFolderPrevious" type="button" class="btn">Previous page</button><button id="contextFolderNext" type="button" class="btn">Next page</button></div>
+              <div id="contextFolderEntries" class="context-folder-entries" aria-label="Folders and CSV files"></div>
+              <div class="context-folder-actions"><button id="contextFolderCancel" type="button" class="btn">Cancel</button><button id="contextFolderUse" type="button" class="btn context-primary">Use this folder</button></div>
+            </dialog>
+          </div>
         </section>
 
         <section class="wizard-step" data-step-panel="3" hidden>
@@ -221,6 +294,8 @@
   </section>
 </main>
 
-<script src="assets/wings-run.js?v=20261103-browser-storage"></script>
+<script src="assets/wings-context-picker.js?v=1"></script>
+<script src="assets/wings-context-setup.js?v=6"></script>
+<script src="assets/wings-run.js?v=20261103-browser-storage&wings_context=2"></script>
 </body>
 </html>

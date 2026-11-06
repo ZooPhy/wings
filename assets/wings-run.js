@@ -419,11 +419,17 @@
     if (!response.ok) throw new Error((await response.text()) || `Upload failed: ${file.name}`);
   }
 
+  // WINGS_CONTEXT_STORAGE_V2: use the launcher's current storage revision.
+  window.WINGS_CONTEXT_SETUP.setCreateSettings(() => (
+    typeof storageRevision === "undefined" ? {} : {storage_revision: storageRevision}
+  ));
+
   async function startRun() {
     if (!preflightRows().every(row => row[0])) { renderPreflight(); return; }
     $("startRun").disabled = true;
     $("startRun").textContent = "Preparing local run…";
     try {
+      await window.WINGS_CONTEXT_SETUP.readyForRun();
       const create = await fetch(`${localOrigin}/api/runs`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -433,6 +439,7 @@
           max_parallel_jobs: Number($("maxParallelJobs").value || 1),
           storage_revision: storageRevision,
           options: {
+            context_setup: true,
             genoflu: $("optGenoflu").checked,
             vadr: $("optVadr").checked,
             phylogeny: $("optPhylogeny").checked,
@@ -445,12 +452,13 @@
       const created = await create.json();
       state.runId = created.run_id;
 
+      $("startRun").textContent = "Verifying prepared context…";
+      await uploadFile(state.runId, "metadata", state.metadata);
+      await window.WINGS_CONTEXT_SETUP.attach(state.runId);
       for (let i = 0; i < state.reads.length; i += 1) {
         $("startRun").textContent = `Copying FASTQ ${i + 1}/${state.reads.length}…`;
         await uploadFile(state.runId, "reads", state.reads[i]);
       }
-      $("startRun").textContent = "Copying metadata…";
-      await uploadFile(state.runId, "metadata", state.metadata);
 
       const launch = await fetch(`${localOrigin}/api/runs/${encodeURIComponent(state.runId)}/start`, {method: "POST"});
       if (!launch.ok) throw new Error(await launch.text());

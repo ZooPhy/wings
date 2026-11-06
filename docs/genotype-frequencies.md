@@ -66,7 +66,7 @@ To update a completed run's report and portable bundle using existing outputs:
 ```bash
 snakemake results/wings_report_bundle.wings \
   --cores 1 --use-conda \
-  --allowed-rules run_summary_html wings_report_bundle \
+  --allowed-rules public_genotype_snapshot run_summary_html wings_report_bundle \
   --forcerun run_summary_html wings_report_bundle
 ```
 
@@ -78,8 +78,9 @@ An older HTML or `.wings` file keeps its original contents until rebuilt.
 
 ## Automatic public-data refresh
 
-`run_summary_html` calls `scripts/refresh_genotype_frequencies.py` before embedding
-the chart. The default maximum age is seven days, measured from a successful
+`public_genotype_snapshot` prepares the public data before `run_summary_html`
+embeds the chart. For terminal runs without a prepared context selection, it
+calls the existing refresh adapter. The default maximum age is seven days, measured from a successful
 fetch or the snapshot's build time, not its filesystem modification time. Fresh
 snapshots are reused. Stale ones download both public metadata tables from one
 immutable source commit, validate their join and counts, and atomically replace
@@ -92,9 +93,11 @@ supplied snapshot is valid, the refresh fails rather than reporting empty data.
 The exact report copy is saved as
 `results/run_summary/public_genotype_frequencies.json` and embedded in the HTML.
 
-This check runs when a report is generated. It does not run in the background,
-on installation, when an existing report is opened, or when Snakemake has
-nothing to rebuild. Defaults need no configuration changes. An optional section
+The freshness check runs when the snapshot acquisition rule executes, not on
+every HTML rebuild. A prepared context selection is copied byte-for-byte with
+no refresh, including its original source date and availability. Prepare a new
+selection to change that evidence. Nothing is downloaded when an existing
+report is opened. Defaults need no configuration changes. An optional section
 for `config.yaml` is provided in
 [`config/genotype-frequencies.example.yaml`](../config/genotype-frequencies.example.yaml):
 
@@ -229,3 +232,6 @@ and iframe resizing.
 
 Source: [andersen-lab/avian-influenza](https://github.com/andersen-lab/avian-influenza).
 Metadata definitions: [metadata normalizer](https://github.com/andersen-lab/avian-influenza/blob/385108c26dd26e115af284ec6f8ef83022ea911b/scripts/metadata_normalizer.py).
+
+See [metadata-driven context setup](context-setup.md) for host/region/month
+selection, guided acquisition, and immutable per-run snapshots.

@@ -99,6 +99,7 @@ def main():
     # are extracted unchanged from the installed production Snakefile.
     constants='''REFERENCE_ENABLED = ECOLOGY_ENABLED = PHENOLOGY_ENABLED = SURVEILLANCE_EFFORT_ENABLED = OUTBREAK_ENABLED = RUN_GENOFLU = False
 FROZEN_PHENOLOGY = ""
+CONTEXT_SELECTION = ""
 SAMPLES = []
 def surveillance_tree_inputs(wildcards):
     return []

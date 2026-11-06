@@ -524,6 +524,9 @@ def build_outbreak_context(path, provenance_path=None):
         "source_url": APHIS_SOURCE_URL, "source_file": path.name, "sha256": digest,
         "snapshot_supplied_date": provenance.get("snapshot_supplied_date"),
         "snapshot_date_basis": provenance.get("snapshot_date_basis", "Not recorded"),
+        "retrieved_at": provenance.get("retrieved_at"),
+        "download_url": provenance.get("download_url"),
+        "acquisition": provenance.get("acquisition"),
         "record_count": len(records), "records": records, "states": US_STATES,
         "date_ranges": ranges, "undated_counts": invalid_dates,
         "repeated_rows_retained": repeated, "unmapped_states": sorted(unknown_states),
@@ -718,12 +721,30 @@ def build_payload(
     phenology: Path | None = None,
     surveillance_effort: Path | None = None,
     ebird_status: Path | None = None,
+    context_setup: Path | None = None,
 ) -> dict[str, Any]:
     metadata_rows = read_metadata(metadata)
     summary_rows = read_sample_summaries(summaries)
     samples = build_sample_records(metadata_rows, summary_rows)
     sample_ids = {sample["sample_id"] for sample in samples}
     tree_records, warnings = build_tree_records(trees, sample_ids)
+    context_status = None
+    if context_setup is not None:
+        selection = json.loads(Path(context_setup).read_text(encoding="utf-8"))
+        if selection.get("schema") != "wings.context-selection.v1":
+            raise ValueError("Unsupported context selection")
+        # Embed availability and query scope, without local paths or credentials.
+        context_status = {key: selection.get(key) for key in
+                          ("schema", "snapshot_id", "prepared_at", "status", "metadata_sha256")}
+        context_status["providers"] = {
+            name: {key: record.get(key) for key in ("status", "reason", "release", "source_mode",
+                                                  "refresh_status", "retrieved_at", "snapshot_date")}
+            for name, record in selection.get("providers", {}).items()
+        }
+        context_status["scope"] = selection.get("plan", {}).get("scopes", [])
+        for name, record in context_status["providers"].items():
+            if record["status"] != "READY":
+                warnings.append(name + " context " + str(record["status"]) + ": " + str(record["reason"]))
     references = None
     if reference_manifest is not None:
         import runpy
@@ -782,6 +803,7 @@ def build_payload(
         "trees": tree_records,
         "ebird_contexts": ebird_contexts,
         "ebird_attribution": ebird_attribution,
+        "context_setup": context_status,
         "ebird_status": package_status,
         "outbreak_context": build_outbreak_context(aphis_csv, aphis_provenance),
         "ecological_context": ecology,
@@ -892,6 +914,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ebird-terms", type=Path)
     parser.add_argument("--ebird-citation", type=Path)
     parser.add_argument("--ebird-status", type=Path)
+    parser.add_argument("--context-setup", type=Path)
     parser.add_argument("--coverage", type=Path, action="append", default=[],
                         help="Existing per-sample coverage TSV (repeat for each sample).")
     parser.add_argument("--genoflu", type=Path, action="append", default=[],
@@ -910,6 +933,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     if "snakemake" in globals():
         metadata, summaries, trees, output, ebird, terms, citation = _paths_from_snakemake()
+        context_inputs = list(getattr(snakemake.input, "context_setup", []))
+        context_setup = Path(context_inputs[0]) if context_inputs else None
         status_inputs = list(getattr(snakemake.input, "ebird_status", []))
         ebird_status = Path(status_inputs[0]) if status_inputs else None
         refs = list(getattr(snakemake.input, "reference_manifest", []))
@@ -932,6 +957,7 @@ def main() -> None:
         surveillance_effort = Path(surveillance_effort_inputs[0]) if surveillance_effort_inputs else None
     else:
         args = parse_args()
+        context_setup = args.context_setup
         ebird_status = args.ebird_status
         reference_manifest, reference_provenance, reference_loader = args.reference_manifest, args.reference_provenance, None
         metadata, summaries, trees, output, ebird, terms, citation = (
@@ -951,7 +977,7 @@ def main() -> None:
                             reference_manifest=reference_manifest, reference_provenance=reference_provenance,
                             reference_loader=reference_loader,
                             phenology=phenology, surveillance_effort=surveillance_effort,
-                            ebird_status=ebird_status)
+                            ebird_status=ebird_status, context_setup=context_setup)
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.

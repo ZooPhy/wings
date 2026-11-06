@@ -47,6 +47,22 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - Apple Silicon and Linux ARM64 support
 - Docker, Apptainer, Singularity, or local IRMA execution
 
+## Metadata-driven context setup
+
+In the local runner's **Metadata** step, check the source cards you want to include,
+then select **Prepare context**. WINGS derives geographic/date windows and host scope
+and prepares only the selected sources. Cards show concise availability and import
+actions; matching and import settings are under **Advanced settings**. Use
+**Choose folder…** to select eBird downloads; compatible cached data is reused
+automatically. **Seasonal bird patterns** uses the supported eBird reference
+(2023, released 2025). **APHIS detections** retrieves the official CSV when downloads
+are allowed, with a clearly labeled saved-snapshot fallback. Each run retains its
+CSV and provenance. A manual CSV is an optional override in Advanced settings. No
+assembly or polishing jobs run during preparation; paired samples are optional.
+Prepared context is pinned to the metadata and reused in the analysis and reports.
+See [context setup and acquisition](docs/context-setup.md), including terminal use,
+access requirements, missing-data behavior, and offline operation.
+
 ## Workflow
 
 ```text

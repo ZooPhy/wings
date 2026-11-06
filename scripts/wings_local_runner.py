@@ -23,6 +23,11 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+# Context helpers live beside this launcher (also supports import-by-path tests).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import context_setup
+import context_runner
+
 try:
     import yaml
 except ImportError as error:  # pragma: no cover
@@ -310,6 +315,8 @@ def build_config(run_id: str) -> tuple[Path, int]:
     phylogeny = dict(config.get("phylogeny") or {})
     phylogeny["enabled"] = bool(options.get("phylogeny", False))
     config["phylogeny"] = phylogeny
+    if options.get("context_setup"):
+        context_setup.configure(config, directory / "context", metadata)
 
     config_path = directory / "execution_config.yaml"
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
@@ -807,6 +814,8 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
     """Launch one browser-owned attempt, preserving existing configuration and logs."""
     with LOCK:
         state = read_state(run_id)
+        if context_runner.busy(run_id):
+            raise ValueError("Wait for context preparation and uploads to finish")
         process = PROCESSES.get(run_id)
         if process and process.poll() is None:
             raise ValueError("This run already has an active launcher process")
@@ -817,6 +826,8 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
         resume = resume or state.get("status") in {"failed", "stopped", "interrupted"}
         executable = runtime_preflight()
         directory = run_dir(run_id)
+        if resume and (state.get("options") or {}).get("context_setup"):
+            context_setup.configure({}, directory / "context", directory / "inputs" / "metadata.tsv")
         if resume:
             config_path = (directory / "execution_config.yaml").resolve()
             config_path.relative_to(directory)
@@ -825,7 +836,10 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
             sample_count = state.get("sample_count", 0)
         else:
             config_path, sample_count = build_config(run_id)
-        require_briefing_model(yaml.safe_load(config_path.read_text(encoding="utf-8")) or {})
+        saved_config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        if (state.get("options") or {}).get("context_setup"):
+            context_setup.validate_config(saved_config, directory / "inputs" / "metadata.tsv")
+        require_briefing_model(saved_config)
         attempts = list(state.get("attempts") or [])
         if resume and not attempts:
             attempts.append({
@@ -911,6 +925,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = self.parsed()
         try:
+            if context_runner.handle_get(self, globals()):
+                return
             if parsed.path == "/api/health":
                 snakemake = shutil.which("snakemake")
                 storage = storage_settings()
@@ -1021,6 +1037,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not match:
             self.error_response("Unknown endpoint", 404)
             return
+        reserved_run = None
         try:
             run_id = unquote(match.group(1))
             directory = run_dir(run_id)
@@ -1038,6 +1055,8 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ValueError("Content-Length is required")
             if kind == "metadata" and length > 25 * 1024 * 1024:
                 raise ValueError("Metadata file is unexpectedly large")
+            context_runner.reserve_upload(run_id, globals())
+            reserved_run = run_id
             destination = directory / "inputs" / ("reads" if kind == "reads" else "") / (filename if kind == "reads" else "metadata.tsv")
             destination.parent.mkdir(parents=True, exist_ok=True)
             temp = destination.with_name(f".{destination.name}.upload-{os.getpid()}")
@@ -1053,10 +1072,15 @@ class Handler(SimpleHTTPRequestHandler):
             self.json_response({"stored": str(destination), "size_bytes": destination.stat().st_size})
         except (OSError, ValueError) as error:
             self.error_response(str(error), 400)
+        finally:
+            if reserved_run is not None:
+                context_runner.finish_upload(reserved_run, globals())
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = self.parsed()
         try:
+            if context_runner.handle_post(self, globals()):
+                return
             if parsed.path == "/api/storage":
                 origin = self.headers.get("Origin")
                 expected_origin = f"http://{self.headers.get('Host', '')}"

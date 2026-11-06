@@ -1,0 +1,35 @@
+name: Metadata-driven context setup
+on:
+  push:
+    branches: [main]
+    paths: ['Snakefile', 'scripts/**', 'assets/wings-context-*.js', 'assets/wings-context-layout.css', 'assets/wings-run.js', 'run.html', 'tests/**', '.github/workflows/context-setup.yml']
+  pull_request:
+    paths: ['Snakefile', 'scripts/**', 'assets/wings-context-*.js', 'assets/wings-context-layout.css', 'assets/wings-run.js', 'run.html', 'tests/**', '.github/workflows/context-setup.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  context:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install PyYAML 'snakemake>=9,<10'
+      - run: python -m unittest discover -s tests -p 'test_context*.py' -v
+      - run: python -m unittest discover -s tests -p 'test_outbreak_context.py' -v
+      - run: python -m unittest discover -s tests -p 'test_genotype*.py' -v
+      - run: python tests/check_context_path_aliases.py
+      - run: node tests/test_context_setup_ui.cjs
+      - run: node tests/test_context_picker_ui.cjs
+      - run: python tests/integration_context_setup.py
+      - run: python tests/integration_ebird_context.py

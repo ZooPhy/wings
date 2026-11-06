@@ -7,6 +7,7 @@ import argparse
 from collections import Counter, defaultdict
 from datetime import date
 import hashlib
+import html
 import json
 import re
 from pathlib import Path
@@ -137,6 +138,16 @@ def build_dashboard(page: Path, styles: list[Path], script: Path, snapshot: Path
         '<a href="docs/genotype-frequencies.md" target="_blank" rel="noopener noreferrer">Refresh instructions</a>',
         "This report includes the public-data snapshot saved when its HTML was rendered.",
     )
+    scope = data.get("context_scope")
+    if scope:
+        if scope.get("unavailable"):
+            note = "Public comparison unavailable: " + str(scope.get("reason", "No valid source snapshot"))
+        else:
+            note = ("Public comparison is restricted to this run's recorded host labels, regions, and collection-month windows. "
+                    "Unmatched or undated public records are excluded; empty matches are not replaced with global frequencies. "
+                    "These counts describe available SRA records, not population prevalence.")
+        content = re.sub(r"(<main\b[^>]*>)", lambda match: match.group(1) +
+                         '<p class="help" role="note">' + html.escape(note) + '</p>', content, count=1)
     css = "\n".join(path.read_text(encoding="utf-8") for path in styles)
     if re.search(r"</style", css, re.IGNORECASE):
         raise ValueError("Unexpected closing style tag in chart CSS")
