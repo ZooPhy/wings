@@ -57,7 +57,7 @@ actions; matching and import settings are under **Advanced settings**. Use
 automatically. **Seasonal bird patterns** uses the supported eBird reference
 (2023, released 2025). **APHIS detections** retrieves the official CSV when downloads
 are allowed, with a clearly labeled saved-snapshot fallback. Each run retains its
-CSV and provenance. A manual CSV is an optional override in Advanced settings. No
+CSV and provenance. Manual CSV overrides are available through terminal/API options. No
 assembly or polishing jobs run during preparation; paired samples are optional.
 Prepared context is pinned to the metadata and reused in the analysis and reports.
 See [context setup and acquisition](docs/context-setup.md), including terminal use,

@@ -17,8 +17,10 @@ Medaka, or the sample analysis workflow. Paired analysis is not required.
 4. Use **Import data** when eBird data is needed, then **Choose folder…** for the
    extracted download. WINGS reuses compatible cached data automatically when no
    download or prepared-data folder is explicitly selected. Advanced settings contain
-   matching windows, the supported seasonal reference, and optional APHIS overrides.
-   Prepare again after changing the selection or settings.
+   matching windows, the supported seasonal reference, and eBird folder selection.
+   Prepare again after changing the selection or settings. Selecting **Public genotypes**
+   includes the full public reference automatically; there is no separate global
+   comparison checkbox. Filter by host, location, and date in the report.
 5. Continue through Analysis and launch. WINGS verifies metadata, selected sources,
    and snapshot hashes before copying reads and starting analysis.
 
@@ -33,7 +35,8 @@ A restarted runner identifies incomplete preparation as interrupted.
 `YYYY-MM-DD`; `country`, `state`, `latitude`, `longitude`, and host fields determine
 which context can be resolved. WINGS host codes in `host` are mapped using the
 bundled host table. Recorded `host_common_name` and `host_species` labels also
-participate in public-genotype matching. Unknown taxon labels are not guessed.
+participate in optional terminal/API public-genotype matching. The launcher keeps
+the full public reference. Unknown taxon labels are not guessed.
 Missing fields can be blank. Invalid dates/coordinates fail the production metadata
 validator before acquisition. No coordinates are inferred from a state centroid.
 
@@ -49,11 +52,11 @@ observations or being automatically paired.
 | BirdCast | Contiguous-US state and previous local evening | Existing state/night and seasonal-context adapter. Unsupported geography, out-of-season nights, and missing records retain explicit status. |
 | eBird Status and Trends | Host, geography, reference annual cycle | Existing phenology builder in its own Conda environment. Approved `EBIRDST_ACCESS_KEY` may be needed; the browser offers the supported 2023 reference, released in 2025. A reference annual cycle is not observed migration in the sample year. |
 | eBird EBD and sampling effort | Region and date windows | Authorized all-species EBD plus sampling-event download, or a verified portable WINGS package. The page generates the request scope; it does not bypass eBird's account/request process. |
-| Public genotype frequencies | Recorded host labels, region, collection month | Existing public metadata adapter, with a saved source commit/snapshot. Selects the union of metadata windows without counting a public group more than once. No-match results are explicit, not replaced with global data. An explicit global comparison option is available. |
+| Public genotype frequencies | Report filters for host, location, and collection month | The launcher includes the full public metadata reference, with a saved source commit/snapshot. It does not discard records outside the input metadata's scope. Terminal/API callers can still request a scoped subset explicitly. |
 | Run genotype frequencies | WINGS sample IDs and GenoFLU results | Computed after analysis; no external acquisition. Units remain WINGS samples rather than birds unless the analysis explicitly defines birds. |
 | APHIS detections | Run geography and dates for Explorer inspection | Retrieves the official full CSV during preparation when downloads are allowed. A verified cached download, then the bundled snapshot, provide fallback. The card identifies the source and date. Explorer filters the pinned snapshot by geography and date. |
 
-Public host matching is conservative: punctuation/case normalization and recorded
+For scoped terminal/API comparisons, public host matching is conservative: punctuation/case normalization and recorded
 common/scientific labels, not fuzzy taxonomy. Public records with missing month or
 unmatched host/region are excluded from a scoped comparison, with the source audit
 retained. Counts describe records in that source, not prevalence or complete
@@ -62,8 +65,14 @@ surveillance coverage. The report labels scoped comparisons.
 ## First-time eBird setup
 
 Open [eBird data access](https://ebird.org/data/download) from the preparation panel.
-Request **all species**, cover every listed region and complete date window,
-include **sampling event data**, and retain the downloaded terms and citation.
+Request **all species** and include every listed region. Under **Choose date range**,
+enter the single **From** and **To** month/year shown by WINGS. These inclusive
+months span the earliest start and latest end across all sample matching windows,
+including gaps between them. For example, windows from 2025-03-16 through
+2026-05-08 require **March 2025 → May 2026** on eBird's form.
+Include **sampling event data**, and retain the downloaded terms and citation.
+WINGS still filters the download using the original per-sample date windows;
+the broader download range does not change analysis windows or package coverage.
 The source release must cover the requested dates. Do not change a release label
 to make old data appear current.
 
@@ -123,8 +132,8 @@ From the repository, inspect a plan:
 python scripts/context_setup.py plan --metadata metadata.tsv
 ```
 
-Optionally create an options JSON file. These defaults use online context
-acquisition; EBD remains a guided import:
+Optionally create an options JSON file. This example matches the launcher's online
+acquisition and full-reference behavior; EBD remains a guided import:
 
 ```json
 {
@@ -137,7 +146,7 @@ acquisition; EBD remains a guided import:
   "ebird_source": "",
   "all_species_confirmed": false,
   "outbreak_file": "",
-  "global_genotypes": false,
+  "global_genotypes": true,
   "required": []
 }
 ```
@@ -145,6 +154,10 @@ acquisition; EBD remains a guided import:
 `selected_sources` controls acquisition; an empty list skips all external sources.
 Omitting it preserves legacy defaults (including the `phenology` toggle). The terminal
 `required` option remains supported; a required source must also be selected.
+For existing terminal/API workflows, omitting `global_genotypes` retains the legacy
+scoped default. Set it to `true` to retain the full reference, as the launcher does.
+The full reference covers the upstream dataset's included SRA runs; it is not an
+exhaustive worldwide genotype collection or a population prevalence estimate.
 
 Prepare context and write a **new** configuration overlay (existing files are not
 overwritten):
@@ -186,7 +199,7 @@ versions still require periodic maintenance and live smoke tests.
 
 **Choose folder…** opens a native chooser on a local Mac. Linux, SSH sessions,
 and Macs without an available graphical chooser use a dialog listing folders on
-the runner computer. APHIS has a **Choose CSV…** button. Selection returns only the
+the runner computer. The launcher obtains APHIS data automatically. Selection returns only the
 path; no directory contents are uploaded or imported until context preparation.
 Cancel leaves the previous value unchanged. Manual paths remain available.
 

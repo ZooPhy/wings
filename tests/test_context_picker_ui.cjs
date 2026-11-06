@@ -22,11 +22,11 @@ Element.prototype.showModal=function(){this.open=true;};
 Element.prototype.close=function(){this.open=false;};
 Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])this.listeners[event.type](event);if(event.bubbles&&this.parent)this.parent.dispatchEvent(event);return true;};
 (async()=>{
-  const ids=['contextSetup','contextSource','contextPackage','contextCoverage','contextCoverageRow','contextOutbreak','contextPickerNotice','contextFolderDialog','contextFolderRoot','contextFolderTitle','contextFolderPath','contextFolderMessage','contextFolderEntries','contextFolderUp','contextFolderPrevious','contextFolderNext','contextFolderUse','contextFolderCancel'];
+  const ids=['contextSetup','contextSource','contextPackage','contextCoverage','contextCoverageRow','contextPickerNotice','contextFolderDialog','contextFolderRoot','contextFolderTitle','contextFolderPath','contextFolderMessage','contextFolderEntries','contextFolderUp','contextFolderPrevious','contextFolderNext','contextFolderUse','contextFolderCancel'];
   const elements=Object.fromEntries(ids.map(id=>[id,new Element()]));
   elements.contextSetup.append(...Object.entries(elements).filter(([id])=>id!=='contextSetup').map(([,el])=>el));
   let invalidations=0;elements.contextSetup.addEventListener('input',()=>invalidations++);
-  const buttons=['ebird_download','ebird_package','aphis_csv'].map((kind,i)=>{const el=new Element('button');el.dataset={contextPick:kind,contextTarget:['contextSource','contextPackage','contextOutbreak'][i]};return el;});
+  const buttons=['ebird_download','ebird_package'].map((kind,i)=>{const el=new Element('button');el.dataset={contextPick:kind,contextTarget:['contextSource','contextPackage'][i]};return el;});
   const clear=new Element('button');clear.dataset.contextClear='contextSource';
   const calls=[];let nativeStatus='BROWSE',nativePath='/home/user/Downloaded birds',failure=false,deferBrowse=null;
   const roots=[{id:'home',label:'Home',path:'/home/user'}];
@@ -54,8 +54,7 @@ Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])th
   await elements.contextFolderUse.listeners.click();assert.equal(elements.contextSource.value,'/home/user/Bird folder <img>');assert.equal(elements.contextPackage.value,'');assert.equal(elements.contextCoverage.checked,false);assert.equal(invalidations,1);assert.equal(elements.contextCoverageRow.hidden,false);assert.equal(picker.isBusy(),false);assert.equal(elements.contextFolderDialog.open,false);
   const original=elements.contextSource.value;nativeStatus='CANCELLED';await buttons[0].listeners.click();assert.equal(elements.contextSource.value,original);assert.equal(invalidations,1);
   nativeStatus='SELECTED';nativePath='/mounted/disk/Prepared birds';await buttons[1].listeners.click();assert.equal(elements.contextPackage.value,nativePath);assert.equal(elements.contextSource.value,'');assert.equal(invalidations,2);assert.equal(elements.contextCoverageRow.hidden,true);
-  nativeStatus='BROWSE';await buttons[2].listeners.click();assert.equal(elements.contextFolderUse.hidden,true);
-  await elements.contextFolderEntries.children[1].listeners.click();assert.equal(elements.contextOutbreak.value,'/home/user/snapshot.csv');assert.equal(picker.isBusy(),false);
+  nativeStatus='BROWSE';
   await buttons[0].listeners.click();await elements.contextFolderNext.listeners.click();assert.equal(calls.at(-1).body.offset,100);assert.equal(elements.contextFolderPrevious.disabled,false);
   await elements.contextFolderPrevious.listeners.click();assert.equal(calls.at(-1).body.offset,0);
   elements.contextFolderCancel.listeners.click();assert.equal(picker.isBusy(),false);
@@ -70,8 +69,8 @@ Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])th
   assert.equal(calls.some(c=>c.action==='start'||c.action==='prepare'),false);
   const html=fs.readFileSync(path.join(__dirname,'../run.html'),'utf8');
   for(const id of ids)assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,id);
-  assert.equal((html.match(/data-context-pick=/g)||[]).length,3);
+  assert.equal((html.match(/data-context-pick=/g)||[]).length,2);
   assert.ok(html.indexOf('Downloaded eBird folder')<html.indexOf('Use previously prepared eBird data'));
   assert.ok(html.indexOf('assets/wings-context-picker.js')<html.indexOf('assets/wings-context-setup.js'));
-  console.log('PASS: native selection/cancellation; runner-folder navigation and pagination; CSV selection; safe names; import exclusivity; coverage reset; stale-response protection; cache wording and script order.');
+  console.log('PASS: native selection/cancellation; runner-folder navigation and pagination; safe names; import exclusivity; coverage reset; stale-response protection; cache wording and script order.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
