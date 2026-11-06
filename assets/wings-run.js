@@ -420,15 +420,23 @@
   }
 
   // WINGS_CONTEXT_STORAGE_V2: use the launcher's current storage revision.
-  window.WINGS_CONTEXT_SETUP.setCreateSettings(() => (
-    typeof storageRevision === "undefined" ? {} : {storage_revision: storageRevision}
-  ));
+  // Saved-run viewing must still initialize if a context asset is unavailable.
+  if (typeof window.WINGS_CONTEXT_SETUP?.setCreateSettings === "function") {
+    window.WINGS_CONTEXT_SETUP.setCreateSettings(() => (
+      typeof storageRevision === "undefined" ? {} : {storage_revision: storageRevision}
+    ));
+  }
 
   async function startRun() {
     if (!preflightRows().every(row => row[0])) { renderPreflight(); return; }
     $("startRun").disabled = true;
     $("startRun").textContent = "Preparing local run…";
     try {
+      if (!["setCreateSettings", "readyForRun", "attach"].every(
+        name => typeof window.WINGS_CONTEXT_SETUP?.[name] === "function"
+      )) {
+        throw new Error("Context setup did not load. Reload this page before starting a new run. Saved runs remain available.");
+      }
       await window.WINGS_CONTEXT_SETUP.readyForRun();
       const create = await fetch(`${localOrigin}/api/runs`, {
         method: "POST",

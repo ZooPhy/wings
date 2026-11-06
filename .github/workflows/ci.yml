@@ -107,5 +107,6 @@ jobs:
         run: |
           node tests/test_stage_status_display.cjs
           node tests/test_status_polling.cjs
+          node tests/test_run_context_guard.cjs
       - name: Check run status recovery after browser restart
         run: node tests/test_run_recovery.cjs
