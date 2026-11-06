@@ -19,12 +19,13 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
-    env:
-      TMPDIR: ${{ runner.temp }}/wings-regression-artifacts
     steps:
       - uses: actions/checkout@v4
       - name: Prepare temporary test directory
-        run: mkdir -p "$TMPDIR"
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/wings-regression-artifacts"
+          echo "TMPDIR=$RUNNER_TEMP/wings-regression-artifacts" >> "$GITHUB_ENV"
       - uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
