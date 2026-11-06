@@ -10,8 +10,16 @@ const root = path.resolve(__dirname, "..");
 const files = new Map([
   ["/run.html", ["text/html", "run.html"]],
   ["/assets/wings-run.js", ["text/javascript", "assets/wings-run.js"]],
+  ["/assets/wings-context-setup.js", ["text/javascript", "assets/wings-context-setup.js"]],
+  ["/assets/wings-context-picker.js", ["text/javascript", "assets/wings-context-picker.js"]],
+  ["/assets/wings-context-layout.css", ["text/css", "assets/wings-context-layout.css"]],
   ["/assets/wings-portal.css", ["text/css", "assets/wings-portal.css"]],
 ]);
+// Fail immediately if the page gains another script absent from this fixture.
+for (const match of fs.readFileSync(path.join(root, 'run.html'), 'utf8').matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)) {
+  const pathname = new URL(match[1], 'http://localhost/run.html').pathname;
+  assert.ok(files.has(pathname), `Recovery fixture must serve ${pathname}`);
+}
 const run = {
   run_id: "20261008-135811-be5742", name: "Test Run", status: "running",
   created_at: "2026-10-08T20:58:11Z", started_at: "2026-10-08T20:58:11Z",
@@ -35,6 +43,7 @@ const older = {...run, run_id: "older-run", name: "Older <b>run</b>",
   status: "failed", created_at: "2026-10-07T20:58:11Z",
   finished_at: "2026-10-08T21:08:11Z"};
 let offline = false;
+let missingContext = false;
 let writes = 0;
 const errors = [];
 const server = http.createServer((req, res) => {
@@ -49,9 +58,12 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/runs") return json([older, run]);
   if (url.pathname === `/api/runs/${run.run_id}`) return json(run);
   if (url.pathname === "/api/runs/older-run") return json(older);
+  if (missingContext && url.pathname.startsWith('/assets/wings-context-') && url.pathname.endsWith('.js')) {
+    return json({error: 'Context asset intentionally unavailable'}, 404);
+  }
   const file = files.get(url.pathname);
   if (file) {
-    res.writeHead(200, {"Content-Type": file[0]});
+    res.writeHead(200, {"Content-Type": file[0], "Cache-Control": "no-store"});
     res.end(fs.readFileSync(path.join(root, file[1])));
     return;
   }
@@ -67,8 +79,16 @@ const server = http.createServer((req, res) => {
     page.on("pageerror", error => errors.push(error.message));
     return page;
   };
-  const status = (page, label) => page.waitForFunction(
-    label => document.getElementById("metricStatus").textContent === label, label);
+  const status = async (page, label) => {
+    assert.deepEqual(errors, [], 'Launcher script errors before saved-run recovery');
+    try {
+      await page.waitForFunction(label => document.getElementById("metricStatus").textContent === label, label);
+    } catch (error) {
+      error.message += '\nPage errors: ' + JSON.stringify(errors) +
+        '\nStatus: ' + await page.locator('#statusSubtitle').textContent();
+      throw error;
+    }
+  };
   try {
     browser = await chromium.launch({headless: true});
     let page = await newPage();
@@ -147,9 +167,17 @@ const server = http.createServer((req, res) => {
     await page.waitForFunction(() => document.getElementById("savedRunSelect").options.length === 3);
     assert.equal(await page.locator("#setupView").isVisible(), true);
     assert.equal(await page.locator("#runStatus").isVisible(), false);
-    assert.equal(writes, 0, "Viewing/recovering runs must never create, start, or stop a run");
+    // Missing context scripts must not prevent viewing a previously launched run.
+    missingContext = true;
+    await page.goto(savedUrl);
+    await status(page, 'landed');
+    assert.equal(await page.evaluate(() => typeof window.WINGS_CONTEXT_SETUP), 'undefined');
+    assert.equal(await page.locator('#resultsLink').isVisible(), true);
+    // New-run gating (including existing preflight checks) is tested separately
+    // in test_run_context_guard.cjs with valid and invalid preflight fixtures.
+    assert.equal(writes, 0, "Viewing/recovering runs or a missing context module must never create, start, or stop a run");
     assert.deepEqual(errors, []);
-    console.log("Run recovery passed: refresh, browser restart, disk discovery, reconnect, completion, selection, missing run, and new-run setup.");
+    console.log("Run recovery passed: refresh, browser restart, disk discovery, reconnect, completion, selection, missing run, new-run setup, and unavailable context assets.");
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

@@ -103,7 +103,13 @@ def frozen_reexecution_input(label):
     return str(HISTORICAL_FROZEN_INPUTS.get(label, "") or "").strip()
 
 
-FROZEN_PHENOLOGY = frozen_reexecution_input("phenology")
+# WINGS_METADATA_CONTEXT_SETUP_V1
+CONTEXT_SELECTION = frozen_reexecution_input("context_setup") or str(
+    (config.get("context_setup") or {}).get("selection") or ""
+)
+FROZEN_PHENOLOGY = frozen_reexecution_input("phenology") or str(
+    (config.get("phenology") or {}).get("snapshot") or ""
+)
 FROZEN_EBIRD_CONTEXT = frozen_reexecution_input("ebird_context")
 FROZEN_EBIRD_TERMS = frozen_reexecution_input("ebird_terms")
 FROZEN_EBIRD_CITATION = frozen_reexecution_input("ebird_citation")
@@ -177,6 +183,11 @@ def _discover_fastq_files(reads_dir: str, read_pattern: str):
 
 SAMPLE_FASTQ = _discover_fastq_files(READS, READ_PATTERN)
 SAMPLES = sorted(SAMPLE_FASTQ)
+if CONTEXT_SELECTION and not HISTORICAL_REEXECUTION_ENABLED:
+    import runpy
+    runpy.run_path(str(Path(workflow.basedir) / "scripts/context_setup.py"))["validate_config"](
+        config, Path(METADATA_FILE), SAMPLES
+    )
 
 COVERAGE_MIN = float(config.get("coverage_min_depth", 50.0))
 COVERAGE_MIN_BREADTH = float(config.get("coverage_min_breadth", 0.95))
@@ -3045,6 +3056,7 @@ rule metadata_ecological_context:
 
 rule surveillance_explorer_data:
     input:
+        context_setup=([CONTEXT_SELECTION] if CONTEXT_SELECTION else []),
         ebird_status=EBIRD_STATUS_INPUT,
         ebird_package_loader="scripts/ebird_context_package.py",
         explorer_builder="scripts/build_surveillance_explorer.py",
@@ -3355,6 +3367,30 @@ rule public_health_interpretation:
         """
 
 
+rule public_genotype_snapshot:
+    input:
+        seed=GENOTYPE_FREQUENCY_SEED,
+        script="scripts/prepare_public_genotype_snapshot.py",
+        refresh="scripts/refresh_genotype_frequencies.py",
+        importer="scripts/build_genotype_frequencies.py"
+    output:
+        json=f"{RESULTS}/run_summary/public_genotype_frequencies.json"
+    params:
+        cache=str(Path(str(GENOTYPE_FREQUENCY_CONFIG.get("cache_dir", "~/.cache/wings/genotype-frequencies"))).expanduser()),
+        ref=str(GENOTYPE_FREQUENCY_CONFIG.get("ref", "master")),
+        age=float(GENOTYPE_FREQUENCY_CONFIG.get("max_age_days", 7)),
+        offline="--offline" if GENOTYPE_FREQUENCY_OFFLINE else "",
+        prepared="--prepared" if CONTEXT_SELECTION or frozen_reexecution_input("genotype_frequencies") or as_bool(GENOTYPE_FREQUENCY_CONFIG.get("prepared_snapshot", False)) else ""
+    conda:
+        "envs/py-tools.yaml"
+    shell:
+        r"""
+        python {input.script:q} --seed {input.seed:q} --output {output.json:q} \
+          --cache-dir {params.cache:q} --ref {params.ref:q} --max-age-days {params.age} \
+          {params.offline} {params.prepared}
+        """
+
+
 rule run_summary_html:
     input:
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
@@ -3406,20 +3442,17 @@ rule run_summary_html:
         interpretation=f"{RESULTS}/run_summary/public_health_interpretation.json",
         run_report_html="scripts/report/run-report.html",
         genotype_builder="scripts/build_genotype_dashboard.py",
-        genotype_refresh="scripts/refresh_genotype_frequencies.py",
-        genotype_importer="scripts/build_genotype_frequencies.py",
         genotype_page="genotypes.html",
         genotype_styles=["assets/wings-portal.css", "assets/wings-genotypes.css"],
         genotype_js="assets/wings-genotypes.js",
-        genotype_snapshot=GENOTYPE_FREQUENCY_SEED,
+        genotype_snapshot=f"{RESULTS}/run_summary/public_genotype_frequencies.json",
         explorer_css="scripts/report/surveillance-explorer.css",
         map_boundaries_js="scripts/report/map-boundaries.js",
         explorer_js="scripts/report/surveillance-explorer.js"
     output:
         html=f"{RESULTS}/run_summary/run_summary.html",
         tsv=f"{RESULTS}/run_summary/run_summary.tsv",
-        review=f"{RESULTS}/run_summary/samples_requiring_review.tsv",
-        public_genotypes=f"{RESULTS}/run_summary/public_genotype_frequencies.json"
+        review=f"{RESULTS}/run_summary/samples_requiring_review.tsv"
     params:
         samples=",".join(SAMPLES),
         snakemake_version=SNAKEMAKE_VERSION,
@@ -3469,18 +3502,11 @@ rule run_summary_html:
         cp "$explorer_js_abs" "$temp_report_dir/surveillance-explorer.js"
         cp "$map_boundaries_js_abs" "$temp_report_dir/map-boundaries.js"
 
-        python {input.genotype_refresh:q} \
-          --seed {input.genotype_snapshot:q} \
-          --output {output.public_genotypes:q} \
-          --cache-dir {params.genotype_cache:q} \
-          --ref {params.genotype_ref:q} --max-age-days {params.genotype_age} \
-          {params.genotype_offline}
-
         python {input.genotype_builder:q} \
           --page {input.genotype_page:q} \
           --styles {input.genotype_styles:q} \
           --script {input.genotype_js:q} \
-          --snapshot {output.public_genotypes:q} \
+          --snapshot {input.genotype_snapshot:q} \
           --explorer-json {input.explorer_json:q} \
           --output "$temp_report_dir/genotype-frequencies.html"
 
@@ -3575,7 +3601,11 @@ PRIMARY_INPUT_SPECS = [
 REPLAY_INPUT_SPECS = [
     ("metadata", METADATA_FILE),
     ("validated_metadata", f"{RESULTS}/metadata/validated_metadata.tsv"),
+    ("genotype_frequencies", f"{RESULTS}/run_summary/public_genotype_frequencies.json"),
 ]
+
+if CONTEXT_SELECTION:
+    REPLAY_INPUT_SPECS.append(("context_setup", CONTEXT_SELECTION))
 
 if REFERENCE_ENABLED:
     REPLAY_INPUT_SPECS.extend([
