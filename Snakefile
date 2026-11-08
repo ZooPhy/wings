@@ -948,7 +948,16 @@ rule sample_metadata:
 # -----------------------------------------------------------------------------
 # Final targets
 # -----------------------------------------------------------------------------
+# WINGS_AMINO_ACIDS_CONFIG_V1_BEGIN
+AA_ENABLED = as_bool(config.get("run_amino_acids", True))
+AA_PANEL = str(Path(str(config.get("amino_acid_reference_panel", "resources/amino_acids/reference_panel.json"))).expanduser())
+AA_EVIDENCE = str(Path(str(config.get("amino_acid_evidence", "resources/amino_acids/evidence.json"))).expanduser())
+AA_MIN_IDENTITY = float(config.get("amino_acid_min_identity", 0.90))
+AA_MIN_COVERAGE = float(config.get("amino_acid_min_coverage", 0.90))
+# WINGS_AMINO_ACIDS_CONFIG_V1_END
+
 FINAL_TARGETS = [
+    f"{RESULTS}/run_summary/amino_acids/report.html",
     f"{RESULTS}/metadata/validated_metadata.tsv",
     f"{RESULTS}/metadata/metadata_validation.tsv",
     expand(f"{RESULTS}/{{sample}}/metadata/{{sample}}.metadata.tsv", sample=SAMPLES),
@@ -3393,6 +3402,8 @@ rule public_genotype_snapshot:
 
 rule run_summary_html:
     input:
+        amino_acids=f"{RESULTS}/run_summary/amino_acids/report.html",
+        amino_script="scripts/wings_amino_acids.py",
         metadata=f"{RESULTS}/metadata/validated_metadata.tsv",
         stability_summary=INTERPRETATION_STABILITY_TSV,
         summaries=expand(
@@ -3539,6 +3550,7 @@ rule run_summary_html:
         rm -f "$temp_qmd"
         rm -rf "$output_dir/.run_summary_files"
         rm -rf "$temp_report_dir"
+        python {input.amino_script:q} embed --report {output.html:q} --amino {input.amino_acids:q}
         """
 
 
@@ -3909,3 +3921,6 @@ rule wings_report_bundle:
           --output {output.bundle:q} \
           {input.reports:q}
         """
+
+# WINGS_AMINO_ACIDS_RULES_V1
+include: "scripts/amino_acids.smk"

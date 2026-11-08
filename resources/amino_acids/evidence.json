@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "version": "pilot-2026-11-06",
+  "scope": "Two PB2 substitutions only; literature associations, not a comprehensive phenotype screen. Reference positions are native full-length PB2 coordinates.",
+  "entries": [
+    {
+      "reference_id": "NC_007357.1:PB2", "position": 627, "reference_aa": "E", "alternate_aa": "K",
+      "statement": "PB2 E627K was associated with increased replication and virulence in the studied H5N1 mouse model.",
+      "study_context": "Hong Kong/1997 H5N1 experimental virus backgrounds; mice. Effect in the WINGS sample is not established by sequence alone.",
+      "citation_url": "https://pubmed.ncbi.nlm.nih.gov/15016548/"
+    },
+    {
+      "reference_id": "NC_007357.1:PB2", "position": 701, "reference_aa": "D", "alternate_aa": "N",
+      "statement": "PB2 D701N was implicated in replication of the studied duck H5N1 viruses in mice.",
+      "study_context": "Duck H5N1 experimental backgrounds; mouse infection. Replication and lethality depended on multiple genes; transfer to the WINGS sample is uncertain.",
+      "citation_url": "https://pubmed.ncbi.nlm.nih.gov/16140781/"
+    }
+  ]
+}
