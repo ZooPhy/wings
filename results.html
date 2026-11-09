@@ -187,7 +187,7 @@
   </style>
 </head>
 <body>
-  <!-- WINGS_WEB_BUILD 2026-08-09-separate-results-v3-no-blob-navigation -->
+  <!-- WINGS_WEB_BUILD 2026-11-09-bundle-schema-v2-shared-chunks -->
 
   <main class="shell" id="bundle-launcher">
     <div class="header">
@@ -250,6 +250,10 @@
     const openAnother = document.getElementById("open-another");
     const closeResults = document.getElementById("close-results");
 
+    // Highest bundle schema version this page can read. Bumping it requires a
+    // matching change in materializeReport().
+    const SUPPORTED_BUNDLE_VERSION = 2;
+
     let currentBundle = null;
     let currentRunLabel = "WINGS run summary";
 
@@ -269,12 +273,27 @@
       return null;
     }
 
+    // Schema version 2 stores the HTML that every sample report shares once,
+    // under bundle.shared, and keeps only the unique middle section per sample.
+    // Reconstruction returns the original report character for character.
+    // Version 1 entries carry a whole "html" string and are returned as-is.
+    function materializeReport(bundle, entry) {
+      if (typeof entry === "string") return entry;
+      if (!entry || typeof entry !== "object") return null;
+      if (typeof entry.html === "string") return entry.html;
+
+      if (typeof entry.html_mid === "string") {
+        const shared = bundle.shared || {};
+        return (shared.report_prefix || "") + entry.html_mid + (shared.report_suffix || "");
+      }
+      return null;
+    }
+
     function getSampleHtml(bundle, sampleId) {
       if (!bundle || !bundle.samples) return null;
 
-      const direct = bundle.samples[sampleId];
-      if (typeof direct === "string") return direct;
-      if (direct && typeof direct === "object" && typeof direct.html === "string") return direct.html;
+      const direct = materializeReport(bundle, bundle.samples[sampleId]);
+      if (direct !== null) return direct;
 
       const normalized = normalizeSampleKey(sampleId);
       for (const [key, value] of Object.entries(bundle.samples)) {
@@ -283,8 +302,8 @@
         const filenameMatches = filename && normalizeSampleKey(filename) === normalized;
 
         if (keyMatches || filenameMatches) {
-          if (typeof value === "string") return value;
-          if (value && typeof value === "object" && typeof value.html === "string") return value.html;
+          const html = materializeReport(bundle, value);
+          if (html !== null) return html;
         }
       }
       return null;
@@ -293,6 +312,12 @@
     function validateBundle(bundle) {
       if (!bundle || typeof bundle !== "object") throw new Error("The selected file is not a valid WINGS bundle.");
       if (bundle.format !== "WINGS_REPORT_BUNDLE") throw new Error("This file is not a WINGS report bundle.");
+      if (Number(bundle.version) > SUPPORTED_BUNDLE_VERSION) {
+        throw new Error(
+          `This bundle uses schema version ${bundle.version}, but this page understands ` +
+          `up to version ${SUPPORTED_BUNDLE_VERSION}. Update your copy of WINGS to open it.`
+        );
+      }
       if (!getRunSummaryHtml(bundle)) throw new Error("The bundle does not contain a run summary.");
       if (!bundle.samples || typeof bundle.samples !== "object") throw new Error("The bundle does not contain sample reports.");
       return bundle;
