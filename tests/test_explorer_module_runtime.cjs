@@ -52,7 +52,7 @@ function mount(text=source) {
 test('standalone tabs mount, switch all views, and retain the concordance controller',()=>{
   const h=mount();
   assert.equal(h.explorer.concordanceController,h.concordance);
-  for(const name of ['overview','genome','genotypes','ecology','coverage','concordance','outbreak']){
+  for(const name of ['overview','genome','amino','genotypes','ecology','coverage','concordance','outbreak']){
     assert.doesNotThrow(()=>h.tabs.activate(name));assert.equal(h.tabs.active,name);
     assert.equal(h.root.dataset.wseActiveTab,name);
   }
@@ -85,4 +85,15 @@ test('embedded tabs body is exactly the standalone implementation',()=>{
   const bundle=fs.readFileSync(path.join(__dirname,'../scripts/report/surveillance-explorer.js'),'utf8');
   const embedded=bundle.split('/* WINGS_EXPLORER_TABS_JS_BEGIN */')[1].split('/* WINGS_EXPLORER_TABS_JS_END */')[0];
   assert.equal(embedded.trim(),source.trim());
+});
+
+
+// WINGS_AMINO_MINIMAL_DOM_CHECK_V1
+test('Amino acids opens with explicit empty state in the minimal DOM',()=>{
+  const h=mount();
+  h.tabs.activate('amino');
+  assert.equal(h.tabs.active,'amino');
+  assert.equal(h.tabs.panels.amino.hidden,false);
+  assert.equal(h.root.querySelector('.wse-app-toolbar').hidden,true);
+  assert.match(h.tabs.panels.amino.querySelector('p').textContent,/not embedded/);
 });

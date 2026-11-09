@@ -10,10 +10,11 @@
     return node;
   };
 
-  const TAB_ORDER = ["overview", "genome", "genotypes", "ecology", "coverage", "concordance", "outbreak"];
+  const TAB_ORDER = ["overview", "genome", "amino", "genotypes", "ecology", "coverage", "concordance", "outbreak"];
   const TAB_LABELS = {
     overview: "Overview",
     genome: "Genome",
+    amino: "Amino acids",
     genotypes: "Genotype frequencies",
     ecology: "Ecology",
     coverage: "Sampling & Detections",
@@ -202,6 +203,45 @@
     return {refresh};
   }
 
+  // WINGS_AMINO_EXPLORER_TAB_V1
+  function mountAminoDashboard(explorer, panel) {
+    const id = explorer.root.dataset.wseAminoTemplateId || "wings-amino-acid-dashboard-0";
+    const template = document.getElementById(id);
+    const legacy = document.getElementById("amino-acid-cohort-demo") || document.querySelector?.('section[aria-label="Amino acid changes"]');
+    const original = template?.content?.querySelector("iframe") || legacy?.querySelector("iframe");
+    if (!original) {
+      panel.append(make("p", "wse-app-empty", "Amino acid results are not embedded in this report. Generate the amino acid report and rebuild the run summary."));
+      return null;
+    }
+    let frame = null;
+    const refresh = () => {
+      if (!frame) {
+        frame = original.cloneNode(true);
+        frame.title = "WINGS amino acid landscape";
+        frame.style.display = "block";
+        frame.style.width = "100%";
+        frame.style.height = "1000px";
+        frame.style.border = "0";
+        frame.setAttribute("loading", "eager");
+        frame.addEventListener("load", () => frame.contentWindow?.postMessage({type:"wings-amino-measure"}, "*"));
+        panel.append(frame);
+      }
+      frame.contentWindow?.postMessage({type:"wings-amino-measure"}, "*");
+    };
+    globalThis.addEventListener("message", event => {
+      if (!frame || event.source !== frame.contentWindow || event.data?.type !== "wings-amino-height") return;
+      const height = event.data.height;
+      if (typeof height !== "number" || !Number.isFinite(height) || height < 200 || height > 30000) return;
+      frame.style.height = `${Math.max(400, Math.ceil(height) + 16)}px`;
+    });
+    // Preserve one copy of the report and its sample/filter state across tab changes.
+    if (legacy && original.parentElement) {
+      original.remove();
+      legacy.remove();
+    }
+    return {refresh};
+  }
+
   function mount(explorer) {
     if (!explorer || !explorer.root) throw new Error("Explorer instance is required.");
     if (explorer.explorerTabs) return explorer.explorerTabs;
@@ -305,6 +345,7 @@
     if (genomeFooter) panels.genome.append(genomeFooter);
 
     panels.ecology.append(ecology);
+    const aminoDashboard = mountAminoDashboard(explorer, panels.amino);
     const genotypeDashboard = mountGenotypeDashboard(explorer, panels.genotypes);
 
 
@@ -359,6 +400,8 @@
       active = name;
       root.dataset.wseActiveTab = name;
       toolbar.hidden = name === "genotypes" || name === "overview";
+      if (name === "amino") toolbar.hidden = true;
+      if (name === "amino") requestAnimationFrame(() => aminoDashboard?.refresh());
       // Explicit display prevents the toolbar grid rule from overriding hidden.
       toolbar.style.display = toolbar.hidden ? "none" : "";
       if (subtitle) subtitle.hidden = name !== "coverage";
@@ -498,5 +541,5 @@
     return api;
   }
 
-  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison,mountGenotypeDashboard} };
+  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison,mountGenotypeDashboard,mountAminoDashboard} };
 })();
