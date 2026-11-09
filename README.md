@@ -34,6 +34,7 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - VADR sequence annotation and validation
 - Interactive sample-level HTML reports
 - Interactive sequencing-run summary report
+- [Protein variation: mutation and coding landscape](#protein-variation-mutation-and-coding-landscape) with reference-coordinate amino-acid plots, sample and change-type filters, codon/nucleotide details, and SVG/TSV/JSON exports
 - Optional internal eight-segment phylogeny inference from QC-qualified WINGS consensuses using MAFFT and IQ-TREE 2
 - Linked eight-segment Surveillance Explorer with synchronized sample selection across timeline, map, and segment trees
 - [Ecological context](docs/ecological-context.md) with aligned eBird reporting frequency, an offline BirdCast state pilot, and cached ERA5 weather; source scales, units, dates, and provenance remain visible
@@ -1046,6 +1047,35 @@ The record captures the WINGS Git commit, branch and dirty/clean state; SHA-256 
 For a formal reproducible analysis, generate provenance from a clean committed repository state so `workflow.git_dirty` is `false`.
 
 ## Reports
+
+### Protein variation: mutation and coding landscape
+
+The **Mutation & coding landscape** view supports interactive exploration of reported amino-acid (AA) changes across samples. Select a segment using the **Genome constellation** control, then inspect its protein reference tracks. Each track uses its own reference amino-acid coordinates and shows the comparison reference name, segment accession, and protein accession with links to the source records.
+
+#### Reading the plot
+
+- Lollipop markers place reported changes along the reference protein. In the all-samples view, marker height represents the percentage of comparison samples with a change; labels show sample counts and the displayed denominator.
+- Click a change to inspect its codon and nucleotide details. The legend distinguishes observed changes, cited annotations, and insertion/deletion markers.
+- HA tracks include a region strip for the signal peptide, HA1, and HA2. The displayed boundaries use the selected reference's precursor-protein coordinates; do not assume that these positions use another HA numbering convention.
+- Summary counters show the selected sample count, protein-track count, distinct changes, and selected reference length. These values depend on the report and selection; they are not fixed workflow totals.
+
+#### Selecting samples and filtering changes
+
+| Control | Use |
+| --- | --- |
+| **Find a mutation or sample** | Search by change, sample, position, or evidence. |
+| **Comparison samples → Edit selection** | Search by barcode or collection date; select individual samples, select all, or clear the selection. |
+| **Displayed sample** | Choose the all-samples view or an individual sample. |
+| **Change type** | Show all changes, substitutions, insertions, deletions, or nonsense mutations. |
+| **Observed in samples** | Show all frequencies or apply thresholds of at least 10%, 25%, 50%, 80%, 90%, or 100%. |
+| **From aa / To aa**, **Zoom**, **Fit proteins** | Inspect a reference-coordinate interval or return to the fitted protein view. |
+| **Show residues** | Display residue letters aligned to the reference. |
+
+An empty plot can result from the active filters rather than an absence of reported changes. Check the counts before and after frequency filtering, and choose **All frequencies** to inspect less frequent changes. Sample frequency describes occurrence across comparison samples; it is not a within-sample read-level allele frequency.
+
+#### Exporting the view
+
+Use **Save plot SVG** for a vector image and **Download TSV** or **Download JSON** for the available tabular or structured data exports. Retain the reference accession and coordinate convention when interpreting or sharing changes. A cited annotation provides context and should be distinguished from the observed sequence difference itself.
 
 ### Public genotype frequency graph
 
