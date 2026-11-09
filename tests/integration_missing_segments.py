@@ -54,7 +54,8 @@ def require(condition, message):
 def rule_text(source, name):
     match = re.search(r"^rule " + re.escape(name) + r":\s*$", source, re.M)
     require(match is not None, "Cannot find production rule " + name)
-    following = re.search(r"^(?:rule|checkpoint) \w+:", source[match.end():], re.M)
+    # Stop at any next top-level statement, including include:.
+    following = re.search(r"^[^\s#]", source[match.end():], re.M)
     end = match.end() + following.start() if following else len(source)
     return source[match.start():end]
 
