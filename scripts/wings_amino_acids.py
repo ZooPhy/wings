@@ -461,13 +461,20 @@ def recompare(args):
 
 
 def embed(args):
+    # WINGS_AMINO_TAB_EMBED_V1
     p=Path(args.report);text=p.read_text();start='<!-- WINGS_AMINO_ACIDS_BEGIN -->';end='<!-- WINGS_AMINO_ACIDS_END -->'
     text=re.sub(re.escape(start)+'.*?'+re.escape(end)+r'\n?','',text,flags=re.S)
-    fragment=(start+'<section aria-label="Amino acid changes"><iframe title="Amino acid changes" '
-              'sandbox="allow-scripts allow-downloads" style="width:100%;height:900px;border:0" srcdoc="'+
-              html.escape(Path(args.amino).read_text(),quote=True)+'"></iframe></section>'+end)
+    report=Path(args.amino).read_text()
+    bridge='<!-- WINGS_AMINO_HEIGHT_BRIDGE_V1 -->\n<script>\n(() => {\n  let lastHeight = 0;\n  const content = document.querySelector("main") || document.body;\n  const measure = () => {\n    const height = Math.ceil(content.getBoundingClientRect().height);\n    if(height >= 200 && height !== lastHeight) {\n      lastHeight = height;\n      parent.postMessage({type:"wings-amino-height",height}, "*");\n    }\n  };\n  addEventListener("message", event => { if(event.source === parent && event.data?.type === "wings-amino-measure") requestAnimationFrame(measure); });\n  addEventListener("load", measure);\n  addEventListener("resize", measure);\n  if(typeof ResizeObserver === "function") new ResizeObserver(measure).observe(content);\n})();\n</script>\n'
+    if 'WINGS_AMINO_HEIGHT_BRIDGE_V1' not in report:
+        if '</body>' not in report:raise ValueError('Amino acid report has no closing body')
+        report=report.replace('</body>',bridge+'\n</body>',1)
+    fragment=(start+'<template id="wings-amino-acid-dashboard-0"><iframe title="WINGS amino acid landscape" '
+              'sandbox="allow-scripts allow-downloads" style="width:100%;height:1000px;border:0" srcdoc="'+
+              html.escape(report,quote=True)+'"></iframe></template>'+end)
     if '</body>' not in text:raise ValueError('Run report has no closing body')
     text=text.replace('</body>',fragment+'\n</body>',1);p.write_text(text)
+
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);sub=ap.add_subparsers(dest='command',required=True)
