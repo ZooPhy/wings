@@ -207,7 +207,7 @@
   function mountAminoDashboard(explorer, panel) {
     const id = explorer.root.dataset.wseAminoTemplateId || "wings-amino-acid-dashboard-0";
     const template = document.getElementById(id);
-    const legacy = document.getElementById("amino-acid-cohort-demo") || document.querySelector('section[aria-label="Amino acid changes"]');
+    const legacy = document.getElementById("amino-acid-cohort-demo") || document.querySelector?.('section[aria-label="Amino acid changes"]');
     const original = template?.content?.querySelector("iframe") || legacy?.querySelector("iframe");
     if (!original) {
       panel.append(make("p", "wse-app-empty", "Amino acid results are not embedded in this report. Generate the amino acid report and rebuild the run summary."));
