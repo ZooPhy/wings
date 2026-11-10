@@ -1457,7 +1457,8 @@ rule coverage_table:
 # -----------------------------------------------------------------------------
 rule resolve_medaka_model:
     input:
-        fastq=lambda wildcards: SAMPLE_FASTQ[wildcards.sample]
+        fastq=lambda wildcards: SAMPLE_FASTQ[wildcards.sample],
+        resolver="scripts/resolve_medaka_model.py"
     output:
         model=f"{RESULTS}/{{sample}}/medaka/model.tsv"
     log:
@@ -1475,7 +1476,7 @@ rule resolve_medaka_model:
         # inspected. `if cmd; then` would collapse every non-zero code into one
         # branch, which is what previously hid unrelated failures.
         set +e
-        python scripts/resolve_medaka_model.py \
+        python {input.resolver:q} \
             --fastq {input.fastq:q} \
             --output {output.model:q} \
             --max-records {params.max_records} \
