@@ -57,7 +57,7 @@ markers. Keep those markers when editing the stylesheet.
 
 ```sh
 python -m unittest discover -s tests -p test_explorer_asset_build.py -v
-node --test tests/test_explorer_module_runtime.cjs tests/test_explorer_tabs.cjs tests/test_genome_braid_clock.cjs tests/test_genomic_ecological_concordance_ui.cjs tests/test_tree_studio.cjs
+node --test tests/test_amino_explorer_tab.cjs tests/test_explorer_module_runtime.cjs tests/test_explorer_tabs.cjs tests/test_genome_braid_clock.cjs tests/test_genomic_ecological_concordance_ui.cjs tests/test_tree_studio.cjs
 ```
 
 The new Python checks cover deterministic generation, drift detection, propagation
@@ -80,8 +80,18 @@ The updater refuses an unrecognized difference between standalone and embedded
 modules instead of discarding local work. It also refuses to overwrite existing,
 different files at newly introduced paths.
 
-The four legacy module installers (`install_braid_clock.py`,
-`install_explorer_tabs.py`, `install_tree_studio.py`, and
-`install_dynamic_phenology.py`) stop when the new manifest exists. Use the
+The five legacy module installers (`install_braid_clock.py`,
+`install_explorer_tabs.py`, `install_tree_studio.py`,
+`install_dynamic_phenology.py`, and `install_amino_explorer_tab.py`) stop when
+the new manifest exists. Use the
 canonical sources and builder for future changes. This prevents their older
 insertion logic from rewriting the Explorer after migration.
+
+The amino tab is maintained in `scripts/report/explorer-tabs.js` and included
+once in the generated Explorer bundle. Its occurrence in both the source and
+bundle is expected. Do not update it by rerunning a legacy installer. The amino
+regression suite exercises lazy iframe mounting, retained state, height-message
+validation, legacy report discovery, and empty states against both copies.
+The builder tests verify that rebuilding preserves the exact canonical module.
+See [Amino acids in Surveillance Explorer](amino-acid-explorer-tab.md) for saved
+report refresh guidance.

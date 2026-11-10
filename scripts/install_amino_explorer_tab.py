@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Add the saved amino acid landscape to the Surveillance Explorer tabs and demo."""
+"""Legacy amino-tab migration for checkouts without canonical Explorer assets.
+
+Migrated checkouts must edit canonical modules/templates and use the asset
+builder. This installer refuses those checkouts before reading or writing
+report assets, analysis scripts, or saved bundles.
+"""
 import argparse,base64,gzip,html,json,re,shutil,subprocess,sys,tempfile,zlib
 from html.parser import HTMLParser
 from pathlib import Path
@@ -87,6 +92,15 @@ def main():
     parser.add_argument('--apply',action='store_true')
     parser.add_argument('--amino-report',type=Path,help='Saved amino acid HTML if the demo does not already embed it')
     args=parser.parse_args();repo=args.repo.resolve()
+    # WINGS_CANONICAL_ASSETS_GUARD_V1
+    if (repo / "scripts/report/explorer-assets.json").is_file():
+        raise ValueError(
+            "This legacy installer is disabled for canonical Explorer assets. "
+            "Edit the standalone modules/templates, then run "
+            "python scripts/build_explorer_assets.py --write. "
+            "To refresh an existing demo with embedded amino results, use "
+            "python scripts/refresh_demo_ui.py --apply."
+        )
     updates={}
     tabs_path=repo/'scripts/report/explorer-tabs.js';tabs=patch_tabs(tabs_path.read_text())
     updates['scripts/report/explorer-tabs.js']=tabs.encode()

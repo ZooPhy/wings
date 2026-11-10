@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -36,6 +38,40 @@ class ExplorerBuildTests(unittest.TestCase):
         self.assertIn(b"// synthetic source edit", changes["scripts/report/surveillance-explorer.js"])
         original = (ROOT / "scripts/report/surveillance-explorer.js").read_bytes()
         self.assertEqual(original.split(b"// WINGS_BRAID_CLOCK_HOOK_BEGIN")[1], changes["scripts/report/surveillance-explorer.js"].split(b"// WINGS_BRAID_CLOCK_HOOK_BEGIN")[1])
+
+    def test_amino_tab_survives_canonical_rebuild(self):
+        source = (self.repo / "scripts/report/explorer-tabs.js").read_bytes().strip()
+        output = builder.render_all(self.repo)["scripts/report/surveillance-explorer.js"]
+        begin = b"/* WINGS_EXPLORER_TABS_JS_BEGIN */"
+        end = b"/* WINGS_EXPLORER_TABS_JS_END */"
+        self.assertEqual(output.count(begin), 1)
+        self.assertEqual(output.count(end), 1)
+        embedded = output.split(begin, 1)[1].split(end, 1)[0].strip()
+        self.assertEqual(embedded, source)
+        self.assertEqual(embedded.count(b"function mountAminoDashboard("), 1)
+        self.assertIn(b"const aminoDashboard = mountAminoDashboard(explorer, panels.amino)", embedded)
+        self.assertIn(b"aminoDashboard?.refresh()", embedded)
+        builder.write_outputs(self.repo, builder.render_all(self.repo))
+        self.assertEqual(builder.plan(self.repo), {})
+
+    def test_amino_installer_refuses_migrated_checkout_before_any_write(self):
+        sentinel = self.repo / "scripts/wings_amino_acids.py"
+        sentinel.write_text("# existing local analysis script\n")
+        before = {p.relative_to(self.repo): p.read_bytes()
+                  for p in self.repo.rglob("*") if p.is_file()}
+        for options in ([], ["--apply"], ["--apply", "--amino-report", "missing.html"]):
+            with self.subTest(options=options):
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/install_amino_explorer_tab.py"),
+                     "--repo", str(self.repo), *options],
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("legacy installer is disabled", result.stderr)
+                self.assertIn("build_explorer_assets.py --write", result.stderr)
+                after = {p.relative_to(self.repo): p.read_bytes()
+                         for p in self.repo.rglob("*") if p.is_file()}
+                self.assertEqual(after, before)
 
     def test_shared_concordance_style_updates_both_placements(self):
         path = self.repo / "scripts/report/genomic-ecological-concordance.css"

@@ -1,7 +1,16 @@
-const {test}=require('node:test');
+const {test,describe}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const source=fs.readFileSync(path.join(__dirname,'../scripts/report/explorer-tabs.js'),'utf8');
+const canonical=fs.readFileSync(path.join(__dirname,'../scripts/report/explorer-tabs.js'),'utf8');
+const production=fs.readFileSync(path.join(__dirname,'../scripts/report/surveillance-explorer.js'),'utf8');
+const begin='/* WINGS_EXPLORER_TABS_JS_BEGIN */',end='/* WINGS_EXPLORER_TABS_JS_END */';
+assert.equal(production.split(begin).length,2);
+assert.equal(production.split(end).length,2);
+const embedded=production.split(begin)[1].split(end)[0].trim();
+assert.equal(embedded,canonical.trim());
+for(const [asset,source] of [['canonical module',canonical],['generated bundle',embedded]]) {
+describe(asset,()=>{
+
 function env(available=true,legacyMode=false){
  const handlers={};let cloneCount=0,removed=0;
  const frame={style:{},contentWindow:{postMessage(){}},setAttribute(){},addEventListener(){}};
@@ -31,3 +40,6 @@ test('height bridge ignores viewport-only changes and remeasures content',()=>{
  handlers.resize();resize();assert.equal(sent.length,1);
  height=1400;resize();assert.equal(sent.length,2);assert.equal(sent[1].height,1400);
 });
+
+});
+}
