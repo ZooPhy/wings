@@ -5,14 +5,27 @@ The resulting .wings file is JSON and contains the rendered run-summary,
 sample-summary HTML files, run-level provenance, and a small manifest. It is
 designed to be read locally in a web browser without uploading report contents
 to a server.
+
+Sample reports rendered from the same Quarto template share a large
+byte-identical prefix and suffix. Schema version 2 stores that shared material
+once instead of once per sample, which cuts the bundle roughly in half on a
+30-sample run. This is a storage change only: every report, provenance field,
+and run-summary byte is preserved, and a reader reconstructs each report
+character for character. See scripts/wings_bundle_format.py.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from wings_bundle_format import pack_bundle, verify_roundtrip
 
 FORMAT_NAME = "WINGS_REPORT_BUNDLE"
 FORMAT_VERSION = 1
@@ -104,6 +117,14 @@ def parse_args() -> argparse.Namespace:
         help="Output .wings bundle path",
     )
     parser.add_argument(
+        "--no-pack",
+        action="store_true",
+        help=(
+            "Write a schema version 1 bundle with each report stored whole. "
+            "Only needed for readers that predate shared-chunk support."
+        ),
+    )
+    parser.add_argument(
         "sample_reports",
         nargs="+",
         type=Path,
@@ -115,6 +136,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     bundle = build_bundle(args.run_summary, args.provenance, args.sample_reports)
+    sample_count = bundle["sample_count"]
+
+    saved_bytes = 0
+    if not args.no_pack:
+        # Confirm every report reconstructs exactly before the packed form is
+        # allowed anywhere near the output path. A bundle that cannot be
+        # unpacked byte-for-byte is not written at all.
+        saved_bytes = verify_roundtrip(bundle)["saved_bytes"]
+        bundle = pack_bundle(bundle)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp_output = args.output.with_suffix(args.output.suffix + ".tmp")
@@ -124,9 +154,13 @@ def main() -> None:
     temp_output.replace(args.output)
 
     size_mb = args.output.stat().st_size / (1024 * 1024)
+    detail = ""
+    if saved_bytes > 0:
+        detail = f", {saved_bytes / (1024 * 1024):.2f} MB of shared report HTML stored once"
     print(
         f"WINGS report bundle created: {args.output} "
-        f"({bundle['sample_count']} samples, {size_mb:.2f} MB)"
+        f"({sample_count} samples, {size_mb:.2f} MB, "
+        f"schema v{bundle['version']}{detail})"
     )
 
 

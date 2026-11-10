@@ -230,6 +230,9 @@ def prepare_case(root, repo, source, negative):
     (root / "Snakefile").write_text(build_harness(source, negative), encoding="utf-8")
     (root / "scripts").mkdir()
     shutil.copy2(repo / "scripts/build_report_bundle.py", root / "scripts/build_report_bundle.py")
+    # The bundle builder imports this codec at module scope, so the synthetic
+    # tree needs it too; the production rule declares it as an input.
+    shutil.copy2(repo / "scripts/wings_bundle_format.py", root / "scripts/wings_bundle_format.py")
     (root / "envs").mkdir()
     shutil.copy2(repo / "envs/medaka.yaml", root / "envs/medaka.yaml")
     for sample in SAMPLE_IDS:
@@ -316,6 +319,7 @@ def self_check(repo, source):
             fixture_checkpoint(sample, root / sample / "segments", root / sample / "manifest.tsv")
             require(len(list((root / sample / "segments").glob("*/alignment.bam"))) == expected, "Wrong fixture segment count.")
     require((repo / "scripts/build_report_bundle.py").is_file(), "Bundle builder not found.")
+    require((repo / "scripts/wings_bundle_format.py").is_file(), "Bundle format codec not found.")
     print("PASS: source extraction and synthetic fixture checks.", flush=True)
 
 

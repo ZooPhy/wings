@@ -3909,7 +3909,8 @@ rule wings_report_bundle:
             f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.html",
             sample=SAMPLES,
         ),
-        builder="scripts/build_report_bundle.py"
+        builder="scripts/build_report_bundle.py",
+        codec="scripts/wings_bundle_format.py"
     output:
         bundle=f"{RESULTS}/wings_report_bundle.wings"
     shell:
