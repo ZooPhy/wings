@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import hashlib
 from functools import lru_cache
 import html
+from html.parser import HTMLParser
 import io
 import json
 from pathlib import Path
@@ -460,6 +461,28 @@ def recompare(args):
     print('Source JSONs retained. No raw-read processing, Snakemake jobs, or downloads were run.')
 
 
+def _insert_before_body_end(source, fragment, label):
+    """Insert at the document body, ignoring tag-like JavaScript strings."""
+    class BodyEnd(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.lines = [0] + [match.end() for match in re.finditer('\n', source)]
+            self.positions = []
+
+        def handle_endtag(self, tag):
+            if tag == 'body':
+                line, column = self.getpos()
+                self.positions.append(self.lines[line - 1] + column)
+
+    parser = BodyEnd()
+    parser.feed(source)
+    parser.close()
+    if len(parser.positions) != 1:
+        raise ValueError(label + ' must have exactly one closing body tag')
+    position = parser.positions[0]
+    return source[:position] + fragment + '\n' + source[position:]
+
+
 def embed(args):
     # WINGS_AMINO_TAB_EMBED_V1
     p=Path(args.report);text=p.read_text();start='<!-- WINGS_AMINO_ACIDS_BEGIN -->';end='<!-- WINGS_AMINO_ACIDS_END -->'
@@ -467,13 +490,11 @@ def embed(args):
     report=Path(args.amino).read_text()
     bridge='<!-- WINGS_AMINO_HEIGHT_BRIDGE_V1 -->\n<script>\n(() => {\n  let lastHeight = 0;\n  const content = document.querySelector("main") || document.body;\n  const measure = () => {\n    const height = Math.ceil(content.getBoundingClientRect().height);\n    if(height >= 200 && height !== lastHeight) {\n      lastHeight = height;\n      parent.postMessage({type:"wings-amino-height",height}, "*");\n    }\n  };\n  addEventListener("message", event => { if(event.source === parent && event.data?.type === "wings-amino-measure") requestAnimationFrame(measure); });\n  addEventListener("load", measure);\n  addEventListener("resize", measure);\n  if(typeof ResizeObserver === "function") new ResizeObserver(measure).observe(content);\n})();\n</script>\n'
     if 'WINGS_AMINO_HEIGHT_BRIDGE_V1' not in report:
-        if '</body>' not in report:raise ValueError('Amino acid report has no closing body')
-        report=report.replace('</body>',bridge+'\n</body>',1)
+        report=_insert_before_body_end(report,bridge,'Amino acid report')
     fragment=(start+'<template id="wings-amino-acid-dashboard-0"><iframe title="WINGS amino acid landscape" '
               'sandbox="allow-scripts allow-downloads" style="width:100%;height:1000px;border:0" srcdoc="'+
               html.escape(report,quote=True)+'"></iframe></template>'+end)
-    if '</body>' not in text:raise ValueError('Run report has no closing body')
-    text=text.replace('</body>',fragment+'\n</body>',1);p.write_text(text)
+    text=_insert_before_body_end(text,fragment,'Run report');p.write_text(text)
 
 
 def main():
