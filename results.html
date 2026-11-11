@@ -350,6 +350,17 @@
 
         const rawHref = link.getAttribute("href") || "";
 
+        // Embedded sample pages use a relative return link for standalone
+        // reports. In a bundle viewer, open the stored summary instead of
+        // requesting that path from the website hosting this page.
+        if (/^(?:\.\.?\/)*(?:run_summary\/)?run_summary\.html(?:[?#].*)?$/i.test(rawHref)) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          renderRunSummary();
+          return;
+        }
+
         if (rawHref.startsWith("#")) {
           event.preventDefault();
           event.stopPropagation();

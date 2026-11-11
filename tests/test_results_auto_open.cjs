@@ -19,6 +19,7 @@ const bundle = {
 <html>
 <body>
 <h1 id="auto-run-marker">AUTO_OPEN_RUN_SUMMARY</h1>
+<a id="sample-link" href="../sample_one/summary/sample_one.sample_summary.html">Open sample one</a>
 </body>
 </html>`
   },
@@ -29,7 +30,7 @@ const bundle = {
   samples: {
     sample_one: {
       filename: "sample_one.sample_summary.html",
-      html: `<!doctype html><html><body><h1>Sample one</h1></body></html>`
+      html: `<!doctype html><html><body><h1 id="sample-marker">Sample one</h1><a id="sample-return" href="../../run_summary/run_summary.html">Back to run summary</a></body></html>`
     }
   }
 };
@@ -37,6 +38,7 @@ const bundle = {
 let bundleRequests = 0;
 let compressedRequests = 0;
 let fallbackRequests = 0;
+let missingRequests = 0;
 
 const server = http.createServer((request, response) => {
   const url = new URL(request.url, "http://127.0.0.1");
@@ -78,6 +80,7 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  if (/(?:^|\/)run_summary\.html$/i.test(url.pathname)) missingRequests += 1;
   response.writeHead(404);
   response.end("Not found");
 });
@@ -121,10 +124,22 @@ const server = http.createServer((request, response) => {
       "AUTO_OPEN_RUN_SUMMARY"
     );
 
+    const missingBefore = missingRequests;
+    await frame.locator("#sample-link").click();
+    await frame.locator("#sample-marker").waitFor();
+    await frame.locator("#sample-return").click();
+    await frame.locator("#auto-run-marker").waitFor();
+    assert.equal(await page.locator("#back-to-run").isHidden(), true);
+    assert.equal(missingRequests, missingBefore);
+
     await page.goto(`${baseUrl}/results.html?demo=1`);
     await page.frameLocator("#report-frame").locator("#auto-run-marker").waitFor();
     assert.equal(compressedRequests, 1);
     assert.equal(fallbackRequests, 0);
+    await frame.locator("#sample-link").click();
+    await frame.locator("#sample-marker").waitFor();
+    await frame.locator("#sample-return").click();
+    await frame.locator("#auto-run-marker").waitFor();
     await page.addInitScript(() => { window.DecompressionStream = undefined; });
     await page.goto(`${baseUrl}/results.html?demo=1`);
     await page.frameLocator("#report-frame").locator("#auto-run-marker").waitFor();
