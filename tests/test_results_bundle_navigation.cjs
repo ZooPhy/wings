@@ -9,9 +9,11 @@ const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)[1];
 function fixture(version = 1) {
   const nodes = new Map();
   const element = () => ({hidden: false, style: {}, textContent: '', events: {},
+    setAttribute(name, value) {this[name] = value;},
     classList: {add() {}, remove() {}}, addEventListener(name, callback) {this.events[name] = callback;}});
   const document = {getElementById(id) {if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id);}};
-  const context = vm.createContext({document, window: {location: {search: ''}, scrollTo() {}, alert() {}}, URLSearchParams});
+  const frames = [];
+  const context = vm.createContext({document, window: {location: {search: ''}, scrollTo() {}, alert() {}, requestAnimationFrame(callback) {frames.push(callback);}}, URLSearchParams});
   vm.runInContext(script, context);
   const run = '<h1>Stored run summary</h1>', sample = '<h1>Stored sample</h1>';
   const bundle = {format: 'WINGS_REPORT_BUNDLE', version, run_summary: {html: run},
@@ -32,8 +34,23 @@ function fixture(version = 1) {
     listener(event);
     return event;
   }
-  return {nodes, frame, click, run, sample};
+  return {nodes, frame, click, run, sample, frames};
 }
+
+test('reports stay covered until initialization and two animation frames finish', () => {
+  const h = fixture();
+  assert.equal(h.frame.style.visibility, 'hidden');
+  assert.equal(h.nodes.get('report-loading').hidden, false);
+  h.click('../one/summary/one.sample_summary.html');
+  h.click('consensus.fasta');
+  // The earlier summary load must not reveal a newer sample render.
+  h.frames.shift()(); h.frames.shift()();
+  assert.equal(h.frame.style.visibility, 'hidden');
+  h.frames.shift()(); h.frames.shift()();
+  assert.equal(h.frame.style.visibility, 'visible');
+  assert.equal(h.frame['aria-busy'], 'false');
+  assert.equal(h.nodes.get('report-loading').hidden, true);
+});
 
 for (const version of [1, 2]) {
   test('sample return restores the stored summary for bundle v' + version, () => {

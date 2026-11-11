@@ -20,9 +20,21 @@ class ExplorerBuildTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.repo = Path(self.temp.name).resolve()
         shutil.copytree(ROOT / "scripts/report", self.repo / "scripts/report")
+        artwork = self.repo / "assets/birds/host-artwork.js"
+        artwork.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / "assets/birds/host-artwork.js", artwork)
+        states = self.repo / "assets/states/state-artwork.js"
+        states.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / "assets/states/state-artwork.js", states)
 
     def test_checked_in_assets_are_current(self):
         self.assertEqual(builder.plan(ROOT), {})
+
+    def test_state_catalog_matches_svg_sources(self):
+        spec = importlib.util.spec_from_file_location('state_builder', ROOT / 'scripts/build_state_assets.py')
+        states = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(states)
+        self.assertEqual((ROOT / 'assets/states/state-artwork.js').read_bytes(), states.build(ROOT).encode('utf-8'))
 
     def test_build_is_deterministic_and_idempotent(self):
         first = builder.render_all(self.repo)

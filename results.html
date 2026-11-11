@@ -179,6 +179,15 @@
       background: var(--white);
     }
 
+    .report-stage { position: relative; flex: 1; }
+    .report-loading {
+      position: absolute; inset: 0; z-index: 1;
+      display: grid; place-content: start center; padding-top: 6rem;
+      background: var(--white); color: var(--maroon);
+      font-size: 1.2rem; font-weight: 750;
+    }
+    .report-loading[hidden] { display: none; }
+
     @media (max-width: 620px) {
       .shell { margin: 1rem auto; }
       .header { align-items: flex-start; }
@@ -232,7 +241,10 @@
         <button class="button" type="button" id="close-results">Close results</button>
       </div>
     </div>
-    <iframe class="report-frame" id="report-frame" title="WINGS report"></iframe>
+    <div class="report-stage">
+      <div class="report-loading" id="report-loading" role="status" hidden>Preparing report…</div>
+      <iframe class="report-frame" id="report-frame" title="WINGS report"></iframe>
+    </div>
   </section>
 
   <input id="file-input" type="file" accept=".wings,application/json" hidden>
@@ -247,6 +259,7 @@
     const bundleLauncher = document.getElementById("bundle-launcher");
     const reportViewer = document.getElementById("report-viewer");
     const reportFrame = document.getElementById("report-frame");
+    const reportLoading = document.getElementById("report-loading");
     const reportStatus = document.getElementById("report-status");
     const backToRun = document.getElementById("back-to-run");
     const openAnother = document.getElementById("open-another");
@@ -258,6 +271,7 @@
 
     let currentBundle = null;
     let currentRunLabel = "WINGS run summary";
+    let renderGeneration = 0;
 
     function normalizeSampleKey(value) {
       return String(value || "")
@@ -332,6 +346,10 @@
       reportViewer.classList.add("is-open");
       reportStatus.textContent = label;
       backToRun.hidden = viewType !== "sample";
+      renderGeneration++;
+      reportLoading.hidden = false;
+      reportFrame.style.visibility = "hidden";
+      reportFrame.setAttribute("aria-busy", "true");
       reportFrame.srcdoc = html;
       window.scrollTo(0, 0);
     }
@@ -437,12 +455,26 @@
       await openBundle(bundle, label);
     }
 
-    reportFrame.addEventListener("load", attachReportNavigation);
+    reportFrame.addEventListener("load", () => {
+      const doc = reportFrame.contentDocument;
+      if (!currentBundle || !doc || doc.URL === "about:blank") return;
+      attachReportNavigation();
+      const generation = renderGeneration;
+      // DOMContentLoaded applies the presentation. Two frames allow layout
+      // and paint to settle while the original report remains covered.
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        if (generation !== renderGeneration || doc !== reportFrame.contentDocument || !currentBundle) return;
+        reportFrame.style.visibility = "visible";
+        reportFrame.setAttribute("aria-busy", "false");
+        reportLoading.hidden = true;
+      }));
+    });
 
     backToRun.addEventListener("click", renderRunSummary);
 
     openAnother.addEventListener("click", () => {
       currentBundle = null;
+      renderGeneration++;
       currentRunLabel = "WINGS run summary";
       reportFrame.removeAttribute("srcdoc");
       reportViewer.classList.remove("is-open");

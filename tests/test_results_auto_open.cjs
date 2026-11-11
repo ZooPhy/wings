@@ -118,6 +118,9 @@ const server = http.createServer((request, response) => {
 
     const frame = page.frameLocator("#report-frame");
     await frame.locator("#auto-run-marker").waitFor();
+    await page.waitForFunction(() => document.getElementById('report-frame').getAttribute('aria-busy') === 'false');
+    assert.equal(await page.locator('#report-loading').isHidden(), true);
+    assert.equal(await page.locator('#report-frame').evaluate(node => getComputedStyle(node).visibility), 'visible');
 
     assert.equal(
       await frame.locator("#auto-run-marker").innerText(),
@@ -127,8 +130,10 @@ const server = http.createServer((request, response) => {
     const missingBefore = missingRequests;
     await frame.locator("#sample-link").click();
     await frame.locator("#sample-marker").waitFor();
+    await page.waitForFunction(() => document.getElementById('report-frame').getAttribute('aria-busy') === 'false');
     await frame.locator("#sample-return").click();
     await frame.locator("#auto-run-marker").waitFor();
+    await page.waitForFunction(() => document.getElementById('report-frame').getAttribute('aria-busy') === 'false');
     assert.equal(await page.locator("#back-to-run").isHidden(), true);
     assert.equal(missingRequests, missingBefore);
 

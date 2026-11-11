@@ -124,8 +124,50 @@ is removed. Without these options, sample files retain their original bytes.
 Collection metadata uses four compact rounded cards: date, host, specimen, and
 location. Recorded latitude and longitude stay together inside the location
 card, without rounding or duplication. The cards wrap based on the report
-content width. Additional metadata remains in smaller cards; no photos or
-external image requests are included.
+content width. Additional metadata remains in smaller cards.
+
+Host cards include the matching drawing from `assets/birds/`, with the species
+name and exact recorded host value. The offline catalog supports all 173 supplied
+drawings, four-letter host codes, common names, and the five current eBird taxon
+codes. Unknown or conflicting host values keep their text without a guessed image.
+Original SVG bytes, including metadata, are preserved. The generated catalog is
+embedded in sample navigation, so portable reports need no external image requests.
+
+After changing drawings, rebuild and verify both asset layers:
+
+```bash
+python scripts/build_bird_assets.py
+python scripts/build_bird_assets.py --check
+python scripts/build_explorer_assets.py --write
+python scripts/build_explorer_assets.py --check
+```
+
+The bundle viewer covers the iframe with “Preparing report…” during each report
+load and reveals it after the load event and two animation frames. This applies
+to the demo, samples, and return navigation. Pending reveal callbacks cannot
+uncover a newer report load. Standalone HTML reports do not use this viewer cover.
+
+Collection-location cards also embed matching drawings from `assets/states/`,
+named like `Kentucky_KY.svg` and `New_York_NY.svg`. Full state names and postal
+codes match when the recorded country is US, USA, United States, or United States
+of America. Punctuation and case do not affect matching. Missing or unsupported
+locations keep their recorded text. Coordinates are unchanged. Drawings are
+decorative; location text remains available if an image cannot be displayed.
+
+Build the state catalog before rebuilding the report assets:
+
+```bash
+python scripts/build_state_assets.py
+python scripts/build_state_assets.py --check
+python scripts/build_explorer_assets.py --write
+python scripts/build_explorer_assets.py --check
+python scripts/refresh_demo_navigation.py --repo . --apply
+python scripts/refresh_demo_navigation.py --repo . --check
+```
+
+Commit the SVG sources, generated `assets/states/state-artwork.js`, and regenerated
+sample-navigation JS/CSS together. Existing saved reports can use the same
+`refresh_saved_explorer_ui.py --refresh-samples` process as bird artwork.
 
 To make the published demo use the current summary navigation and sample cards:
 

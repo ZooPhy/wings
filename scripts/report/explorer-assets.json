@@ -1,6 +1,8 @@
 {
   "schema": "wings.explorer-assets.v1",
   "sources": [
+    "assets/birds/host-artwork.js",
+    "assets/states/state-artwork.js",
     "scripts/report/vendor/d3-hierarchy.v3.min.js",
     "scripts/report/explorer-view-navigator.js",
     "scripts/report/pipeline-view-navigator.js",

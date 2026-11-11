@@ -96,15 +96,22 @@
 .wsp-sample-id { color:#000000; font-size:15px; font-weight:700; overflow-wrap:anywhere; }
 .wsp-layout { display:grid; grid-template-columns:130px minmax(120px,.8fr) minmax(160px,1.2fr) minmax(180px,1.3fr); gap:12px; align-items:stretch; padding:16px; max-width:1000px; box-sizing:border-box; }
 .wsp-date,.wsp-card { min-width:0; min-height:148px; box-sizing:border-box; border-radius:12px; padding:16px; }
-.wsp-date { display:flex; flex-direction:column; justify-content:center; align-items:center; gap:6px; background:#8C1D40; color:#FFFFFF; text-align:center; }
+.wsp-date { display:flex; flex-direction:column; justify-content:flex-start; align-items:center; gap:6px; border-top:4px solid transparent; background:#8C1D40; color:#FFFFFF; text-align:center; }
 .wsp-date-label { color:#FFC627; font-size:11px; font-weight:800; letter-spacing:.12em; }
 .wsp-calendar { display:grid; gap:4px; }
 .wsp-day { font-size:48px; font-weight:900; line-height:1.05; }
 .wsp-month { color:#FFC627; font-size:14px; font-weight:800; }
 .wsp-date-raw { font-size:18px; overflow-wrap:anywhere; }
-.wsp-card { display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:10px; border:1px solid #8C1D4030; border-top:4px solid #FFC627; background:#FFFFFF; }
+.wsp-card { display:flex; flex-direction:column; justify-content:flex-start; align-items:flex-start; gap:10px; border:1px solid #8C1D4030; border-top:4px solid #FFC627; background:#FFFFFF; }
 .wsp-label { color:#8C1D40; font-size:11px; font-weight:800; letter-spacing:.08em; }
+.wsp-label,.wsp-date-label { line-height:1.4; }
 .wsp-host-value { font-size:28px; font-weight:900; line-height:1.2; overflow-wrap:anywhere; }
+.wsp-host { gap:5px; }
+.wsp-host-artwork { display:block; width:120px; height:100px; max-width:100%; object-fit:contain; align-self:flex-start; border-radius:8px; }
+.wsp-host-name { color:#000000; font-size:18px; font-weight:900; line-height:1.15; overflow-wrap:anywhere; }
+.wsp-host-code { color:#8C1D40; font-size:13px; font-weight:800; line-height:1.2; overflow-wrap:anywhere; }
+.wsp-location-card { gap:5px; }
+.wsp-state-artwork { display:block; width:120px; height:100px; max-width:100%; object-fit:contain; align-self:flex-start; }
 .wsp-specimen,.wsp-location { color:#000000; font-size:23px; font-weight:800; line-height:1.4; overflow-wrap:anywhere; }
 .wsp-coordinates { display:flex; flex-wrap:wrap; gap:6px 14px; margin:0; }
 .wsp-coordinates > div { display:grid; gap:2px; }

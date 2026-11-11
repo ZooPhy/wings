@@ -31,6 +31,58 @@
     });
   }
   const fieldKey = value => value.toLowerCase().replace(/[_\s]+/g, " ").trim();
+  const hostKey = value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const hostAliases = {blkvul: "BLVU", snogoo: "SNGO", turvul: "TUVU", cangoo: "CANG", cago: "CANG", rethaw: "RTHA"};
+  const hostArtwork = new Map();
+  for (const bird of globalThis.WINGS_HOST_ARTWORK || []) {
+    hostArtwork.set(hostKey(bird.name), bird);
+    if (bird.code) hostArtwork.set(hostKey(bird.code), bird);
+  }
+  function resolveHost(host) {
+    const key = hostKey(host);
+    const direct = hostArtwork.get(key) || hostArtwork.get(hostKey(hostAliases[key]));
+    if (direct) return direct;
+    // Metadata may include both a species name and its code, in either order.
+    const candidates = String(host).split(/[()·\/|,]/).map(hostKey).filter(Boolean);
+    const matches = candidates.map(key => hostArtwork.get(key) || hostArtwork.get(hostKey(hostAliases[key]))).filter(Boolean);
+    return matches.length && matches.every(bird => bird === matches[0]) ? matches[0] : null;
+  }
+  function populateHostCard(card, host) {
+    card.append(make("span", "wsp-label", "HOST"));
+    const bird = resolveHost(host);
+    if (!bird) { card.append(make("strong", "wsp-host-value", host)); return; }
+    const drawing = make("img", "wsp-host-artwork");
+    drawing.src = bird.src;
+    drawing.alt = "";
+    drawing.width = 120; drawing.height = 100;
+    drawing.addEventListener("error", () => drawing.remove(), {once: true});
+    card.append(drawing, make("strong", "wsp-host-name", bird.name));
+    // Retain the exact recorded value alongside the display name.
+    if (hostKey(host) !== hostKey(bird.name)) card.append(make("span", "wsp-host-code", host));
+  }
+  const stateArtwork = new Map();
+  for (const state of globalThis.WINGS_STATE_ARTWORK || []) {
+    stateArtwork.set(hostKey(state.name), state);
+    stateArtwork.set(hostKey(state.code), state);
+  }
+  function resolveState(state, country) {
+    if (!["us", "usa", "unitedstates", "unitedstatesofamerica"].includes(hostKey(country))) return null;
+    return stateArtwork.get(hostKey(state)) || null;
+  }
+  function populateLocationCard(card, state, country) {
+    card.append(make("span", "wsp-label", "COLLECTION LOCATION"));
+    const artwork = resolveState(state, country);
+    if (artwork) {
+      const drawing = make("img", "wsp-state-artwork");
+      drawing.src = artwork.src;
+      drawing.alt = "";
+      drawing.width = 120; drawing.height = 100;
+      drawing.addEventListener("error", () => drawing.remove(), {once: true});
+      card.append(drawing);
+    }
+    const location = [state, country].filter(value => value !== "Not recorded").join(" · ") || "Not recorded";
+    card.append(make("strong", "wsp-location", location));
+  }
   function tableContainer(table) {
     const panel = table.closest(".report-panel");
     return panel?.querySelectorAll("table").length === 1 ? panel : table.closest(".escape-table-shell") || table;
@@ -68,12 +120,11 @@
       dateCard.append(time);
     } else dateCard.append(make("strong", "wsp-date-raw", date));
     const hostCard = make("div", "wsp-card wsp-host");
-    hostCard.append(make("span", "wsp-label", "HOST"), make("strong", "wsp-host-value", host));
+    populateHostCard(hostCard, host);
     const specimenCard = make("div", "wsp-card wsp-specimen-card");
     specimenCard.append(make("span", "wsp-label", "SPECIMEN TYPE"), make("strong", "wsp-specimen", specimen));
     const locationCard = make("div", "wsp-card wsp-location-card");
-    const location = [state, country].filter(value => value !== "Not recorded").join(" · ") || "Not recorded";
-    locationCard.append(make("span", "wsp-label", "COLLECTION LOCATION"), make("strong", "wsp-location", location));
+    populateLocationCard(locationCard, state, country);
     const coordinates = entries.filter(row => ["latitude", "longitude"].includes(fieldKey(row.label)));
     if (coordinates.length) {
       const list = make("dl", "wsp-coordinates");
@@ -229,7 +280,7 @@
     compactFileExplanation(document.getElementById("consensus-and-variant-files"));
     mountGenoFLU(document.getElementById("genoflu-genotype"));
   }
-  globalThis.WINGS_SAMPLE_PRESENTATION = {initialize, mountGenoFLU, readCalls, compactFileExplanation, mountSampleProfile};
+  globalThis.WINGS_SAMPLE_PRESENTATION = {initialize, mountGenoFLU, readCalls, compactFileExplanation, mountSampleProfile, resolveHost, populateHostCard, resolveState, populateLocationCard};
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, {once: true});
   else initialize();
 })();
