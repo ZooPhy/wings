@@ -126,3 +126,16 @@ location. Recorded latitude and longitude stay together inside the location
 card, without rounding or duplication. The cards wrap based on the report
 content width. Additional metadata remains in smaller cards; no photos or
 external image requests are included.
+
+To make the published demo use the current summary navigation and sample cards:
+
+```bash
+python scripts/refresh_demo_navigation.py --repo . --apply
+python scripts/refresh_demo_navigation.py --repo . --check
+```
+
+This supports the tracked `demo/wings_demo.wings.gz` on its own and updates an
+uncompressed copy too if one exists. Original demo files are backed up outside
+the repository. Sample data, embedded evidence, provenance and original report
+dates are preserved; only presentation assets and visible refresh notices are
+updated. Reload the refreshed demo bundle in the viewer to see the changes.
