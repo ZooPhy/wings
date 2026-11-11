@@ -6,6 +6,21 @@
 @@WINGS:scripts/report/evidence-synthesis.js@@
 /* WINGS_EVIDENCE_SYNTHESIS_END */
 
+/* WINGS_D3_HIERARCHY_BEGIN */
+// Publish bundled D3 without registering an anonymous RequireJS module.
+(function(define, module, exports) {
+@@WINGS:scripts/report/vendor/d3-hierarchy.v3.min.js@@
+}).call(globalThis, undefined, undefined, undefined);
+/* WINGS_D3_HIERARCHY_END */
+
+/* WINGS_VIEW_NAVIGATOR_BEGIN */
+@@WINGS:scripts/report/explorer-view-navigator.js@@
+/* WINGS_VIEW_NAVIGATOR_END */
+
+/* WINGS_PIPELINE_NAVIGATION_BEGIN */
+@@WINGS:scripts/report/pipeline-view-navigator.js@@
+/* WINGS_PIPELINE_NAVIGATION_END */
+
 /* WINGS_EXPLORER_TABS_JS_BEGIN */
 @@WINGS:scripts/report/explorer-tabs.js@@
 /* WINGS_EXPLORER_TABS_JS_END */

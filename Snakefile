@@ -2232,7 +2232,9 @@ rule sample_summary_html:
         report_html="scripts/report/escape-report.html",
         report_js="scripts/report/escape-report.js",
         constellation_css="scripts/report/genome-constellation.css",
-        constellation_js="scripts/report/genome-constellation.js"
+        constellation_js="scripts/report/genome-constellation.js",
+        navigation_css="scripts/report/sample-navigation.css",
+        navigation_js="scripts/report/sample-navigation.js"
     output:
         html=f"{RESULTS}/{{sample}}/summary/{{sample}}.sample_summary.html"
     params:
@@ -2280,6 +2282,8 @@ rule sample_summary_html:
         report_js_abs="$(cd "$(dirname {input.report_js:q})" && pwd)/$(basename {input.report_js:q})"
         constellation_css_abs="$(cd "$(dirname {input.constellation_css:q})" && pwd)/$(basename {input.constellation_css:q})"
         constellation_js_abs="$(cd "$(dirname {input.constellation_js:q})" && pwd)/$(basename {input.constellation_js:q})"
+        navigation_css_abs="$(cd "$(dirname {input.navigation_css:q})" && pwd)/$(basename {input.navigation_css:q})"
+        navigation_js_abs="$(cd "$(dirname {input.navigation_js:q})" && pwd)/$(basename {input.navigation_js:q})"
 
         report_logo_abs="$(cd "$(dirname {input.report_logo:q})" && pwd)/$(basename {input.report_logo:q})"
 
@@ -2295,6 +2299,8 @@ rule sample_summary_html:
         cp "$report_js_abs" "$temp_report_dir/escape-report.js"
         cp "$constellation_css_abs" "$temp_report_dir/genome-constellation.css"
         cp "$constellation_js_abs" "$temp_report_dir/genome-constellation.js"
+        cp "$navigation_css_abs" "$temp_report_dir/sample-navigation.css"
+        cp "$navigation_js_abs" "$temp_report_dir/sample-navigation.js"
 
         (
             cd "$output_dir"

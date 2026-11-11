@@ -1,6 +1,12 @@
 {
   "schema": "wings.explorer-assets.v1",
   "sources": [
+    "scripts/report/vendor/d3-hierarchy.v3.min.js",
+    "scripts/report/explorer-view-navigator.js",
+    "scripts/report/pipeline-view-navigator.js",
+    "scripts/report/sample-view-navigator.js",
+    "scripts/report/sample-report-presentation.js",
+    "scripts/report/view-navigation.css",
     "scripts/report/migration-weave.js",
     "scripts/report/evidence-synthesis.js",
     "scripts/report/explorer-tabs.js",
@@ -12,6 +18,8 @@
     "scripts/report/tree-studio.css"
   ],
   "outputs": {
+    "scripts/report/sample-navigation.js": "scripts/report/templates/sample-navigation.js.tpl",
+    "scripts/report/sample-navigation.css": "scripts/report/templates/sample-navigation.css.tpl",
     "scripts/report/explorer-tabs.css": "scripts/report/templates/explorer-tabs.css.tpl",
     "scripts/report/surveillance-explorer.js": "scripts/report/templates/surveillance-explorer.js.tpl",
     "scripts/report/surveillance-explorer.css": "scripts/report/templates/surveillance-explorer.css.tpl"

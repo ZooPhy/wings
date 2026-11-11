@@ -92,50 +92,7 @@
   overflow-wrap: anywhere;
 }
 
-.wse-app-tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 0;
-  margin: 0;
-  padding: 0 1rem;
-  border: 0;
-  border-bottom: 1px solid #dee2e6;
-  background: white;
-  overflow-x: auto;
-}
-
-.wse-app-tab {
-  flex: 0 0 auto;
-  min-width: 0;
-  margin-bottom: -1px;
-  padding: .72rem 1.15rem;
-  border: 1px solid transparent;
-  border-radius: .25rem .25rem 0 0;
-  background: transparent;
-  color: #2563eb;
-  font-size: 1rem;
-  font-weight: 400;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.wse-app-tab:hover {
-  color: #1d4ed8;
-  border-color: #e9ecef #e9ecef #dee2e6;
-  background: transparent;
-}
-
-.wse-app-tab[aria-selected="true"] {
-  color: #212529;
-  border-color: #dee2e6 #dee2e6 #fff;
-  background: #fff;
-  font-weight: 400;
-}
-
-.wse-app-tab:focus-visible {
-  outline: 3px solid #ffc627;
-  outline-offset: -3px;
-}
+@@WINGS:scripts/report/view-navigation.css@@
 
 .wse-app-views {
   border: 1px solid #d8e0e1;

@@ -28,3 +28,7 @@ jobs:
         run: python -m unittest discover -s tests -p test_explorer_asset_build.py -v
       - name: Test Explorer modules and tab integration
         run: node --test tests/test_amino_explorer_tab.cjs tests/test_explorer_module_runtime.cjs tests/test_explorer_tabs.cjs tests/test_genome_braid_clock.cjs tests/test_genomic_ecological_concordance_ui.cjs tests/test_tree_studio.cjs
+      - name: Test grouped navigation
+        run: node --test tests/test_explorer_navigation.cjs tests/test_navigation_loaders.cjs
+      - name: Test saved report UI refresh
+        run: python -m unittest discover -s tests -p test_saved_explorer_ui_refresh.py -v

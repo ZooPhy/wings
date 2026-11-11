@@ -10,7 +10,7 @@ vm.runInContext(source, context);
 const api = context.WINGS_EXPLORER_TABS;
 
 test('exports application views including the embedded genotype dashboard', () => {
-  assert.equal(api.VERSION, '0.3.0');
+  assert.equal(api.VERSION, '0.4.0');
   assert.deepEqual(Array.from(api.TAB_ORDER), ['overview', 'genome', 'amino', 'genotypes', 'ecology', 'coverage', 'concordance', 'outbreak']);
 });
 

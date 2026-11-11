@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.3.0";
+  const VERSION = "0.4.0";
 
   const make = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -324,6 +324,8 @@
       panels[name] = panel;
     });
 
+    const navigation = globalThis.WINGS_VIEW_NAVIGATOR.mount(nav, buttons);
+
     panels.coverage.append(timeline, mainGrid);
 
     const shared = make("div", "wse-app-shared");
@@ -365,7 +367,9 @@
       panels.outbreak.append(make("p", "wse-app-empty", "No outbreak-context panel is available for this run."));
     }
 
-    root.insertBefore(nav, shell);
+    const workspace = make("div", "wse-explorer-workspace");
+    root.insertBefore(workspace, shell);
+    workspace.append(navigation.element, shell);
     globalThis.WINGS_EVIDENCE_SYNTHESIS.mount(explorer, app);
     const overviewBrief = app.querySelector(".wse-evidence-synthesis");
     app.append(toolbar);
@@ -414,6 +418,7 @@
         buttons[key].tabIndex = selected ? 0 : -1;
         panels[key].hidden = !selected;
       }
+      navigation.select(name, focus);
       if (focus) buttons[name].focus();
       if (name === "coverage") {
         requestAnimationFrame(() => {
@@ -433,12 +438,13 @@
     for (const [name, button] of Object.entries(buttons)) {
       button.addEventListener("click", () => activate(name));
       button.addEventListener("keydown", (event) => {
-        const index = TAB_ORDER.indexOf(name);
+        const order = navigation.visibleViews();
+        const index = order.indexOf(name);
         let next = null;
-        if (event.key === "ArrowRight") next = TAB_ORDER[(index + 1) % TAB_ORDER.length];
-        if (event.key === "ArrowLeft") next = TAB_ORDER[(index - 1 + TAB_ORDER.length) % TAB_ORDER.length];
-        if (event.key === "Home") next = TAB_ORDER[0];
-        if (event.key === "End") next = TAB_ORDER[TAB_ORDER.length - 1];
+        if (event.key === "ArrowDown" || event.key === "ArrowRight") next = order[(index + 1) % order.length];
+        if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = order[(index - 1 + order.length) % order.length];
+        if (event.key === "Home") next = order[0];
+        if (event.key === "End") next = order[order.length - 1];
         if (next) {
           event.preventDefault();
           activate(next, true);
