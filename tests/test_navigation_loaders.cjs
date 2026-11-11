@@ -22,3 +22,16 @@ for(const [name,source] of [['sample navigation',read('sample-navigation.js')],[
     if(loader==='CommonJS-like globals'){assert.equal(context.exports,originalExports);assert.equal(context.module,originalModule);assert.deepEqual(originalModule.exports,{preserved:true});assert.deepEqual(originalExports,{preserved:true});}
   });
 });
+
+
+for (const [name, source] of [['canonical Pipeline navigator', read('pipeline-view-navigator.js')], ['generated Explorer bundle', bundle]]) {
+  for (const readyState of ['complete', 'loading']) test(name + ' initializes safely without a Pipeline document (' + readyState + ')', () => {
+    const listeners = [];
+    const document = {readyState, querySelectorAll: () => [], addEventListener: (event, callback) => listeners.push(callback)};
+    const context = vm.createContext({document});
+    assert.doesNotThrow(() => vm.runInContext(source, context));
+    for (const callback of listeners) assert.doesNotThrow(() => callback());
+    assert.equal(typeof context.WINGS_PIPELINE_NAVIGATION.mount, 'function');
+    assert.doesNotThrow(() => context.WINGS_PIPELINE_NAVIGATION.initialize());
+  });
+}

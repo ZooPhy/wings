@@ -981,7 +981,7 @@ THIS SOFTWARE.
   }
 
   function initialize() {
-    const overview = document.getElementById("overview");
+    const overview = document.getElementById?.("overview");
     const tabset = overview?.closest(".panel-tabset");
     mount(tabset);
   }
