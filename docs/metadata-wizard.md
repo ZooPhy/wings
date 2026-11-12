@@ -69,7 +69,9 @@ to update the VADR and consensus/variant table styles in saved bundles.
 After editing the host-code TSV, run `python scripts/build_metadata_reference.py`
 and commit the refreshed reference JSON. Country labels/codes and country-specific top-level ISO subdivision records
 are maintained in that JSON with source attribution. The collection editor asks
-for country before region. Changing countries clears an incompatible region and
+for country before region, using searchable autofill fields with one choice per
+country or region. Region suggestions are filtered by the selected country.
+Changing countries clears an incompatible region and
 records the previous value in the change log. Imported mismatches remain visible
 and block export until corrected or cleared. Countries without bundled
 subdivisions allow a manually entered region.

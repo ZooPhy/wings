@@ -77,6 +77,8 @@
         get("mwProposals").replaceChildren();renderIssues();updateSummary();
       }
     });
+    const countries=make("datalist");countries.id="mwCountries";
+    for(const country of reference.countries){const option=make("option");option.value=country.alpha3;option.label=`${country.name} · ${country.alpha3}`;countries.append(option);}dialog.append(countries);
     const hostNames=make("datalist");hostNames.id="mwHostNames";const seen=new Set();
     for(const host of reference.hosts){
       const species=Core.key(host.name);if(seen.has(species))continue;seen.add(species);
@@ -114,20 +116,22 @@
   function editableCell(rowIndex,field,readonly=false) {
     const cell=make("td");if(readonly){cell.append(make("strong","",model.rows[rowIndex][field] || "—"));return cell;}
     if(field==="country" || field==="state"){
-      const row=model.rows[rowIndex],current=row[field] || "",country=Core.countryMatch(row.country,index),regions=Core.regionsForCountry(row.country,index);
-      if(field==="country" || !country || regions.length){
-        const select=make("select");select.dataset.row=String(rowIndex);select.dataset.field=field;select.setAttribute("aria-label",`${LABELS[field]}, row ${rowIndex+1}`);
-        const blank=make("option","",field==="country"?"Select country…":country?"Select state / province…":"Choose country first");blank.value="";select.append(blank);
-        const matched=field==="country"?Core.countryMatch(current,index):Core.regionMatch(current,row.country,index);
-        const choices=field==="country"?reference.countries.map(item=>({value:item.alpha3,label:`${item.name} · ${item.alpha3}`,match:item===matched})):[...new Map(regions.map(item=>[item.name,item])).values()].sort((a,b)=>a.name.localeCompare(b.name)).map(item=>({value:item.name,label:item.name,match:item.name===matched?.name}));
-        for(const choice of choices){const option=make("option","",choice.label);option.value=choice.match?current:choice.value;select.append(option);}
-        if(current && !matched){const recorded=make("option","",`Review imported value: ${current}`);recorded.value=current;recorded.disabled=true;select.append(recorded);}
-        select.value=current;select.disabled=field==="state" && !country;cell.append(select);
-        if(field==="state" && !country)cell.append(make("small","","Select a country to choose its states/provinces."));
-        return cell;
+      const row=model.rows[rowIndex],country=Core.countryMatch(row.country,index);
+      const input=make("input");input.type="text";input.value=row[field] || "";input.dataset.row=String(rowIndex);input.dataset.field=field;input.autocomplete="off";
+      input.setAttribute("aria-label",`${LABELS[field]}, row ${rowIndex+1}`);
+      if(field==="country"){
+        input.setAttribute("list","mwCountries");input.placeholder="Search country name or code";cell.append(input);
+      }else{
+        input.disabled=!country;input.placeholder=country?"Search state / province":"Choose country first";
+        const regions=Core.regionsForCountry(row.country,index),list=make("datalist");list.id=`mwRegions-${rowIndex}`;
+        for(const region of [...new Map(regions.map(item=>[item.name,item])).values()].sort((a,b)=>a.name.localeCompare(b.name))){
+          const option=make("option");option.value=region.name;option.label=`${region.name} · ${region.code}`;list.append(option);
+        }
+        input.setAttribute("list",list.id);cell.append(input,list);
+        if(!country)cell.append(make("small","","Select a country to search its states/provinces."));
+        else if(!regions.length)cell.append(make("small","","No predefined regions for this country; enter a region if known."));
       }
-      // Some countries have no subdivision records in the bundled ISO catalogue.
-      cell.append(make("small","","No predefined regions for this country; enter a region if known."));
+      return cell;
     }
     if(field==="specimen_type"){
       const select=make("select");select.dataset.row=String(rowIndex);select.dataset.field=field;select.setAttribute("aria-label",`Specimen type, row ${rowIndex+1}`);
