@@ -37,8 +37,8 @@ def refresh_html(text):
             f'<li>Reference positions at ≥ <strong>{depth}</strong>: ≥ <strong>{breadth}</strong></li>\n'
             '<li>Consensus length ≥ configured segment minimum</li>\n'
             f'<li>Consensus N fraction ≤ <strong>{ns}</strong></li>\n</ul>\n'
-            '<p><strong>Length warning:</strong> above the configured upper length guide; '
-            'still <strong>PASS</strong> if all criteria are met.</p>\n'
+            '<p><strong>Length warning:</strong> consensus exceeds the expected segment length; '
+            'this warning alone does not cause QC failure.</p>\n'
             '<p><strong>Genome status — segments passing QC:</strong></p>'
         )
         text = text[:matches[0].start()] + replacement + text[matches[0].end():]
@@ -51,6 +51,11 @@ def refresh_html(text):
         '', text)
     if 'These categories describe' in text or 'Each influenza segment passes WINGS segment QC' in text:
         raise ValueError('Old QC explanation remains; no files changed')
+    text = text.replace(
+        '<strong>Length warning:</strong> above the configured upper length guide; '
+        'still <strong>PASS</strong> if all criteria are met.',
+        '<strong>Length warning:</strong> consensus exceeds the expected segment length; '
+        'this warning alone does not cause QC failure.')
     return text
 
 

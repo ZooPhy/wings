@@ -1055,7 +1055,7 @@ cat('<script type="application/json" id="wings-distribution-data">',
 - Consensus length ≥ configured segment minimum
 - Consensus N fraction ≤ **`r format(100 * max_n_fraction, trim = TRUE)`%**
 
-**Length warning:** above the configured upper length guide; still **PASS** if all criteria are met.
+**Length warning:** consensus exceeds the expected segment length; this warning alone does not cause QC failure.
 
 **Genome status — segments passing QC:**
 
