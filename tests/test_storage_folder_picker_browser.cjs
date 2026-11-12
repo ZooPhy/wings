@@ -49,6 +49,12 @@ const server=http.createServer((req,res)=>{
     await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
     assert.equal(await page.locator('#condaCacheDirectory').inputValue(),'');
     await page.locator('#runsDirectory').fill('/runs');await page.locator('[data-storage-browse="runsDirectory"]').click();
+    // Force reopening before the previous native dialog close event is delivered.
+    await page.evaluate(()=>{
+      document.getElementById('storageFolderPicker').close();
+      document.querySelector('[data-storage-browse="runsDirectory"]').click();
+    });
+    await page.waitForFunction(()=>document.getElementById('folderPickerPath').textContent==='/runs' && !document.getElementById('folderPickerChoose').disabled);
     await dialog.getByRole('button',{name:'Denied /',exact:true}).click();
     await page.waitForFunction(()=>document.getElementById('folderPickerStatus').textContent==='Access denied');
     assert.equal(await dialog.locator('#folderPickerChoose').isDisabled(),true);

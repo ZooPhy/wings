@@ -23,7 +23,11 @@
   const footer=make("footer",undefined,"folder-actions"),cancel=button("Cancel",()=>dialog.close()),choose=button("Use this folder",select);choose.className="btn btn-primary";choose.id="folderPickerChoose";footer.append(cancel,choose);
   dialog.append(title,make("p","Browse folders on the computer running WINGS. Choose a folder, then validate and apply the storage locations.","help"),shortcuts,current,toolbar,status,list,pager,footer);document.body.append(dialog);
   let target,path="",parent="",offset=0,limit=200,request=0,selectedPath=null;
-  dialog.addEventListener("close",()=>{request++;selectedPath=null;target?.focus();});
+  dialog.addEventListener("close",()=>{
+    // Native close events are queued: a new picker session may already be open.
+    if(dialog.open)return;
+    request++;selectedPath=null;target?.focus();
+  });
   async function load(value="",start=0,keepSearch=false) {
     const revision=++request;selectedPath=null;choose.disabled=true;up.disabled=true;previous.disabled=true;next.disabled=true;
     status.textContent="Loading folders…";list.replaceChildren();count.textContent="";
