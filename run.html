@@ -31,12 +31,8 @@
 
 <main class="portal-main">
   <h1 class="portal-title">Run WINGS Pipeline</h1>
-  <p class="portal-lede">
-    Prepare a local avian-influenza sequencing run, validate the inputs, launch the WINGS Snakemake workflow, and follow progress from the same portal.
-  </p>
-
   <div class="local-note">
-    <strong>Local-first:</strong> sequencing files and metadata are sent only to the WINGS runner on this computer and stored under your local WINGS run directory. FASTQ files and the complete metadata file are not uploaded to the WINGS website. Context downloads can send selected coordinates, dates, regions, or species to their data providers when enabled.
+    Files stay local; context uses external services.
   </div>
 
   <section id="savedRuns" class="panel" aria-labelledby="savedRunsTitle" hidden>
