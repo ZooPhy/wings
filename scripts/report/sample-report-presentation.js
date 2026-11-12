@@ -165,33 +165,13 @@
     return match[1] + (decimals ? "." + decimals : "") + (match[3] || "");
   }
 
-  function mountBlastTable(table) {
+  function mountSegmentOrder(table) {
     if (!table) return null;
-    if (table.wingsBlastPresentation) return table.wingsBlastPresentation;
+    if (table.wingsSegmentOrder) return table.wingsSegmentOrder;
     const headers = Array.from(table.querySelector("thead")?.querySelectorAll("th") || []);
-    const labels = headers.map(cell => cell.textContent.trim().toLowerCase());
-    const segmentIndex = labels.indexOf("segment"), hitIndex = labels.indexOf("top blast hit");
-    if (segmentIndex < 0 || hitIndex < 0) return null;
-    const numeric = labels.map((label, index) => [label, index]).filter(([label]) => ["identity (%)", "query coverage (%)", "e-value", "bit score"].includes(label)).map(([, index]) => index);
+    const segmentIndex = headers.findIndex(cell => cell.textContent.trim().toLowerCase() === "segment");
+    if (segmentIndex < 0) return null;
     const bodies = Array.from(table.querySelectorAll("tbody"));
-    const sentinel = /^(?:SKIPPED(?:[_\s-].*)?|NO[_\s-]?HITS?|NOT[_\s-]?(?:AVAILABLE|RECORDED)|N\/?A|FAILED|ERROR|MISSING)$/i;
-    for (const body of bodies) {
-      for (const row of body.querySelectorAll("tr")) {
-        const cells = row.querySelectorAll("td");
-        for (const link of cells[hitIndex]?.querySelectorAll("a") || []) {
-          if (sentinel.test(link.textContent.trim())) link.replaceWith(make("span", "", link.textContent));
-        }
-        for (const index of numeric) {
-          const cell = cells[index];
-          if (!cell) continue;
-          const recorded = cell.textContent.trim(), display = trimMetricZeros(recorded);
-          if (display !== recorded) {
-            cell.setAttribute("data-wings-recorded-value", recorded);
-            cell.textContent = display;
-          }
-        }
-      }
-    }
     const segmentHeader = headers[segmentIndex];
     function sortSegments(descending = false) {
       for (const body of bodies) {
@@ -224,8 +204,71 @@
     segmentHeader.setAttribute("title", "Sort by segment order");
     sortSegments();
     const api = {sortSegments, segmentHeader};
+    table.wingsSegmentOrder = api;
+    return api;
+  }
+
+  function mountBlastTable(table) {
+    if (!table) return null;
+    if (table.wingsBlastPresentation) return table.wingsBlastPresentation;
+    const labels = Array.from(table.querySelector("thead")?.querySelectorAll("th") || []).map(cell => cell.textContent.trim().toLowerCase());
+    const hitIndex = labels.indexOf("top blast hit");
+    if (!labels.includes("segment") || hitIndex < 0) return null;
+    const numeric = labels.map((label, index) => [label, index]).filter(([label]) => ["identity (%)", "query coverage (%)", "e-value", "bit score"].includes(label)).map(([, index]) => index);
+    const sentinel = /^(?:SKIPPED(?:[_\s-].*)?|NO[_\s-]?HITS?|NOT[_\s-]?(?:AVAILABLE|RECORDED)|N\/?A|FAILED|ERROR|MISSING)$/i;
+    for (const body of table.querySelectorAll("tbody")) {
+      for (const row of body.querySelectorAll("tr")) {
+        const cells = row.querySelectorAll("td");
+        for (const link of cells[hitIndex]?.querySelectorAll("a") || []) {
+          if (sentinel.test(link.textContent.trim())) link.replaceWith(make("span", "", link.textContent));
+        }
+        for (const index of numeric) {
+          const cell = cells[index];
+          if (!cell) continue;
+          const recorded = cell.textContent.trim(), display = trimMetricZeros(recorded);
+          if (display !== recorded) {
+            cell.setAttribute("data-wings-recorded-value", recorded);
+            cell.textContent = display;
+          }
+        }
+      }
+    }
+    const api = mountSegmentOrder(table);
     table.wingsBlastPresentation = api;
     return api;
+  }
+
+  function removeExpectedLengthTables(main) {
+    const ids = new Set(), parents = [];
+    let removed = 0;
+    if (!main) return {removed, ids};
+    for (const table of Array.from(main.querySelectorAll("table"))) {
+      const headers = Array.from(table.querySelector("thead")?.querySelectorAll("th") || []).map(cell => cell.textContent.trim().toLowerCase().replace(/\s+/g, " "));
+      if (headers.length !== 2 || headers[0] !== "segment" || !["expected complete length", "expected segment length", "expected length"].includes(headers[1])) continue;
+      const fileWrap = table.closest(".file-download-table-wrap");
+      const container = (fileWrap?.querySelectorAll("table").length === 1 ? fileWrap : null) || table.closest(".escape-table-wrapper") || table.closest(".escape-table-shell") || table;
+      parents.push(container.parentElement);
+      if (container.id) ids.add(container.id);
+      container.remove();removed++;
+    }
+    if (!removed) return {removed, ids};
+    for (const tag of ["h2", "h3", "h4", "h5", ".file-download-title"]) {
+      for (const heading of Array.from(main.querySelectorAll(tag))) {
+        if (!/^expected\s+segment[\s-]*length\s+ranges$/i.test(heading.textContent.trim().replace(/#$/, "").trim())) continue;
+        parents.push(heading.parentElement);
+        if (heading.id) ids.add(heading.id);
+        heading.remove();
+      }
+    }
+    // Remove empty presentation shells, preserving panels with other evidence.
+    for (let parent of parents) {
+      while (parent && parent !== main && !parent.children.length && !parent.textContent.trim() &&
+        (parent.tagName === "SECTION" || ["cell", "cell-output", "cell-output-display", "report-panel", "escape-table-shell", "file-download-table-wrap"].some(cls => parent.classList.contains(cls)))) {
+        if (parent.id) ids.add(parent.id);
+        const next = parent.parentElement;parent.remove();parent = next;
+      }
+    }
+    return {removed, ids};
   }
 
   function readCalls(table) {
@@ -342,20 +385,26 @@
   }
 
   function initialize() {
-    mountSampleProfile(document.querySelector?.("main.content") || document.querySelector?.("main"));
+    const main = document.querySelector?.("main.content") || document.querySelector?.("main");
+    const removedLengths = removeExpectedLengthTables(main);
+    mountSampleProfile(main);
     for (const id of ["irma-candidate-selection", "interpretation"]) {
       const section = document.getElementById(id);
       if (section?.tagName === "SECTION") section.remove();
     }
     const toc = document.getElementById("TOC");
     for (const link of toc?.querySelectorAll('a[href^="#"]') || []) {
-      if (["#irma-candidate-selection", "#interpretation"].includes(link.getAttribute("href"))) (link.closest("li") || link).remove();
+      const href = link.getAttribute("href");
+      if (["#irma-candidate-selection", "#interpretation"].includes(href) || removedLengths.ids.has(href.slice(1))) (link.closest("li") || link).remove();
     }
     compactFileExplanation(document.getElementById("consensus-and-variant-files"));
     for (const table of document.getElementById("blast-top-hits")?.querySelectorAll("table") || []) mountBlastTable(table);
+    for (const id of ["vadr-annotation-quality-control", "consensus-and-variant-files"]) {
+      for (const table of document.getElementById(id)?.querySelectorAll("table") || []) mountSegmentOrder(table);
+    }
     mountGenoFLU(document.getElementById("genoflu-genotype"));
   }
-  globalThis.WINGS_SAMPLE_PRESENTATION = {initialize, mountGenoFLU, readCalls, compactFileExplanation, mountSampleProfile, resolveHost, populateHostCard, resolveState, populateLocationCard, mountBlastTable, trimMetricZeros};
+  globalThis.WINGS_SAMPLE_PRESENTATION = {initialize, mountGenoFLU, readCalls, compactFileExplanation, mountSampleProfile, resolveHost, populateHostCard, resolveState, populateLocationCard, mountBlastTable, trimMetricZeros, mountSegmentOrder, removeExpectedLengthTables};
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, {once: true});
   else initialize();
 })();
