@@ -18,6 +18,41 @@ def load_runner():
 
 
 class StorageOptionsTests(unittest.TestCase):
+    def test_conda_reports_all_configured_cache_paths_once(self):
+        runner = load_runner()
+        with patch.dict(os.environ, {'CONDA_EXE': '/opt/conda/bin/conda'}, clear=True), \
+             patch.object(runner.subprocess, 'run', return_value=Mock(
+                 stdout='{"pkgs_dirs": ["/opt/conda/pkgs", "/home/user/.conda/pkgs"]}')) as probe:
+            expected = '/opt/conda/pkgs; /home/user/.conda/pkgs'
+            self.assertEqual(runner.conda_cache_default(), expected)
+            self.assertEqual(runner.conda_cache_default(), expected)
+            probe.assert_called_once_with(['/opt/conda/bin/conda', 'info', '--json'],
+                                          capture_output=True, text=True, timeout=5, check=True)
+            with patch.object(runner, 'RUNS_ROOT', Path.cwd()):
+                self.assertEqual(runner.storage_settings()['conda_pkgs_default'], expected)
+
+    def test_inherited_cache_takes_precedence_without_conda_probe(self):
+        runner = load_runner()
+        with patch.dict(os.environ, {'CONDA_PKGS_DIRS': '/chosen/cache'}, clear=True), \
+             patch.object(runner.subprocess, 'run') as probe:
+            self.assertEqual(runner.conda_cache_default(), '/chosen/cache')
+            probe.assert_not_called()
+
+    def test_missing_or_unresponsive_conda_does_not_invent_a_path(self):
+        for failure in (OSError('missing'), subprocess.TimeoutExpired('conda', 5),
+                        ValueError('invalid JSON')):
+            runner = load_runner()
+            with self.subTest(failure=failure), \
+                 patch.dict(os.environ, {'CONDA_EXE': '/missing/conda'}, clear=True), \
+                 patch.object(runner.subprocess, 'run', side_effect=failure):
+                self.assertEqual(runner.conda_cache_default(), '')
+        runner = load_runner()
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(runner.shutil, 'which', return_value=None), \
+             patch.object(runner.subprocess, 'run') as probe:
+            self.assertEqual(runner.conda_cache_default(), '')
+            probe.assert_not_called()
+
     def start(self, runner, arguments):
         server = Mock()
         server.serve_forever.side_effect = KeyboardInterrupt

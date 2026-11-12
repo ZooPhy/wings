@@ -80,7 +80,11 @@
       storageRevision = state.runner.storage_revision;
       $("storageMessage").textContent = `Current run directory: ${state.runner.runs_root} · ${formatBytes(state.runner.free_bytes)} free. Quotas and required working space may differ.`;
     }
-    $("condaCacheDefault").textContent = `Leave blank to use: ${state.runner.conda_pkgs_default}. Package downloads are separate from run storage.`;
+    const cacheDefault=state.runner.conda_pkgs_default;
+    const cacheKnown=cacheDefault && cacheDefault!=='Conda configuration default';
+    $("condaCacheDefault").textContent = cacheKnown
+      ? `Default cache location(s): ${cacheDefault}. Leave blank to use these locations.`
+      : 'Default cache location could not be detected. Run conda info to see its package cache paths, or choose a folder above.';
   }
 
   async function applyStorage() {
@@ -409,7 +413,7 @@
       [Boolean(state.docker?.ready && state.docker.selection_vadr===$('optVadr').checked && !dockerPending), "Docker / container runtime", dockerPending?'Checking engine access…':state.docker?.message || 'Use Check Docker before launching.'],
       [Boolean(state.runner?.storage_revision && !storageDirty && !storagePending && storageRevision === state.runner.storage_revision), "Storage locations",
         storageDirty || storagePending ? "Validate and apply your edited locations under Run details." : state.runner?.storage_revision
-          ? `Runs: ${state.runner.runs_root} · Conda cache: ${state.runner.conda_pkgs_dir || state.runner.conda_pkgs_default}`
+          ? `Runs: ${state.runner.runs_root} · Conda cache: ${state.runner.conda_pkgs_dir || state.runner.conda_pkgs_default || 'default location not detected'}`
           : "Connect to an updated local runner to verify storage."],
       [readsOk, "Sequence inputs", readsOk ? `${state.reads.length} FASTQ file(s) selected` : "Select FASTQ files with one consistent extension"],
       [metadataOk, "Metadata structure", metadataOk ? `${state.metadataIds.length} sample rows detected` : (state.metadataError || "Select metadata.tsv")],

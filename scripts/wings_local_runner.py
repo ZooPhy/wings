@@ -18,6 +18,7 @@ import time
 import uuid
 import webbrowser
 from datetime import datetime, timezone
+from functools import lru_cache
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -1309,14 +1310,39 @@ def register_runs(root: Path) -> None:
         RUN_LOCATIONS[run_id] = root
 
 
+@lru_cache(maxsize=8)
+def configured_conda_cache(conda_executable: str) -> tuple[str, ...]:
+    """Ask Conda for its configured cache paths once per runner session."""
+    try:
+        result = subprocess.run([conda_executable, "info", "--json"],
+                                capture_output=True, text=True, timeout=5, check=True)
+        paths = json.loads(result.stdout).get("pkgs_dirs", [])
+        if not isinstance(paths, list):
+            return ()
+        return tuple(str(Path(path).expanduser()) for path in paths
+                     if isinstance(path, str) and path.strip())
+    except (OSError, subprocess.SubprocessError, ValueError, AttributeError):
+        return ()
+
+
+def conda_cache_default() -> str:
+    inherited = os.environ.get("CONDA_PKGS_DIRS")
+    if inherited:
+        return inherited
+    executable = os.environ.get("CONDA_EXE") or shutil.which("conda")
+    paths = configured_conda_cache(executable) if executable else ()
+    return "; ".join(paths) if paths else ""
+
+
 def storage_settings() -> dict:
+    cache_default = conda_cache_default()
     with LOCK:
         root = RUNS_ROOT
         parent = root
         while not parent.exists():
             parent = parent.parent
         return {"runs_root": str(root), "conda_pkgs_dir": CURRENT_CACHE_DIR or "",
-                "conda_pkgs_default": os.environ.get("CONDA_PKGS_DIRS") or "Conda configuration default",
+                "conda_pkgs_default": cache_default,
                 "storage_revision": STORAGE_REVISION, "free_bytes": shutil.disk_usage(parent).free}
 
 
@@ -1382,7 +1408,7 @@ def main() -> int:
     print(f"WINGS local runner: {url}")
     print(f"Repository: {REPO_ROOT}")
     print(f"Run storage: {RUNS_ROOT}")
-    print(f"Conda package cache: {os.environ.get('CONDA_PKGS_DIRS') or 'Conda configuration default'}")
+    print(f"Conda package cache: {conda_cache_default() or 'Not detected; run conda info to view cache paths'}")
     print("Sequence data remain on this computer; the server is bound to localhost only.")
     if not args.no_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()

@@ -95,9 +95,9 @@
             </div>
             <div class="field">
               <label for="condaCacheDirectory">Conda package cache directory</label>
-              <input id="condaCacheDirectory" type="text" autocomplete="off" spellcheck="false" placeholder="Use launcher / Conda default">
+              <input id="condaCacheDirectory" type="text" autocomplete="off" spellcheck="false" placeholder="Leave blank to use the default shown below">
               <button type="button" class="btn btn-secondary" data-storage-browse="condaCacheDirectory">Browse folders…</button>
-              <div id="condaCacheDefault" class="help">Optional. Leave blank to use the runner's inherited Conda cache settings.</div>
+              <div id="condaCacheDefault" class="help">The default cache location will appear when the local runner connects.</div>
             </div>
             <button id="applyStorage" class="btn btn-secondary" type="button" disabled>Validate and apply locations</button>
             <p id="storageMessage" class="help" role="status">Connect to the local runner to configure storage.</p>
@@ -311,7 +311,7 @@
 <script src="assets/wings-metadata-wizard.js?v=6"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
 <script src="assets/wings-context-setup.js?ebird_folder=2&v=12"></script>
-<script src="assets/wings-run.js?v=20261112-docker-retry&wings_context=3"></script>
+<script src="assets/wings-run.js?v=20261112-conda-location&wings_context=3"></script>
 <script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>
