@@ -252,6 +252,7 @@
   }
 
   function parseMetadata(text) {
+    if (globalThis.WINGS_METADATA) return globalThis.WINGS_METADATA.inspectIds(text);
     const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     const lines = normalized.split("\n").filter((line) => line.trim().length > 0);
     if (!lines.length) throw new Error("Metadata file is empty.");

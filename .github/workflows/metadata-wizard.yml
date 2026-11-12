@@ -1,0 +1,28 @@
+name: Metadata wizard
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Metadata preparation and runner contracts
+        run: |
+          python scripts/build_metadata_reference.py --check
+          node --test tests/test_metadata_wizard.cjs
+          python -m unittest discover -s tests -p test_metadata_wizard_contract.py
+      - name: Install browser test dependencies
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: Wizard and annotation-table browser checks
+        run: node tests/test_metadata_wizard_browser.cjs

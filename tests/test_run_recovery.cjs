@@ -10,6 +10,10 @@ const root = path.resolve(__dirname, "..");
 const files = new Map([
   ["/run.html", ["text/html", "run.html"]],
   ["/assets/wings-run.js", ["text/javascript", "assets/wings-run.js"]],
+  ["/assets/wings-metadata-core.js", ["text/javascript", "assets/wings-metadata-core.js"]],
+  ["/assets/wings-metadata-wizard.js", ["text/javascript", "assets/wings-metadata-wizard.js"]],
+  ["/assets/wings-metadata-wizard.css", ["text/css", "assets/wings-metadata-wizard.css"]],
+  ["/assets/wings-metadata-reference.json", ["application/json", "assets/wings-metadata-reference.json"]],
   ["/assets/wings-context-setup.js", ["text/javascript", "assets/wings-context-setup.js"]],
   ["/assets/wings-context-picker.js", ["text/javascript", "assets/wings-context-picker.js"]],
   ["/assets/wings-context-layout.css", ["text/css", "assets/wings-context-layout.css"]],

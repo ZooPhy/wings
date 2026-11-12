@@ -7,6 +7,7 @@
   <meta name="description" content="Prepare, validate, launch, and monitor a local WINGS Snakemake run.">
   <link rel="stylesheet" href="assets/wings-portal.css">
   <link rel="stylesheet" href="assets/wings-context-layout.css?v=4">
+  <link rel="stylesheet" href="assets/wings-metadata-wizard.css?v=1">
 </head>
 <body>
 <header class="portal-header">
@@ -125,6 +126,10 @@
             </div>
           </div>
           <div id="metadataSummary" class="summary-box">No metadata file selected.</div>
+          <div class="actions">
+            <button id="openMetadataWizard" class="btn btn-primary" type="button" aria-haspopup="dialog">Create or fix metadata</button>
+          </div>
+          <p id="metadataWizardStatus" class="help" role="status" aria-live="polite"></p>
           <div id="contextSetup" class="context-panel">
             <h3>Surveillance context</h3>
             <p class="context-intro">Choose the sources to include in your report.</p>
@@ -285,8 +290,10 @@
   </section>
 </main>
 
+<script src="assets/wings-metadata-core.js?v=1"></script>
+<script src="assets/wings-metadata-wizard.js?v=1"></script>
 <script src="assets/wings-context-picker.js?v=1"></script>
 <script src="assets/wings-context-setup.js?v=10"></script>
-<script src="assets/wings-run.js?v=20261103-browser-storage&wings_context=3"></script>
+<script src="assets/wings-run.js?v=20261111-metadata-wizard&wings_context=3"></script>
 </body>
 </html>
