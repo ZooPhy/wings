@@ -316,6 +316,76 @@ globalThis.WINGS_STATE_ARTWORK = [{"name":"Alabama","code":"AL","country":"US","
     return api;
   }
 
+  function trimMetricZeros(value) {
+    const match = String(value).match(/^([+-]?[0-9][0-9,]*)\.([0-9]+)([eE][+-]?[0-9]+)?$/);
+    if (!match) return value;
+    const decimals = match[2].replace(/0+$/, "");
+    return match[1] + (decimals ? "." + decimals : "") + (match[3] || "");
+  }
+
+  function mountBlastTable(table) {
+    if (!table) return null;
+    if (table.wingsBlastPresentation) return table.wingsBlastPresentation;
+    const headers = Array.from(table.querySelector("thead")?.querySelectorAll("th") || []);
+    const labels = headers.map(cell => cell.textContent.trim().toLowerCase());
+    const segmentIndex = labels.indexOf("segment"), hitIndex = labels.indexOf("top blast hit");
+    if (segmentIndex < 0 || hitIndex < 0) return null;
+    const numeric = labels.map((label, index) => [label, index]).filter(([label]) => ["identity (%)", "query coverage (%)", "e-value", "bit score"].includes(label)).map(([, index]) => index);
+    const bodies = Array.from(table.querySelectorAll("tbody"));
+    const sentinel = /^(?:SKIPPED(?:[_\s-].*)?|NO[_\s-]?HITS?|NOT[_\s-]?(?:AVAILABLE|RECORDED)|N\/?A|FAILED|ERROR|MISSING)$/i;
+    for (const body of bodies) {
+      for (const row of body.querySelectorAll("tr")) {
+        const cells = row.querySelectorAll("td");
+        for (const link of cells[hitIndex]?.querySelectorAll("a") || []) {
+          if (sentinel.test(link.textContent.trim())) link.replaceWith(make("span", "", link.textContent));
+        }
+        for (const index of numeric) {
+          const cell = cells[index];
+          if (!cell) continue;
+          const recorded = cell.textContent.trim(), display = trimMetricZeros(recorded);
+          if (display !== recorded) {
+            cell.setAttribute("data-wings-recorded-value", recorded);
+            cell.textContent = display;
+          }
+        }
+      }
+    }
+    const segmentHeader = headers[segmentIndex];
+    function sortSegments(descending = false) {
+      for (const body of bodies) {
+        const rows = Array.from(body.querySelectorAll("tr"));
+        const rank = row => {
+          const index = ORDER.indexOf(row.querySelectorAll("td")[segmentIndex]?.textContent.trim().toUpperCase());
+          return index < 0 ? ORDER.length : index;
+        };
+        rows.sort((a, b) => {
+          const left = rank(a), right = rank(b);
+          if (left === ORDER.length || right === ORDER.length) return left === right ? 0 : left === ORDER.length ? 1 : -1;
+          return (left - right) * (descending ? -1 : 1);
+        });
+        body.append(...rows);
+      }
+      for (const header of headers) header.setAttribute("aria-sort", "none");
+      segmentHeader.setAttribute("aria-sort", descending ? "descending" : "ascending");
+    }
+    const toggleSort = event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      sortSegments(segmentHeader.getAttribute("aria-sort") === "ascending");
+    };
+    // Capture overrides the older report's alphabetical sorter in saved bundles.
+    segmentHeader.addEventListener("click", toggleSort, true);
+    segmentHeader.addEventListener("keydown", event => {
+      if (["Enter", " "].includes(event.key)) toggleSort(event);
+    }, true);
+    segmentHeader.setAttribute("tabindex", "0");
+    segmentHeader.setAttribute("title", "Sort by segment order");
+    sortSegments();
+    const api = {sortSegments, segmentHeader};
+    table.wingsBlastPresentation = api;
+    return api;
+  }
+
   function readCalls(table) {
     const calls = new Map();
     const rows = (table.querySelector("tbody") || table).querySelectorAll("tr");
@@ -440,9 +510,10 @@ globalThis.WINGS_STATE_ARTWORK = [{"name":"Alabama","code":"AL","country":"US","
       if (["#irma-candidate-selection", "#interpretation"].includes(link.getAttribute("href"))) (link.closest("li") || link).remove();
     }
     compactFileExplanation(document.getElementById("consensus-and-variant-files"));
+    for (const table of document.getElementById("blast-top-hits")?.querySelectorAll("table") || []) mountBlastTable(table);
     mountGenoFLU(document.getElementById("genoflu-genotype"));
   }
-  globalThis.WINGS_SAMPLE_PRESENTATION = {initialize, mountGenoFLU, readCalls, compactFileExplanation, mountSampleProfile, resolveHost, populateHostCard, resolveState, populateLocationCard};
+  globalThis.WINGS_SAMPLE_PRESENTATION = {initialize, mountGenoFLU, readCalls, compactFileExplanation, mountSampleProfile, resolveHost, populateHostCard, resolveState, populateLocationCard, mountBlastTable, trimMetricZeros};
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, {once: true});
   else initialize();
 })();
