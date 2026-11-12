@@ -148,9 +148,13 @@ to the demo, samples, and return navigation. Pending reveal callbacks cannot
 uncover a newer report load. Standalone HTML reports do not use this viewer cover.
 
 Collection-location cards also embed matching drawings from `assets/states/`,
-named like `Kentucky_KY.svg` and `New_York_NY.svg`. Full state names and postal
-codes match when the recorded country is US, USA, United States, or United States
-of America. Punctuation and case do not affect matching. Missing or unsupported
+named like `Kentucky_KY.svg`, `New_York_NY.svg`, and `Ontario_ON.svg`. US state
+names and postal codes match when the recorded country is US, USA, United States,
+or United States of America. All 13 Canadian provinces and territories match
+when the recorded country is CA, CAN, or Canada. Country-specific lookup prevents
+matching a Canadian drawing to a US location or vice versa. Quebec and Québec
+both match QC. Metadata may use State, Province, Territory, Province/Territory,
+or State/Province as its region field. Punctuation and case do not affect matching. Missing or unsupported
 locations keep their recorded text. Coordinates are unchanged. Drawings are
 decorative; location text remains available if an image cannot be displayed.
 

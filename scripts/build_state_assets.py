@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Embed assets/states/State_Name_AB.svg drawings in an offline report catalog."""
+"""Embed US state and Canadian province/territory drawings from assets/states/."""
 import argparse
 import base64
 import json
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
+
+CANADIAN_CODES = frozenset('AB BC MB NB NL NS NT NU ON PE QC SK YT'.split())
 
 
 def build(repo):
@@ -16,8 +18,10 @@ def build(repo):
             raise ValueError('Expected State_Name_AB.svg: ' + path.name)
         name, code = match.groups()
         name = name.replace('_', ' ')
-        key = re.sub(r'[^a-z]', '', name.lower())
-        if key in names or code in codes:
+        country = 'CA' if code in CANADIAN_CODES else 'US'
+        key = (country, re.sub(r'[^a-z]', '', name.lower()))
+        code_key = (country, code)
+        if key in names or code_key in codes:
             raise ValueError('Duplicate state name or code: ' + path.name)
         raw = path.read_bytes()
         root = ET.fromstring(raw)
@@ -30,8 +34,8 @@ def build(repo):
                 if attribute.lower().startswith('on') or (attribute.rsplit('}', 1)[-1] == 'href' and not value.startswith('#')):
                     raise ValueError('Active or external reference in ' + path.name)
         names.add(key)
-        codes.add(code)
-        states.append({'name': name, 'code': code,
+        codes.add(code_key)
+        states.append({'name': name, 'code': code, 'country': country,
                        'src': 'data:image/svg+xml;base64,' + base64.b64encode(raw).decode('ascii')})
     if not states:
         raise ValueError('No drawings found in assets/states; add State_Name_AB.svg files first.')

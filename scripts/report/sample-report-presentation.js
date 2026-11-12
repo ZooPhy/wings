@@ -61,13 +61,17 @@
     if (hostKey(host) !== hostKey(bird.name)) card.append(make("span", "wsp-host-code", host));
   }
   const stateArtwork = new Map();
+  const regionKey = value => hostKey(String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, ""));
+  const regionFields = ["state", "province", "territory", "province/territory", "state/province", "province territory", "state province"];
   for (const state of globalThis.WINGS_STATE_ARTWORK || []) {
-    stateArtwork.set(hostKey(state.name), state);
-    stateArtwork.set(hostKey(state.code), state);
+    const country = state.country || "US";
+    stateArtwork.set(country + ":" + regionKey(state.name), state);
+    stateArtwork.set(country + ":" + regionKey(state.code), state);
   }
   function resolveState(state, country) {
-    if (!["us", "usa", "unitedstates", "unitedstatesofamerica"].includes(hostKey(country))) return null;
-    return stateArtwork.get(hostKey(state)) || null;
+    const key = regionKey(country);
+    const nation = ["us", "usa", "unitedstates", "unitedstatesofamerica"].includes(key) ? "US" : ["ca", "can", "canada"].includes(key) ? "CA" : null;
+    return nation ? stateArtwork.get(nation + ":" + regionKey(state)) || null : null;
   }
   function populateLocationCard(card, state, country) {
     card.append(make("span", "wsp-label", "COLLECTION LOCATION"));
@@ -105,7 +109,7 @@
     const excluded = new Set(["metadata status", "medaka status", "medaka provenance"]);
     const entries = source.entries.filter(row => !excluded.has(fieldKey(row.label)));
     const find = (...keys) => entries.find(row => keys.includes(fieldKey(row.label)))?.value || "Not recorded";
-    const sample = find("sample id", "sample"), host = find("host"), specimen = find("specimen type", "specimen"), date = find("collection date"), state = find("state"), country = find("country");
+    const sample = find("sample id", "sample"), host = find("host"), specimen = find("specimen type", "specimen"), date = find("collection date"), state = find(...regionFields), country = find("country");
     const profile = make("article", "wings-sample-profile");
     profile.setAttribute("aria-label", "Sample collection profile");
     const heading = make("header", "wsp-heading");
@@ -136,7 +140,7 @@
       locationCard.append(list);
     }
     layout.append(dateCard, hostCard, specimenCard, locationCard);profile.append(heading, layout);
-    const standard = new Set(["sample id", "sample", "host", "specimen type", "specimen", "collection date", "state", "country", "latitude", "longitude"]);
+    const standard = new Set(["sample id", "sample", "host", "specimen type", "specimen", "collection date", ...regionFields, "country", "latitude", "longitude"]);
     const extra = entries.filter(row => !standard.has(fieldKey(row.label)));
     if (extra.length) {
       const list = make("dl", "wsp-extra");

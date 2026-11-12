@@ -26,6 +26,7 @@ class StateAssetTests(unittest.TestCase):
         catalog = json.loads(source.split(' = ', 1)[1].rstrip(';\n'))
         self.assertEqual(catalog[0]['name'], 'New York')
         self.assertEqual(catalog[0]['code'], 'NY')
+        self.assertEqual(catalog[0]['country'], 'US')
         self.assertEqual(base64.b64decode(catalog[0]['src'].split(',')[1]), self.svg)
         self.assertEqual((self.folder / 'New_York_NY.svg').read_bytes(), self.svg)
 
@@ -55,6 +56,16 @@ class StateAssetTests(unittest.TestCase):
         (self.folder / 'Kentucky_KY.svg').write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')
         with self.assertRaisesRegex(ValueError, 'Active content'):
             builder.build(self.repo)
+
+    def test_canadian_codes_are_tagged_with_the_correct_country(self):
+        for code in builder.CANADIAN_CODES:
+            (self.folder / ('Canadian_Region_' + code + '_' + code + '.svg')).write_bytes(self.svg)
+        (self.folder / 'California_CA.svg').write_bytes(self.svg)
+        catalog = json.loads(builder.build(self.repo).split(' = ', 1)[1].rstrip(';\n'))
+        self.assertEqual(len(catalog), 14)
+        for region in catalog:
+            self.assertEqual(region['country'], 'US' if region['code'] == 'CA' else 'CA')
+            self.assertEqual(base64.b64decode(region['src'].split(',')[1]), self.svg)
 
 
 if __name__ == '__main__':
