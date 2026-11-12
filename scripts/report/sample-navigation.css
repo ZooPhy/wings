@@ -58,6 +58,30 @@
 .wse-sample-content section[id],.wse-sample-content h2[id] { scroll-margin-top:18px; }
 /* Saved reports may retain the earlier read renderer; omit its duplicate cards. */
 .escape-read-viz > .escape-read-metrics { display:none !important; }
+/* BLAST evidence uses the same card treatment as the sample profile. */
+#blast-top-hits .report-panel { padding:0; border:1px solid #8C1D4030; border-top:6px solid #FFC627; border-radius:16px; background:#FFFFFF; box-shadow:0 4px 18px #8C1D4008; overflow:hidden; }
+#blast-top-hits .escape-table-wrapper { margin:0; overflow-x:auto; }
+#blast-top-hits .escape-table-controls { gap:12px; flex-wrap:wrap; margin:0; padding:14px 18px; background:#FFFFFF; border-bottom:1px solid #8C1D4020; }
+#blast-top-hits .escape-table-controls label { color:#8C1D40; font-size:12px; font-weight:800; letter-spacing:.06em; }
+#blast-top-hits .escape-table-controls input { min-width:0; width:240px; max-width:100%; padding:10px 12px; border:1px solid #8C1D4040; border-radius:10px; font:14px/1.4 Arial,Helvetica,sans-serif; }
+#blast-top-hits .escape-table-controls input:focus-visible { outline:3px solid #FFC627; outline-offset:2px; border-color:#8C1D40; box-shadow:none; }
+#blast-top-hits .escape-table-count { min-width:0; color:#5F5360; font-size:12px; }
+#blast-top-hits table { width:100%; min-width:720px; margin:0; border-collapse:separate; border-spacing:0; font:16px/1.45 Arial,Helvetica,sans-serif; }
+#blast-top-hits table th,#blast-top-hits table td { padding:14px 18px; border:0; vertical-align:middle; box-shadow:none; }
+#blast-top-hits table thead th { position:relative; background:#8C1D40; color:#FFFFFF; border-bottom:3px solid #FFC627; font-size:14px; font-weight:800; line-height:1.4; }
+#blast-top-hits table tbody td { background:#FFFFFF; color:#202124; border-bottom:1px solid #8C1D4018; }
+#blast-top-hits table tbody tr:nth-child(even) > td { background:#FAF6F7; }
+#blast-top-hits table tbody tr:last-child > td { border-bottom:0; }
+#blast-top-hits table tbody tr:hover > td { background:#FFF6D6; }
+#blast-top-hits table tbody td:first-child { color:#8C1D40; font-weight:900; letter-spacing:.04em; }
+#blast-top-hits table :is(th,td):nth-child(n+3):nth-child(-n+6) { text-align:right; font-variant-numeric:tabular-nums; }
+#blast-top-hits table tbody td:last-child { font-size:12px; font-weight:800; letter-spacing:.025em; }
+#blast-top-hits table a { color:#8C1D40; font-weight:700; text-decoration-thickness:1px; text-underline-offset:3px; }
+#blast-top-hits table a:hover { color:#5C1229; text-decoration-thickness:2px; }
+#blast-top-hits table a:focus-visible { outline:3px solid #FFC627; outline-offset:3px; border-radius:3px; }
+#blast-top-hits .escape-sortable::after { color:#FFC627; opacity:1; }
+@media(max-width:650px) { #blast-top-hits .escape-table-controls { align-items:stretch; } #blast-top-hits .escape-table-controls input { width:100%; box-sizing:border-box; } }
+@media print { #blast-top-hits .report-panel { box-shadow:none; overflow:visible; } #blast-top-hits .escape-table-wrapper { overflow:visible; } #blast-top-hits table { min-width:0; } }
 @media(max-width:1050px) { .wse-sample-workspace > .wse-sample-content { grid-column:1; grid-row:2; } }
 
 /* GenoFLU constellation: recorded calls, independent of segment QC status. */
