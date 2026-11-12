@@ -9,6 +9,8 @@ const root=path.resolve(__dirname,'..');
 const mutations=[];
 const server=http.createServer((request,response)=>{
   const url=new URL(request.url,'http://127.0.0.1');
+  // Docker readiness is a diagnostic POST, not a run mutation. Keep all other writes guarded.
+  if(request.method==='POST' && url.pathname==='/api/docker/check'){response.setHeader('Content-Type','application/json');response.end(JSON.stringify({ready:true,message:'Docker engine is responding',required:true}));return;}
   if(request.method!=='GET')mutations.push(url.pathname);
   if(url.pathname==='/api/runs'){response.setHeader('Content-Type','application/json');response.end('[]');return;}
   if(url.pathname==='/api/health'){response.setHeader('Content-Type','application/json');response.end(JSON.stringify({snakemake_available:false,config_yaml_present:false}));return;}

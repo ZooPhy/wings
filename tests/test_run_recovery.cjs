@@ -54,12 +54,14 @@ let writes = 0;
 const errors = [];
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
-  if (req.method !== "GET") writes += 1;
   const json = (value, status = 200) => {
     res.writeHead(status, {"Content-Type": "application/json", "Cache-Control": "no-store"});
     res.end(JSON.stringify(value));
   };
+  if (req.method !== "GET" && !(req.method === "POST" && url.pathname === "/api/docker/check")) writes += 1;
   if (url.pathname.startsWith("/api/") && offline) return json({error: "offline"}, 503);
+  // Only the diagnostic POST is exempt; unexpected run writes still fail the test.
+  if (req.method === "POST" && url.pathname === "/api/docker/check") return json({ready: true, message: "Docker engine is responding", required: true});
   if (url.pathname === "/api/health") return json({snakemake_available: true, config_yaml_present: true});
   if (url.pathname === "/api/runs") return json([older, run]);
   if (url.pathname === `/api/runs/${run.run_id}`) return json(run);
