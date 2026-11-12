@@ -11,6 +11,21 @@
   let records = {};
   let folderCheckRequest=0;
   let recaching=false;
+  let progressStarted=0,progressTimer=null,progressView=null,progressKey='',progressChanged=0;
+  function elapsed(seconds){seconds=Math.max(0,Math.floor(seconds));return seconds>=60?`${Math.floor(seconds/60)}m ${seconds%60}s`:`${seconds}s`;}
+  function renderProgress() {
+    if(!progressView)return;
+    const names={ecology:'weather and migration',phenology:'seasonal bird patterns',public_genotypes:'public genotypes',ebird:'eBird observations',outbreak:'APHIS detections'};
+    const active=progressView.active_provider || sources.find(name=>records[name]?.status==='PREPARING');
+    const detail=active==='ebird'?records.ebird?.import_progress:null;
+    $('contextStatus').textContent=`Preparing ${names[active] || 'selected sources'}${detail?.message?' — '+detail.message:''} · ${elapsed((Date.now()-progressStarted)/1000)} elapsed`;
+    const note=$('contextProgressNote');if(note){
+      note.hidden=false;
+      const gap=detail?Math.floor((Date.now()-progressChanged)/1000):0;
+      note.textContent=active==='ebird'?'Large downloads are scanned in full. Keep the runner running. '+(gap>=20?`Last processing update ${elapsed(gap)} ago; waiting for the next count.`:'Record counts update as files are processed.'): 'Context preparation is running separately from sequencing.';
+    }
+  }
+  function stopProgress(){if(progressTimer!==null && typeof clearInterval==='function')clearInterval(progressTimer);progressTimer=null;progressView=null;progressStarted=0;progressKey='';if($('contextProgressNote'))$('contextProgressNote').hidden=true;}
   async function checkEbirdFolder() {
     const area=$('contextFolderCheck');if(!area)return;
     const token=++folderCheckRequest,path=$('contextSource').value.trim() || $('contextPackage').value.trim();
@@ -92,6 +107,12 @@
   }
   function countText(name,record) {
     const number = key => Number.isInteger(record[key]) && record[key]>=0;
+    if(name==='ebird' && record.import_progress){
+      const p=record.import_progress;
+      if(Number.isInteger(p.rows_processed))return `${p.rows_processed.toLocaleString('en-US')} records read · ${p.rows_retained.toLocaleString('en-US')} retained`;
+      if(Number.isFinite(p.bytes_processed) && p.total_bytes>0)return `${Math.floor(100*p.bytes_processed/p.total_bytes)}% of this file read (${(p.bytes_processed/1048576).toFixed(1)} / ${(p.total_bytes/1048576).toFixed(1)} MiB)`;
+      return p.message || '';
+    }
     if(name==='ecology' && number('weather_ready') && number('migration_ready') && number('sample_count')) return `Weather ${record.weather_ready}/${record.sample_count} · Migration ${record.migration_ready}/${record.sample_count}`;
     if(name==='phenology' && number('ready_profiles') && number('sample_count')) return `${record.ready_profiles}/${record.sample_count} profiles available`;
     if(name==='public_genotypes' && number('included_runs')) return `${record.included_runs} public sequencing runs`;
@@ -126,8 +147,15 @@
     records={...records,...(data.providers || {})};
     renderCards();
     const status=$('contextStatus');
-    if(data.status==='PREPARING') status.textContent='Preparing selected sources…';
-    else if(data.status==='READY') {
+    if(data.status==='PREPARING'){
+      if(!progressStarted)progressStarted=Date.now();progressView=data;
+      const key=JSON.stringify(records.ebird?.import_progress || null);if(key!==progressKey){progressKey=key;progressChanged=Date.now();}
+      renderProgress();
+      if(progressTimer===null && typeof setInterval==='function')progressTimer=setInterval(renderProgress,1000);
+      return;
+    }
+    stopProgress();
+    if(data.status==='READY') {
       const chosen=sources.filter(name=>$(controls[name]).checked);
       const count=chosen.filter(name=>records[name]?.status==='READY').length;
       status.textContent=chosen.length ? (count===chosen.length ? 'Context saved. Continue to Analysis.' : 'Context saved with available data. Continue to Analysis.') : 'No context sources selected. Continue to Analysis.';

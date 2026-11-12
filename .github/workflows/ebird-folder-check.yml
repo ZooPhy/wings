@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: '22'
       - name: Folder inventory and reuse checks
-        run: python -m unittest discover -s tests -p test_ebird_folder_check.py
+        run: |
+          python -m unittest discover -s tests -p test_ebird_folder_check.py
+          python -m unittest discover -s tests -p test_ebird_import_progress.py
       - name: Context preparation and picker checks
         run: node --test tests/test_context_setup_ui.cjs tests/test_context_picker_ui.cjs tests/test_run_context_guard.cjs

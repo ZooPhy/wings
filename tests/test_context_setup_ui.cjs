@@ -21,7 +21,7 @@ class Element {
 (async()=>{
   const sources=['ecology','phenology','public_genotypes','ebird','outbreak'];
   const controls={ecology:'contextEcology',phenology:'contextPhenology',public_genotypes:'contextGenotypes',ebird:'contextEbird',outbreak:'contextAphis'};
-  const ids=['contextRecache','contextRecachePanel','contextRecacheRun','contextRecacheStatus','contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
+  const ids=['contextProgressNote','contextRecache','contextRecachePanel','contextRecacheRun','contextRecacheStatus','contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
   const elements=Object.fromEntries(ids.map(id=>[id,new Element(id==='contextPrepare'||id.startsWith('contextAction-')?'button':'div')]));
   for(const id of ['contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage',...Object.values(controls)])elements[id].tagName='input';
   for(const [id,el] of Object.entries(elements))if(id!=='contextSetup'&&id!=='metadataFile')elements.contextSetup.append(el);
@@ -49,8 +49,9 @@ class Element {
     }else throw new Error('Unexpected request '+url);
     return {ok:true,json:async()=>data,text:async()=>JSON.stringify(data)};
   };
-  const errors=[];
-  const sandbox={document:{getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{hostname:'localhost',origin:'http://localhost:8765'},window:{},crypto,TextEncoder,fetch,setTimeout:fn=>fn(),console:{error:(...args)=>errors.push(args)}};
+  const errors=[];let heartbeat=null,clockNow=Date.now();
+  class ClockDate extends Date {static now(){return clockNow;}}
+  const sandbox={document:{getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{hostname:'localhost',origin:'http://localhost:8765'},window:{},Date:ClockDate,crypto,TextEncoder,fetch,setTimeout:fn=>fn(),setInterval:fn=>{heartbeat=fn;return 1;},clearInterval:()=>{heartbeat=null;},console:{error:(...args)=>errors.push(args)}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../assets/wings-context-setup.js'),'utf8'),sandbox);
   const ui=sandbox.window.WINGS_CONTEXT_SETUP;
   const launcher=fs.readFileSync(path.join(__dirname,'../assets/wings-run.js'),'utf8');
@@ -172,6 +173,15 @@ class Element {
   await ui.rebuildEbirdCache();assert.match(elements.contextRecacheStatus.textContent,/previous dataset is unchanged/);
   assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,runsBefore+1);
   assert.equal(calls.filter(c=>c.url.endsWith('/start')).length,0);
+  ui.showStatus({status:'PREPARING',active_provider:'ebird',providers:{ebird:{status:'PREPARING',import_progress:{stage:'sampling',message:'Scanning sampling-event records',rows_processed:1250000,rows_retained:340}}}});
+  assert.match(elements.contextStatus.textContent,/Scanning sampling-event records/);assert.match(elements.contextStatus.textContent,/elapsed/);
+  assert.match(elements['contextCount-ebird'].textContent,/1,250,000 records read · 340 retained/);
+  assert.equal(elements.contextProgressNote.hidden,false);
+  clockNow+=65000;heartbeat();assert.match(elements.contextStatus.textContent,/1m 5s elapsed/);assert.match(elements.contextProgressNote.textContent,/Last processing update/);
+  ui.showStatus({status:'PREPARING',active_provider:'ebird',providers:{ebird:{status:'PREPARING',import_progress:{stage:'fingerprinting',message:'Fingerprinting original observations file',bytes_processed:50,total_bytes:100}}}});
+  assert.match(elements['contextCount-ebird'].textContent,/50% of this file read/);
+  ui.showStatus({status:'READY',providers:{ebird:{status:'READY'}}});assert.equal(elements.contextProgressNote.hidden,true);assert.equal(heartbeat,null);
+  console.log('PASS: real row counters, per-file hashing percentages, elapsed status, and completion cleanup.');
   console.log('PASS: re-cache requires original source and coverage confirmation, prepares a new selection, and never starts sequencing.');
   console.log('PASS: prepared/download/invalid folder detection, inventory feedback, and conditional coverage confirmation.');
   console.log('PASS: source-card behavior; automatic APHIS acquisition; removed settings panels; fallback labels and dates; safe attachment; no sequencing launches.');

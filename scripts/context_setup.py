@@ -244,7 +244,7 @@ def inspect_ebird_folder(value):
             'message':'Extracted eBird download found. File presence is confirmed; species, regions and dates still require your confirmation and import validation.'}
 
 
-def import_ebird(metadata,opts):
+def import_ebird(metadata,opts,progress=None):
     directory=Path(opts['ebird_source']).expanduser().resolve()
     if (directory/'context_manifest.json').exists():
         load('ebird_context_package.py')['verify'](directory,metadata,opts['days'])
@@ -255,6 +255,7 @@ def import_ebird(metadata,opts):
     api=load('ebird_context_package.py')
     args=argparse.Namespace(command='build',output=destination,documents=docs,observations=obs,sampling=sed,
          metadata=Path(metadata),days=opts['days'],release=release,taxonomy_version='unknown',acquired_at='unknown')
+    if progress is not None:args.progress=progress
     api['prepare'](args)
     return str(destination)
 
@@ -342,7 +343,9 @@ def prepare(metadata,directory,settings=None,progress=None,executor=command):
         def ebird():
             selection=find_ebird(metadata,opts)
             if selection['status']!='READY' and opts['ebird_source']:
-                opts['ebird_package']=import_ebird(metadata,opts);selection=find_ebird(metadata,opts)
+                def import_progress(value):
+                    event('ebird','PREPARING',value.get('message','Importing eBird observations'),import_progress=value)
+                opts['ebird_package']=import_ebird(metadata,opts,progress=import_progress);selection=find_ebird(metadata,opts)
             statuses['ebird']=selection
             if progress:progress({'status':'PREPARING','providers':statuses,'active_provider':'ebird'})
         attempt('ebird',ebird)

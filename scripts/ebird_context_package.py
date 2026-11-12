@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 SCHEMA = 'wings.ebird-context.v1'
 VERSION = '1.0.0'
@@ -36,12 +37,46 @@ class ContextError(ValueError):
         self.code = code
 
 
-def sha256(path):
+def sha256(path, progress=None):
     h = hashlib.sha256()
+    done = 0
+    total = Path(path).stat().st_size
+    last_update = time.monotonic()
+    if progress: progress(done, total)
     with Path(path).open('rb') as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b''):
             h.update(block)
+            done += len(block)
+            if progress and time.monotonic() - last_update >= 1:
+                progress(done, total)
+                last_update = time.monotonic()
+    if progress: progress(done, total)
     return h.hexdigest()
+
+
+def run_builder_with_progress(command, progress_file, progress):
+    """Relay real child-process counters; do not infer an overall percentage."""
+    previous = None
+    def relay():
+        nonlocal previous
+        try:
+            value = json.loads(progress_file.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return
+        if value != previous:
+            progress(value)
+            previous = value
+    with subprocess.Popen(command + ['--progress-file', str(progress_file)]) as process:
+        while True:
+            relay()
+            try:
+                code = process.wait(timeout=1)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        relay()
+        if code:
+            raise subprocess.CalledProcessError(code, command)
 
 
 def canonical(value):
@@ -252,6 +287,13 @@ def seal(root, release, taxonomy, acquired, source_hashes, origin):
 
 
 def prepare(args):
+    progress = getattr(args, 'progress', None)
+    def report(**value):
+        if progress: progress(value)
+    def fingerprint(path, stage, message):
+        if not progress:return sha256(path)
+        return sha256(path, (lambda done, total: report(stage=stage, message=message,
+                      bytes_processed=done, total_bytes=total)) if progress else None)
     output = args.output.expanduser().resolve()
     if output.exists():
         raise ValueError('Destination already exists; use a new package directory')
@@ -279,23 +321,29 @@ def prepare(args):
             for name in CACHE_FILES:
                 shutil.copyfile(regular(cache, name), stage / name)
         else:
-            original_hashes = {name: sha256(path) for name, path in [('observations', args.observations), ('sampling', args.sampling)]}
-            subprocess.run([sys.executable, str(Path(__file__).with_name('build_ebird_cache.py')),
+            original_hashes = {name: fingerprint(path, 'fingerprinting', 'Fingerprinting original '+name+' file') for name, path in [('observations', args.observations), ('sampling', args.sampling)]}
+            command = [sys.executable, str(Path(__file__).with_name('build_ebird_cache.py')),
                             '--metadata', str(args.metadata), '--observations', str(args.observations),
-                            '--sampling', str(args.sampling), '--cache-dir', str(stage), '--days', str(args.days)], check=True)
+                            '--sampling', str(args.sampling), '--cache-dir', str(stage), '--days', str(args.days)]
+            if progress:
+                run_builder_with_progress(command, Path(temporary)/'import-progress.json', progress)
+            else:
+                subprocess.run(command, check=True)
             # Original builder writes a combined manifest; add the sampling contract.
             obs = json.loads((stage / 'cache_manifest.json').read_text())
             write_json(stage / 'sampling_manifest.json', {key: obs[key] for key in ('source_sampling', 'metadata_sha256', 'days', 'sampling_rows')})
             sources = {name: {'sha256': value, 'identity': str(getattr(args, name).resolve())} for name, value in original_hashes.items()}
             for name in original_hashes:
-                if sha256(getattr(args, name)) != original_hashes[name]:
+                if fingerprint(getattr(args, name), 'source-verification', 'Verifying original '+name+' file is unchanged') != original_hashes[name]:
                     raise ValueError('Source changed during preparation: ' + name)
         for name in DOCUMENTS:
             shutil.copyfile(regular(docs, name), stage / name)
+        report(stage='cache-verification', message='Validating new cache records, coverage and checksums')
         manifest = seal(stage, args.release, args.taxonomy_version, args.acquired_at, sources, args.command)
         if output.exists():
             raise ValueError('Destination appeared during preparation; preserving it')
         stage.rename(output)
+        report(stage='complete', message='Observations cache built; checking it against metadata')
     print('Prepared package:', output)
     print('Package ID:', manifest['package_id'])
     if args.command == 'migrate':

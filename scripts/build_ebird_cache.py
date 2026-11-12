@@ -13,6 +13,7 @@ import gzip
 import hashlib
 import json
 import sys
+import time
 from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
@@ -25,13 +26,16 @@ def input_lines(path):
     return opener(path, "rt", encoding="utf-8-sig", newline="")
 
 
-def scan_sampling(path, samples, output, event_ids):
+def scan_sampling(path, samples, output, event_ids, progress=None):
     required = {"SAMPLING EVENT IDENTIFIER", "OBSERVATION DATE", "COUNTRY CODE",
                 "COUNTRY", "STATE CODE", "STATE", "GROUP IDENTIFIER",
                 "ALL SPECIES REPORTED"}
     # Ignore radius here so the cache can serve any radius within these regions.
     regions = [replace(s, radius_km=None) for s in samples]
     count = 0
+    scanned = 0
+    last_update = time.monotonic()
+    if progress: progress(stage="sampling", message="Scanning sampling-event records", rows_processed=0, rows_retained=0)
     with output.open("wt", encoding="utf-8", newline="") as writer:
         # Preserve the original columns (including those needed for radius queries).
         with input_lines(path) as stream:
@@ -45,6 +49,7 @@ def scan_sampling(path, samples, output, event_ids):
             idx = {name: columns.index(name) for name in required}
             writer.write(header)
             for line_no, line in enumerate(stream, 2):
+                scanned = line_no - 1
                 fields = line.rstrip("\r\n").split("\t")
                 if len(fields) > len(columns) and any(f.strip() for f in fields[len(columns):]):
                     raise ValueError(f"{path}: line {line_no} has extra nonempty fields")
@@ -58,13 +63,20 @@ def scan_sampling(path, samples, output, event_ids):
                     event_ids.add(event_id)
                     writer.write(line)
                     count += 1
+                if progress and scanned % 10000 == 0 and time.monotonic() - last_update >= 1:
+                    progress(stage="sampling", message="Scanning sampling-event records", rows_processed=scanned, rows_retained=count)
+                    last_update = time.monotonic()
+    if progress: progress(stage="sampling", message="Sampling-event scan complete", rows_processed=scanned, rows_retained=count)
     return count
 
 
-def scan_observations(path, event_ids, samples, output, catalog_output):
+def scan_observations(path, event_ids, samples, output, catalog_output, progress=None):
     counts = defaultdict(int)
     labels = {}
     count = 0
+    scanned = 0
+    last_update = time.monotonic()
+    if progress: progress(stage="observations", message="Scanning observation records", rows_processed=0, rows_retained=0)
     with input_lines(path) as stream, gzip.open(output, "wt", compresslevel=1,
                                                  encoding="utf-8", newline="") as writer:
         header = stream.readline()
@@ -88,6 +100,7 @@ def scan_observations(path, event_ids, samples, output, catalog_output):
         countries = {s.country_code for s in samples if s.country_code}
         writer.write(header)
         for line_no, line in enumerate(stream, 2):
+            scanned = line_no - 1
             fields = line.rstrip("\r\n").split("\t")
             if len(fields) > len(columns) and any(f.strip() for f in fields[len(columns):]):
                 raise ValueError(f"{path}: line {line_no} has extra nonempty fields")
@@ -113,6 +126,9 @@ def scan_observations(path, event_ids, samples, output, catalog_output):
             if selected:
                 writer.write(line)
                 count += 1
+            if progress and scanned % 10000 == 0 and time.monotonic() - last_update >= 1:
+                progress(stage="observations", message="Scanning observation records", rows_processed=scanned, rows_retained=count)
+                last_update = time.monotonic()
             if line_no % 1_000_000 == 0:
                 print(f"Scanned {line_no - 1:,} observation records; cached {count:,}",
                       file=sys.stderr, flush=True)
@@ -120,6 +136,7 @@ def scan_observations(path, event_ids, samples, output, catalog_output):
     write_tsv(catalog_output, ["common_name", "scientific_name", "observation_rows"],
               ({"common_name": common, "scientific_name": scientific,
                 "observation_rows": n} for common, scientific, n in catalog))
+    if progress: progress(stage="observations", message="Observation scan complete", rows_processed=scanned, rows_retained=count)
     return count, len(counts)
 
 
@@ -134,7 +151,13 @@ def main():
                         help="Replace a cached sampling file without rescanning observations")
     parser.add_argument("--cache-dir", required=True, type=Path)
     parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--progress-file", type=Path, help="Optional local progress JSON for the WINGS runner")
     args = parser.parse_args()
+    def progress(**value):
+        if args.progress_file:
+            temp = args.progress_file.with_suffix('.tmp')
+            temp.write_text(json.dumps(value), encoding='utf-8')
+            temp.replace(args.progress_file)
     if not args.sampling_only and args.observations is None:
         parser.error("--observations is required when building the cache")
     if args.sampling_only and args.sampling is None:
@@ -173,7 +196,7 @@ def main():
             manifest = json.loads((dest / "cache_manifest.json").read_text())
             if manifest["metadata_sha256"] != fingerprint or manifest["days"] != args.days:
                 raise ValueError("Metadata or --days differ from the observation cache scope")
-            sed_count = scan_sampling(args.sampling, samples, tmp_sampling, set())
+            sed_count = scan_sampling(args.sampling, samples, tmp_sampling, set(), progress)
             tmp_sampling.replace(sampling)
             sampling_manifest = {
                 "source_sampling": str(args.sampling.resolve()),
@@ -187,12 +210,12 @@ def main():
         else:
             event_ids = set() if args.sampling else None
             if args.sampling:
-                sed_count = scan_sampling(args.sampling, samples, tmp_sampling, event_ids)
+                sed_count = scan_sampling(args.sampling, samples, tmp_sampling, event_ids, progress)
             else:
                 sed_count = 0
             print(f"Matched {sed_count:,} sampling events; scanning observations once...", flush=True)
             obs_count, taxa_count = scan_observations(args.observations, event_ids,
-                                                      samples, tmp_observations, tmp_catalog)
+                                                      samples, tmp_observations, tmp_catalog, progress)
             # Each file is promoted only after the full observations scan succeeds.
             tmp_observations.replace(observations)
             tmp_catalog.replace(catalog)
