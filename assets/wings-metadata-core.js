@@ -77,15 +77,18 @@
   }
 
   function buildIndex(reference) {
-    const hosts=new Map(),names=new Map(),countries=new Map(),regions=new Map();
+    const hosts=new Map(),names=new Map(),countries=new Map(),regions=new Map(),regionsByCountry=new Map();
     const push=(map,k,value)=>{if(!map.has(k))map.set(k,[]);map.get(k).push(value);};
     for(const host of reference.hosts || []) {push(hosts,key(host.code),host);push(names,key(host.name),host);}
     for(const country of reference.countries || []) for(const alias of [country.name,country.alpha2,country.alpha3,...(country.aliases||[])]) countries.set(key(alias),country);
     for(const [alias,code] of Object.entries({"United States of America":"USA",US:"USA",USA:"USA",UK:"GBR","Great Britain":"GBR","South Korea":"KOR","North Korea":"PRK",Russia:"RUS",Turkey:"TUR","Viet Nam":"VNM"})) {
       const country=(reference.countries||[]).find(item=>item.alpha3===code);if(country)countries.set(key(alias),country);
     }
-    for(const region of reference.regions || []) for(const alias of [region.name,region.code]) regions.set(region.country+":"+key(alias),region);
-    return {hosts,names,countries,regions};
+    for(const region of reference.regions || []){
+      push(regionsByCountry,region.country,region);
+      for(const alias of [region.name,region.code,region.code.includes('-')?region.code.split('-').slice(1).join('-'):region.code])regions.set(region.country+":"+key(alias),region);
+    }
+    return {hosts,names,countries,regions,regionsByCountry};
   }
   function hostMatch(value,index) {
     const matches=index.hosts.get(key(value)) || index.names.get(key(value));
@@ -94,6 +97,7 @@
   }
   const countryMatch=(value,index)=>index.countries.get(key(value)) || null;
   const regionMatch=(value,country,index)=>{const nation=countryMatch(country,index);return nation?index.regions.get(nation.alpha3+":"+key(value)) || null:null;};
+  const regionsForCountry=(country,index)=>index.regionsByCountry.get(countryMatch(country,index)?.alpha3) || [];
   function validDate(value) {
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
     const [year,month,day]=value.split("-").map(Number);
@@ -168,7 +172,7 @@
       for(const field of FIELDS.slice(1))if(!text(row[field]).trim())add(warnings,n,field,"Not recorded; complete this field if known.","missing_detail");
       if(text(row.host).trim() && !host)add(warnings,n,"host","Host is not recognized in the WINGS dictionary; review the species or code.","unknown_host");
       if(text(row.country).trim() && !country)add(warnings,n,"country","Country is not recognized; review the name or ISO code.","unknown_country");
-      if(text(row.state).trim() && country && ["USA","CAN"].includes(country.alpha3) && !regionMatch(row.state,row.country,index))add(warnings,n,"state","Region does not match a US state/DC or Canadian province/territory for this country.","unknown_region");
+      if(text(row.state).trim() && country && regionsForCountry(row.country,index).length && !regionMatch(row.state,row.country,index))add(errors,n,"state","Choose a state/province belonging to "+country.name+", or clear the region.","unknown_region");
       if(Boolean(text(row.latitude).trim())!==Boolean(text(row.longitude).trim()))add(warnings,n,"coordinates","Supply both latitude and longitude when known.","coordinate_pair");
       if(FIELDS.slice(1).every(field=>text(row[field]).trim()) && host && country && !errors.some(issue=>issue.row===n) && !warnings.some(issue=>issue.row===n))complete++;
     });
@@ -191,5 +195,5 @@
     if(new Set(ids).size!==ids.length)throw new Error("Metadata contains duplicate sample_id values.");
     return ids;
   }
-  return {FIELDS,key,suggestHeader,stripFastq,fastqExtension,parseTable,mapTable,buildIndex,hostMatch,countryMatch,regionMatch,validDate,normalizeDate,normalizeRows,suggestIds,validate,toTSV,inspectIds};
+  return {FIELDS,key,suggestHeader,stripFastq,fastqExtension,parseTable,mapTable,buildIndex,hostMatch,countryMatch,regionMatch,regionsForCountry,validDate,normalizeDate,normalizeRows,suggestIds,validate,toTSV,inspectIds};
 });

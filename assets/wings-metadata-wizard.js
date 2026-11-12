@@ -4,7 +4,7 @@
   const Core=globalThis.WINGS_METADATA;
   const launch=document.getElementById("openMetadataWizard");
   if(!Core || !launch)return;
-  const referenceURL=new URL("wings-metadata-reference.json?v=1",document.currentScript.src);
+  const referenceURL=new URL("wings-metadata-reference.json?v=2",document.currentScript.src);
   const STEPS=["Import","Match samples","Hosts","Collection details","Review & export"];
   const LABELS={sample_id:"Sample ID",host:"Host name or WINGS code",specimen_type:"Specimen type",collection_date:"Collection date",state:"State / province / territory",country:"Country",latitude:"Latitude",longitude:"Longitude"};
   const PAGE_SIZE=50;
@@ -62,6 +62,14 @@
       if(target.dataset.field!==undefined) {
         const rowIndex=Number(target.dataset.row),field=target.dataset.field,row=model.rows[rowIndex],before=row[field] || "";
         if(before!==target.value){row[field]=target.value;model.audit.push({sample_id:row.sample_id,row:rowIndex+1,field,before,after:target.value,action:"manual edit"});changed();}
+        if(field==="country"){
+          if(Core.countryMatch(before,index)?.alpha3!==Core.countryMatch(row.country,index)?.alpha3 && row.state && !Core.regionMatch(row.state,row.country,index)){
+            const previous=row.state;row.state="";
+            model.audit.push({sample_id:row.sample_id,row:rowIndex+1,field:"state",before:previous,after:"",action:"cleared region after country change"});
+            message("Country changed. The previous state/province was cleared; select a region for the new country. The original value is retained in the change log.");
+          }
+          target.closest("tr").querySelector('[data-field="state"]')?.closest("td").replaceWith(editableCell(rowIndex,"state"));
+        }
         if(field==="collection_date")for(const control of target.parentElement.querySelectorAll('[data-field="collection_date"]')){
           if(control!==target)control.value=control.type!=="date" || Core.validDate(target.value)?target.value:"";
         }
@@ -69,8 +77,6 @@
         get("mwProposals").replaceChildren();renderIssues();updateSummary();
       }
     });
-    const lists=[['mwCountryList',reference.countries.map(country=>[country.alpha3,country.name])],['mwRegionList',reference.regions.map(region=>[region.name,`${region.code} · ${region.country}`])]];
-    for(const [id,values] of lists){const list=make("datalist");list.id=id;for(const [value,label] of values){const option=make("option");option.value=value;option.label=label;list.append(option);}dialog.append(list);}
     const hostNames=make("datalist");hostNames.id="mwHostNames";const seen=new Set();
     for(const host of reference.hosts){
       const species=Core.key(host.name);if(seen.has(species))continue;seen.add(species);
@@ -107,6 +113,22 @@
   }
   function editableCell(rowIndex,field,readonly=false) {
     const cell=make("td");if(readonly){cell.append(make("strong","",model.rows[rowIndex][field] || "—"));return cell;}
+    if(field==="country" || field==="state"){
+      const row=model.rows[rowIndex],current=row[field] || "",country=Core.countryMatch(row.country,index),regions=Core.regionsForCountry(row.country,index);
+      if(field==="country" || !country || regions.length){
+        const select=make("select");select.dataset.row=String(rowIndex);select.dataset.field=field;select.setAttribute("aria-label",`${LABELS[field]}, row ${rowIndex+1}`);
+        const blank=make("option","",field==="country"?"Select country…":country?"Select state / province…":"Choose country first");blank.value="";select.append(blank);
+        const matched=field==="country"?Core.countryMatch(current,index):Core.regionMatch(current,row.country,index);
+        const choices=field==="country"?reference.countries.map(item=>({value:item.alpha3,label:`${item.name} · ${item.alpha3}`,match:item===matched})):[...new Map(regions.map(item=>[item.name,item])).values()].sort((a,b)=>a.name.localeCompare(b.name)).map(item=>({value:item.name,label:item.name,match:item.name===matched?.name}));
+        for(const choice of choices){const option=make("option","",choice.label);option.value=choice.match?current:choice.value;select.append(option);}
+        if(current && !matched){const recorded=make("option","",`Review imported value: ${current}`);recorded.value=current;recorded.disabled=true;select.append(recorded);}
+        select.value=current;select.disabled=field==="state" && !country;cell.append(select);
+        if(field==="state" && !country)cell.append(make("small","","Select a country to choose its states/provinces."));
+        return cell;
+      }
+      // Some countries have no subdivision records in the bundled ISO catalogue.
+      cell.append(make("small","","No predefined regions for this country; enter a region if known."));
+    }
     if(field==="specimen_type"){
       const select=make("select");select.dataset.row=String(rowIndex);select.dataset.field=field;select.setAttribute("aria-label",`Specimen type, row ${rowIndex+1}`);
       const current=model.rows[rowIndex][field] || "";
@@ -117,8 +139,6 @@
     }
     const input=make("input");input.type="text";input.value=model.rows[rowIndex][field] || "";input.dataset.row=String(rowIndex);input.dataset.field=field;input.setAttribute("aria-label",`${LABELS[field] || field}, row ${rowIndex+1}`);
     if(field==="host")input.setAttribute("list","mwHostNames");
-    if(field==="state")input.setAttribute("list","mwRegionList");
-    if(field==="country")input.setAttribute("list","mwCountryList");
     if(field==="sample_id")input.setAttribute("list","mwSampleList");
     if(field==="latitude" || field==="longitude")input.inputMode="decimal";
     if(field==="collection_date"){
@@ -145,10 +165,10 @@
       const label=make("label","mw-date-format","Source date format "),select=make("select");select.id="mwDateFormat";
       for(const [value,name] of [["ask","Ask for ambiguous dates"],["DMY","Day / month / year"],["MDY","Month / day / year"]]){const option=make("option","",name);option.value=value;select.append(option);}select.value=model.dateFormat;label.append(select);
       actions.append(label,button("Review collection standardization","normalize"));
-      body.append(make("p","mw-note","Countries use ISO three-letter codes; US states and Canadian provinces/territories use full names. Other regions retain their text. Coordinates are validated; locations are not geocoded or filled with guessed coordinates."));
+      body.append(make("p","mw-note","Choose the country first, then select one of its states/provinces. Countries export as ISO three-letter codes and regions as full names after standardization. Coordinates are validated; locations are not geocoded."));
     }
     body.append(actions);
-    const fields=model.step===1?["sample_id"]:model.step===2?["sample_id","host"]:["sample_id","specimen_type","collection_date","state","country","latitude","longitude"];
+    const fields=model.step===1?["sample_id"]:model.step===2?["sample_id","host"]:["sample_id","specimen_type","collection_date","country","state","latitude","longitude"];
     const headers=fields.map(field=>LABELS[field]);if(model.step===1)headers.push("FASTQ match","Action");
     const table=tableShell(headers),readIDs=new Set(reads().map(Core.stripFastq));
     const start=model.page*PAGE_SIZE,end=Math.min(start+PAGE_SIZE,model.rows.length);

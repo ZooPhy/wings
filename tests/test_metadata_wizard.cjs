@@ -39,7 +39,7 @@ test('normalization is a proposal and does not mutate original rows or extra col
   const proposal=Core.normalizeRows(original,index,'all');assert.equal(JSON.stringify(original),snapshot);assert.equal(proposal.rows[0].sample_id,'a');assert.equal(proposal.rows[0].host,'SNGO');assert.equal(proposal.rows[0].state,'Quebec');assert.equal(proposal.rows[0].country,'CAN');assert.equal(proposal.rows[0].Notes,original[0].Notes);assert.ok(proposal.changes.some(change=>change.before==='Snow Goose'&&change.after==='SNGO'));
 });
 test('countries use ISO alpha-3 and regions are matched within the chosen country',()=>{
-  for(const [country,state,outCountry,outState] of [['United States','CA','USA','California'],['Canada','QC','CAN','Quebec'],['CA','Québec','CAN','Quebec'],['United Kingdom','England','GBR','England'],['Australia','NSW','AUS','NSW']]){
+  for(const [country,state,outCountry,outState] of [['United States','CA','USA','California'],['Canada','QC','CAN','Quebec'],['CA','Québec','CAN','Quebec'],['United Kingdom','England','GBR','England'],['Australia','NSW','AUS','New South Wales']]){
     const row=Core.normalizeRows([sample('a',{country,state})],index,'collection').rows[0];assert.equal(row.country,outCountry);assert.equal(row.state,outState);
   }
   assert.equal(Core.regionMatch('CA','CAN',index),null);assert.equal(Core.regionMatch('Ontario','USA',index),null);assert.equal(reference.countries.length,249);
@@ -49,6 +49,19 @@ test('dates use strict calendar validation and ambiguous source dates require a 
   assert.equal(Core.normalizeDate('03/04/2025'),'03/04/2025');assert.equal(Core.normalizeDate('03/04/2025','DMY'),'2025-04-03');assert.equal(Core.normalizeDate('03/04/2025','MDY'),'2025-03-04');
   assert.equal(Core.normalizeDate('13/04/2025'),'2025-04-13');assert.equal(Core.normalizeDate('2025-4-3'),'2025-04-03');assert.equal(Core.normalizeDate('31/02/2025','DMY'),'31/02/2025');
   assert.equal(Core.normalizeRows([sample('2025-10-20_barcode04',{collection_date:''})],index).rows[0].collection_date,'');
+});
+test('region choices follow country and incompatible imported pairs block export',()=>{
+  const german=Core.regionsForCountry('Germany',index);
+  assert.equal(german.length,16);assert.ok(german.some(region=>region.name==='Berlin'));
+  assert.equal(german.some(region=>region.name==='New York'),false);
+  assert.equal(Core.regionMatch('New York','Germany',index),null);
+  assert.ok(codes(Core.validate([sample('a',{country:'DEU',state:'New York'})],['a.fastq.gz'],index)).includes('unknown_region'));
+  assert.equal(Core.validate([sample('a',{country:'DEU',state:'Berlin'})],['a.fastq.gz'],index).errors.length,0);
+  assert.ok(codes(Core.validate([sample('a',{country:'USA',state:'Ontario'})],['a.fastq.gz'],index)).includes('unknown_region'));
+  assert.equal(Core.regionMatch('DE-BY','DEU',index).name,'Bayern');
+  assert.equal(Core.regionMatch('BY','Germany',index).name,'Bayern');
+  const changed=Core.normalizeRows([sample('a',{country:'Australia',state:'NSW'})],index,'collection');
+  assert.equal(changed.rows[0].state,'New South Wales');
 });
 test('coordinates are validated without guessed locations or silent axis swapping',()=>{
   for(const [latitude,longitude] of [['NaN','-71'],['Infinity','-71'],['91','0'],['0','181'],['0x01','0'],['1,23','0']])assert.ok(codes(Core.validate([sample('a',{latitude,longitude})],['a.fastq.gz'],index)).includes('coordinate'));

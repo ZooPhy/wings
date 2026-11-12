@@ -67,5 +67,9 @@ does not upload sample data. Rebuild and refresh demo report assets separately
 to update the VADR and consensus/variant table styles in saved bundles.
 
 After editing the host-code TSV, run `python scripts/build_metadata_reference.py`
-and commit the refreshed reference JSON. Country labels/codes and US/Canada
-region records are maintained in that JSON with source attribution.
+and commit the refreshed reference JSON. Country labels/codes and country-specific top-level ISO subdivision records
+are maintained in that JSON with source attribution. The collection editor asks
+for country before region. Changing countries clears an incompatible region and
+records the previous value in the change log. Imported mismatches remain visible
+and block export until corrected or cleared. Countries without bundled
+subdivisions allow a manually entered region.
