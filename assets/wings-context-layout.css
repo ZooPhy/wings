@@ -21,6 +21,8 @@
 #contextSetup .context-check { display:flex; gap:12px; align-items:flex-start; margin:16px 0; font-weight:400; font-size:18px; }
 #contextSetup .context-action-row { display:flex; align-items:center; flex-wrap:wrap; gap:14px 20px; }
 #contextSetup .context-action-row p { margin:0; flex:1; min-width:200px; font-size:17px; }
+#contextSetup .context-prepare-followup { flex-direction:column; align-items:flex-start; margin-top:16px; }
+#contextSetup .context-prepare-followup > p { flex:none; min-width:0; width:100%; margin:0; }
 #contextSetup .btn.context-primary { background:#8c193e; color:#fff; border:1px solid #8c193e; border-radius:8px; padding:12px 22px; min-height:48px; font-family:inherit; font-weight:700; font-size:18px; cursor:pointer; }
 #contextSetup .btn:disabled { opacity:.55; cursor:wait; }
 #contextSetup .context-note { color:#52616c; font-size:16px; margin:12px 0 0; line-height:1.5; }

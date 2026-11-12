@@ -6,7 +6,7 @@
   <title>Run WINGS Pipeline</title>
   <meta name="description" content="Prepare, validate, launch, and monitor a local WINGS Snakemake run.">
   <link rel="stylesheet" href="assets/wings-portal.css">
-  <link rel="stylesheet" href="assets/wings-context-layout.css?v=4">
+  <link rel="stylesheet" href="assets/wings-context-layout.css?v=5">
   <link rel="stylesheet" href="assets/wings-metadata-wizard.css?v=2">
   <link rel="stylesheet" href="assets/wings-folder-picker.css?v=2">
 </head>
@@ -175,6 +175,7 @@
                 <div class="field"><label for="contextSource">eBird observations folder</label>
                   <div class="context-picker-field"><button type="button" class="btn" data-context-pick="ebird_download" data-context-target="contextSource">Choose folder…</button><input id="contextSource" type="text" placeholder="No folder selected — compatible cached data are reused automatically" aria-label="eBird observations folder path"><button type="button" class="context-link" data-context-clear="contextSource">Clear</button></div>
                   <input id="contextPackage" type="hidden" value="">
+                  <p class="context-note">Prepared observations cache: <code id="contextEbirdCacheLocation">~/.cache/wings/context/ebird/ (default; connect to the runner to confirm)</code></p>
                 </div>
                 <button id="contextCheckFolder" type="button" class="btn btn-secondary">Check folder</button>
                 <button id="contextRecache" type="button" class="btn btn-secondary">Rebuild options…</button>
@@ -194,7 +195,7 @@
                   </details>
                 </div>
                 <p class="context-note"><strong>Next:</strong> check the folder and confirm download coverage, then click <strong>Prepare context</strong>. This builds a cache from an original download or reuses a compatible prepared dataset.</p>
-                <div class="context-action-row"><button id="contextPrepareHere" type="button" class="btn context-primary">Prepare context</button><p id="contextNextAction" class="context-note" role="status">After preparation finishes, use Continue to Analysis. Continue only changes the setup step; it does not prepare or rebuild data.</p></div>
+                <div class="context-action-row context-prepare-followup"><button id="contextPrepareHere" type="button" class="btn context-primary">Prepare context</button><p id="contextNextAction" class="context-note" role="status">After preparation finishes, use Continue to Analysis. Continue only changes the setup step; it does not prepare or rebuild data.</p></div>
               </details>
             </details>
             <p id="contextPickerNotice" class="context-note" role="status" aria-live="polite" hidden></p>
@@ -311,7 +312,7 @@
 <script src="assets/wings-metadata-wizard.js?v=6"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
 <script src="assets/wings-context-setup.js?ebird_folder=2&v=12"></script>
-<script src="assets/wings-run.js?v=20261112-conda-location&wings_context=3"></script>
+<script src="assets/wings-run.js?v=20261112-ebird-cache-location&wings_context=3"></script>
 <script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>

@@ -1342,6 +1342,7 @@ def storage_settings() -> dict:
         while not parent.exists():
             parent = parent.parent
         return {"runs_root": str(root), "conda_pkgs_dir": CURRENT_CACHE_DIR or "",
+                "ebird_cache_dir": str(context_setup.cache_root() / "ebird"),
                 "conda_pkgs_default": cache_default,
                 "storage_revision": STORAGE_REVISION, "free_bytes": shutil.disk_usage(parent).free}
 

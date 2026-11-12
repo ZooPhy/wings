@@ -67,6 +67,9 @@
   }
 
   function syncStorage() {
+    const ebirdCache = $("contextEbirdCacheLocation");
+    if (ebirdCache) ebirdCache.textContent = state.runner?.ebird_cache_dir
+      || '~/.cache/wings/context/ebird/ (default; connect to the runner to confirm)';
     if (!$("runsDirectory")) return;
     const available = Boolean(state.runner?.storage_revision);
     $("applyStorage").disabled = !available || storagePending;
