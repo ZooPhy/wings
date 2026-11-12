@@ -108,6 +108,26 @@ def data_scripts(parsed: ReportHTML) -> list[tuple[dict, str]]:
             block['attrs'].get('type', '').lower() in ('application/json', 'application/ld+json')]
 
 
+DEPTH_TITLE_OLD = 'Minimum subtype median depth'
+DEPTH_TITLE = 'Minimum HA/NA median depth'
+DEPTH_NOTE_OLD = 'Recorded “Min Median Depth” from Sample Detail (subtype_min_median_depth). Bar lengths use log10(depth + 1), on a fixed scale across the run. Color does not indicate QC status.'
+DEPTH_NOTE = 'Lower of the HA and NA median depths. If one is missing, the available value is shown. Bars use log10(depth + 1) on a fixed scale across the run; color does not indicate QC status.'
+
+
+def clarify_coverage_depth_label(source: str) -> str:
+    parsed = ReportHTML(source)
+    result = source
+    for block in sorted(parsed.blocks, key=lambda item: item['start'], reverse=True):
+        if block['kind'] != 'script' or block['attrs'].get('type', '').lower() not in ('', 'text/javascript', 'application/javascript', 'module'):
+            continue
+        body = parsed.body(block)
+        if 'wco-depth' not in body or 'subtype_min_median_depth' not in body:
+            continue
+        replacement = body.replace(DEPTH_TITLE_OLD, DEPTH_TITLE).replace(DEPTH_NOTE_OLD, DEPTH_NOTE)
+        result = result[:block['start']] + replacement + result[block['end']:]
+    return result
+
+
 def refresh_html(source: str, assets: dict[str, bytes]) -> tuple[str, list[str]]:
     parsed = ReportHTML(source)
     tests = {
@@ -141,6 +161,10 @@ def refresh_html(source: str, assets: dict[str, bytes]) -> tuple[str, list[str]]
             raise ValueError('Overlapping UI replacements. Demo files unchanged.')
         result = result[:start] + replacement + result[end:]
         previous = start
+    renamed = clarify_coverage_depth_label(result)
+    if renamed != result:
+        labels.append('HA/NA median-depth label')
+        result = renamed
     if data_scripts(parsed) != data_scripts(ReportHTML(result)):
         raise ValueError('An embedded data block changed unexpectedly. Demo files unchanged.')
     return result, labels

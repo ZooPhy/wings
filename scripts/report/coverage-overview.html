@@ -11,7 +11,7 @@
  const link=s=>{const a=el('a','',s.id);if(s.href&&!/^(?:[a-z]+:|\/\/)/i.test(s.href))a.href=s.href;return a;};
  const ui=el('div','wco');ui.append(el('h3','','Genome Coverage Overview'),el('p','wco-note',`${rows.length} samples · select a completeness category or a passing-segment count to explore samples.`));
  const cards=el('div','wco-cards'),buttons=[],bins=[];const panel=el('div','wco-panel'),layout=el('div','wco-layout'),chartArea=el('div'),chart=el('div','wco-chart'),detail=el('div','wco-detail');detail.setAttribute('aria-live','polite');
- const depths=el('div','wco-depth'),depthTitle=el('h3','','Minimum subtype median depth'),selection=el('p','wco-note');
+ const depths=el('div','wco-depth'),depthTitle=el('h3','','Minimum HA/NA median depth'),selection=el('p','wco-note');
  const max=Math.max(1,...rows.filter(s=>Number.isFinite(s.depth)&&s.depth>=0).map(s=>s.depth));
  const show=(selected,title)=>{
   detail.replaceChildren(el('h3','',title),el('p','',`${selected.length} of ${rows.length} samples (${(selected.length*100/rows.length).toFixed(1)}%)`));const ul=el('ul');selected.forEach(s=>{const li=el('li');li.append(link(s),document.createTextNode(` · ${Number.isFinite(s.pass)?s.pass:'NA'}/8 pass`));ul.append(li);});detail.append(ul);
@@ -26,7 +26,7 @@
  const counts=Array.from({length:9},(_,i)=>rows.filter(s=>s.pass===i).length),peak=Math.max(1,...counts);
  counts.forEach((n,i)=>{const b=el('button','wco-bin');b.type='button';b.setAttribute('aria-pressed','false');b.setAttribute('aria-label',`${i} passing segments: ${n} samples`);const bar=el('i');bar.style.height=`${n/peak*155}px`;b.append(el('span','',n),bar,el('span','',i));b.addEventListener('click',()=>{clear();b.setAttribute('aria-pressed','true');show(rows.filter(s=>s.pass===i),`${i}/8 segments pass`);});bins.push(b);chart.append(b);});
  chartArea.append(chart,el('p','wco-note','Passing segments per sample (0–8)'));const reset=el('button','wco-reset','Show all samples');reset.type='button';reset.addEventListener('click',()=>{clear();show(rows,'All samples');});chartArea.append(reset);layout.append(chartArea,detail);panel.append(layout);ui.append(panel);
- const dp=el('div','wco-panel');dp.append(depthTitle,el('p','wco-note','Recorded “Min Median Depth” from Sample Detail (subtype_min_median_depth). Bar lengths use log10(depth + 1), on a fixed scale across the run. Color does not indicate QC status.'),selection,depths);ui.append(dp);
+ const dp=el('div','wco-panel');dp.append(depthTitle,el('p','wco-note','Lower of the HA and NA median depths. If one is missing, the available value is shown. Bars use log10(depth + 1) on a fixed scale across the run; color does not indicate QC status.'),selection,depths);ui.append(dp);
  const definitions=el('details');definitions.append(el('summary','','QC criteria and completeness definitions'));Array.from(original.children).filter(n=>['P','UL','OL'].includes(n.tagName)).forEach(n=>definitions.append(n.cloneNode(true)));ui.append(definitions);
  Array.from(tab.children).forEach(c=>c.hidden=true);tab.append(ui);show(rows,'All samples');
 };if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();})();
