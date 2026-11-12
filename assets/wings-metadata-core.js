@@ -61,7 +61,6 @@
     const warnings=[];
     const rows=records.map((values,index)=>{
       if(values.length>headers.length) throw new Error(`Row ${index+1} has more cells than the header; check the separator or quoting.`);
-      if(values.length<headers.length) warnings.push(`Row ${index+1}: missing trailing cells were left blank.`);
       return headers.map((_,i)=>values[i] ?? "");
     });
     if(rows.length>maxRows) throw new Error("The wizard supports up to 10,000 sample rows.");
