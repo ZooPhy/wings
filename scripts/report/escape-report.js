@@ -139,8 +139,7 @@
     root.innerHTML = "";
     const controls = document.createElement("div"); controls.className = "escape-viz-controls";
     const chart = document.createElement("div"); chart.className = "escape-read-chart";
-    const metrics = document.createElement("div"); metrics.className = "escape-read-metrics";
-    root.append(controls, chart, metrics);
+    root.append(controls, chart);
     ["reads","bases","q20","q30"].forEach((m,i)=>controls.appendChild(makeButton(m.toUpperCase(),m,i===0)));
 
     const draw = (mode) => {
@@ -174,11 +173,6 @@
           <text x="612" y="151" fill="${ASU.white}" font-size="${afterSize}" font-weight="800">${afterLabel}</text>
           <text x="612" y="187" fill="#f2dfe6" font-size="16">${quality ? `${delta>=0?"+":""}${fmt(delta,1)} percentage points` : `${pct(ratio)} retained`}</text>
         </svg>`;
-      metrics.innerHTML = `
-        <div><span>Reads retained</span><strong>${pct(data.reads.retention)}</strong></div>
-        <div><span>Bases retained</span><strong>${pct(data.bases.retention)}</strong></div>
-        <div><span>Adapter-positive reads</span><strong>${fmt(data.adapters.count)}</strong><small>${pct(data.adapters.fraction)} of input</small></div>
-        <div><span>Q20 improvement</span><strong>${fmt((data.q20.after-data.q20.before)*100,1)} pp</strong></div>`;
     };
     controls.addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) draw(b.dataset.value); });
     draw("reads");

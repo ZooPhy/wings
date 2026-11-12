@@ -56,6 +56,8 @@
 .wse-sample-back:hover { background:#FFC627; color:#000000; border-color:#000000; }
 .wse-sample-back:focus-visible,.wse-view-navigator a:focus-visible { outline:3px solid #8C1D40; outline-offset:2px; }
 .wse-sample-content section[id],.wse-sample-content h2[id] { scroll-margin-top:18px; }
+/* Saved reports may retain the earlier read renderer; omit its duplicate cards. */
+.escape-read-viz > .escape-read-metrics { display:none !important; }
 @media(max-width:1050px) { .wse-sample-workspace > .wse-sample-content { grid-column:1; grid-row:2; } }
 
 /* GenoFLU constellation: recorded calls, independent of segment QC status. */
