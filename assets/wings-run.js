@@ -43,22 +43,25 @@
   let dockerPending=false,dockerChecked=0;
   function renderDocker() {
     const status=$('dockerStatus');
-    if(status){status.textContent=dockerPending?'Checking Docker engine access…':state.docker?.message || 'Docker has not been checked.';status.className='help'+(state.docker?(state.docker.ready?' status-ok':' status-error'):'');}
-    for(const id of ['checkDocker','checkDockerPreflight'])if($(id))$(id).disabled=dockerPending || !state.runner;
+    if(status){status.textContent=dockerPending?'Checking Docker engine access…':(state.docker?.message || 'Docker has not been checked.')+(state.docker?.attempted_at?` Last attempt: ${new Date(state.docker.attempted_at).toLocaleTimeString()}.`:'');status.className='help'+(state.docker?(state.docker.ready?' status-ok':' status-error'):'');}
+    for(const id of ['checkDocker','checkDockerPreflight'])if($(id)){
+      $(id).disabled=dockerPending || !state.runner;
+      $(id).textContent=dockerPending?'Checking…':id==='checkDocker'?'Check Docker':'Recheck Docker';
+    }
   }
   async function checkDocker(force=true) {
     if(dockerPending)return false;
     const vadr=$('optVadr').checked;
     if(!force && state.docker?.selection_vadr===vadr && Date.now()-dockerChecked<30000)return state.docker.ready;
-    if(!state.runner?.docker_check_available){state.docker={ready:false,message:'Connect to the updated local runner to check Docker.'};renderDocker();return false;}
+    if(!state.runner){renderDocker();return false;}
     dockerPending=true;state.docker=null;renderDocker();if(state.step===4)renderPreflight();
     try {
       const response=await fetch(`${localOrigin}/api/docker/check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vadr})});
-      if(response.status===404)throw new Error('Restart the updated runner to enable Docker checks.');
+      if(response.status===404)throw new Error('Docker checker is unavailable in this runner session. Restart the WINGS runner, then check again.');
       const result=await response.json();if(!response.ok)throw new Error(result.error || 'Docker check failed.');
       state.docker={...result,selection_vadr:vadr};dockerChecked=Date.now();
     }catch(error){state.docker={ready:false,message:error.message,selection_vadr:vadr};}
-    finally{dockerPending=false;renderDocker();if(state.step===4)renderPreflight();}
+    finally{dockerChecked=Date.now();if(state.docker)state.docker.attempted_at=dockerChecked;dockerPending=false;renderDocker();if(state.step===4)renderPreflight();}
     if(vadr!==$('optVadr').checked)return checkDocker(true);
     return Boolean(state.docker?.ready);
   }

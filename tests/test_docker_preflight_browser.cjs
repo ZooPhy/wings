@@ -4,16 +4,21 @@ const fs=require('node:fs');
 const http=require('node:http');
 const path=require('node:path');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'..');let daemonReady=false,probes=0;
+const root=path.resolve(__dirname,'..');let daemonReady=false,probes=0,endpointAvailable=true,releaseProbe=null,holdProbe=false;
 const server=http.createServer((req,res)=>{
   const route=new URL(req.url,'http://localhost').pathname;
   const json=data=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
-  if(route==='/api/health')return json({docker_check_available:true,snakemake_available:true,snakemake:'fixture',config_yaml_present:true,runs_root:'/fixture',storage_revision:'test',conda_pkgs_default:'default',free_bytes:100});
+  // Older health responses omit the capability flag; the endpoint must still be tried.
+  if(route==='/api/health')return json({snakemake_available:true,snakemake:'fixture',config_yaml_present:true,runs_root:'/fixture',storage_revision:'test',conda_pkgs_default:'default',free_bytes:100});
   if(route==='/api/runs')return json([]);
   if(route==='/api/docker/check'){
     let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{
       const vadr=JSON.parse(body).vadr;probes++;
-      json({ready:!vadr||daemonReady,message:!vadr?'Docker is not required':daemonReady?'Docker engine is responding':'Docker engine is unavailable. Start Docker Desktop.',required:vadr});
+      const finish=()=>{
+        if(!endpointAvailable){res.writeHead(404);res.end();return;}
+        json({ready:!vadr||daemonReady,message:!vadr?'Docker is not required':daemonReady?'Docker engine is responding':'Docker engine is unavailable. Start Docker Desktop.',required:vadr});
+      };
+      if(holdProbe)releaseProbe=finish;else finish();
     });return;
   }
   const file=path.resolve(root,'.'+decodeURIComponent(route));
@@ -27,7 +32,17 @@ const server=http.createServer((req,res)=>{
     browser=await chromium.launch({headless:true});const page=await browser.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/run.html?new=1`);
     await page.waitForFunction(()=>document.getElementById('dockerStatus').textContent.includes('unavailable'));
-    daemonReady=true;await page.locator('#checkDocker').click();
+    daemonReady=true;holdProbe=true;await page.locator('#checkDocker').click();
+    assert.equal(await page.locator('#checkDocker').textContent(),'Checking…');
+    assert.equal(await page.locator('#checkDocker').isDisabled(),true);
+    while(!releaseProbe)await new Promise(resolve=>setTimeout(resolve,10));
+    holdProbe=false;releaseProbe();releaseProbe=null;
+    await page.waitForFunction(()=>document.getElementById('dockerStatus').textContent.includes('responding'));
+    assert.match(await page.locator('#dockerStatus').textContent(),/Last attempt:/);
+    endpointAvailable=false;await page.locator('#checkDocker').click();
+    await page.waitForFunction(()=>document.getElementById('dockerStatus').textContent.includes('Restart the WINGS runner'));
+    assert.equal(await page.locator('#checkDocker').isEnabled(),true);
+    endpointAvailable=true;await page.locator('#checkDocker').click();
     await page.waitForFunction(()=>document.getElementById('dockerStatus').textContent.includes('responding'));
     await page.locator('.step-button[data-step="4"]').click();
     await page.waitForFunction(()=>document.getElementById('preflightList').textContent.includes('Docker engine is responding'));
