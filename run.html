@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="assets/wings-portal.css">
   <link rel="stylesheet" href="assets/wings-context-layout.css?v=4">
   <link rel="stylesheet" href="assets/wings-metadata-wizard.css?v=1">
+  <link rel="stylesheet" href="assets/wings-folder-picker.css?v=1">
 </head>
 <body>
 <header class="portal-header">
@@ -89,11 +90,13 @@
             <div class="field">
               <label for="runsDirectory">Run storage directory</label>
               <input id="runsDirectory" type="text" autocomplete="off" spellcheck="false" placeholder="Connect to the runner to see its directory">
+              <button type="button" class="btn btn-secondary" data-storage-browse="runsDirectory">Browse folders…</button>
               <div class="help">Uploaded inputs, run records and results. Enter an absolute path or a path beginning with ~/.</div>
             </div>
             <div class="field">
               <label for="condaCacheDirectory">Conda package cache directory</label>
               <input id="condaCacheDirectory" type="text" autocomplete="off" spellcheck="false" placeholder="Use launcher / Conda default">
+              <button type="button" class="btn btn-secondary" data-storage-browse="condaCacheDirectory">Browse folders…</button>
               <div id="condaCacheDefault" class="help">Optional. Leave blank to use the runner's inherited Conda cache settings.</div>
             </div>
             <button id="applyStorage" class="btn btn-secondary" type="button" disabled>Validate and apply locations</button>
@@ -291,5 +294,6 @@
 <script src="assets/wings-context-picker.js?v=1"></script>
 <script src="assets/wings-context-setup.js?v=10"></script>
 <script src="assets/wings-run.js?v=20261111-metadata-wizard&wings_context=3"></script>
+<script src="assets/wings-folder-picker.js?v=1"></script>
 </body>
 </html>

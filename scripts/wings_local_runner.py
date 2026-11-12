@@ -1081,11 +1081,14 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if context_runner.handle_post(self, globals()):
                 return
-            if parsed.path == "/api/storage":
+            if parsed.path in {"/api/storage", "/api/storage/directories"}:
                 origin = self.headers.get("Origin")
                 expected_origin = f"http://{self.headers.get('Host', '')}"
                 if self.headers.get_content_type() != "application/json" or (origin and origin != expected_origin):
-                    self.error_response("Use the local WINGS portal to change storage settings.", 403)
+                    self.error_response("Use the local WINGS portal to browse or change storage settings.", 403)
+                    return
+                if parsed.path == "/api/storage/directories":
+                    self.json_response(browse_storage_directories(self.read_json()))
                     return
                 self.json_response(update_storage(self.read_json()))
                 return
@@ -1150,6 +1153,54 @@ class Handler(SimpleHTTPRequestHandler):
             self.error_response(str(error), 400)
             return
         self.error_response("Unknown endpoint", 404)
+
+
+def browse_storage_directories(payload: dict) -> dict:
+    """List folders on this runner without creating directories or changing storage."""
+    if not isinstance(payload, dict):
+        raise ValueError("Folder selection must be an object")
+    value = payload.get("path", "")
+    query = payload.get("query", "")
+    offset = payload.get("offset", 0)
+    hidden = payload.get("show_hidden", False)
+    if not isinstance(value, str) or len(value) > 4096 or "\x00" in value:
+        raise ValueError("Invalid folder path")
+    if not isinstance(query, str) or len(query) > 255:
+        raise ValueError("Invalid folder search")
+    if type(offset) is not int or offset < 0 or offset > 1000000 or type(hidden) is not bool:
+        raise ValueError("Invalid folder listing options")
+    path = Path(value).expanduser() if value else Path.home()
+    if not path.is_absolute():
+        raise ValueError("Choose an absolute path on the runner machine.")
+    path = path.resolve()
+    requested = path
+    while not path.exists() and path.parent != path:
+        path = path.parent
+    if path.is_file():
+        path = path.parent
+    if not path.is_dir():
+        raise ValueError("This location is not a directory")
+    folders = []
+    with os.scandir(path) as entries:
+        for entry in entries:
+            if (not hidden and entry.name.startswith(".")) or query.casefold() not in entry.name.casefold():
+                continue
+            try:
+                if entry.is_dir():
+                    folders.append({"name": entry.name, "path": str(path / entry.name)})
+            except OSError:
+                continue
+    folders.sort(key=lambda item: (item["name"].casefold(), item["name"]))
+    limit = 200
+    shortcuts = []
+    for label, target in [("Home", Path.home()), ("Current runs", RUNS_ROOT), ("WINGS project", REPO_ROOT),
+                          ("Volumes", Path("/Volumes")), ("Mounts", Path("/mnt")),
+                          ("Media", Path("/media")), ("Filesystem", Path(path.anchor))]:
+        if target.is_dir():
+            shortcuts.append({"name": label, "path": str(target.resolve())})
+    return {"path": str(path), "parent": str(path.parent), "directories": folders[offset:offset + limit],
+            "total": len(folders), "offset": offset, "limit": limit, "shortcuts": shortcuts,
+            "notice": "Showing the nearest existing folder." if path != requested else ""}
 
 
 def prepare_storage_directory(value: str) -> Path:

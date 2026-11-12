@@ -1,0 +1,25 @@
+name: Storage folder picker
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  folders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Runner directory listing and origin checks
+        run: python -m unittest discover -s tests -p test_storage_folder_picker.py
+      - name: Install browser test dependencies
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: Folder picker browser checks
+        run: node tests/test_storage_folder_picker_browser.cjs
