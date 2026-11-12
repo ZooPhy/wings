@@ -228,8 +228,18 @@
     } else if(action==="remove"){
       const i=Number(target.dataset.row),row=model.rows[i];model.audit.push({sample_id:row.sample_id,row:i+1,field:"row",before:JSON.stringify(row),after:"",action:"removed row"});model.rows.splice(i,1);changed();
     } else if(action==="add" || action==="missing"){
-      const ids=action==="add"?[""]:validation().missingReads;
-      for(const id of [...new Set(ids)])model.rows.push(Object.fromEntries(model.fields.map(field=>[field,field==="sample_id"?id:""])));changed();
+      if(action==="missing" && !reads().length){message("Select FASTQ files in the Sequences step of the run form first, then reopen the wizard to add their metadata rows.");return;}
+      const ids=[...new Set(action==="add"?[""]:validation().missingReads)];
+      if(!ids.length){message("No rows added: every selected FASTQ already has a metadata row. Review any ID errors shown below.");return;}
+      const first=model.rows.length;
+      for(const id of ids){
+        const row=Object.fromEntries(model.fields.map(field=>[field,field==="sample_id"?id:""]));model.rows.push(row);
+        model.audit.push({sample_id:id,row:model.rows.length,field:"row",before:"",after:JSON.stringify(row),action:action==="missing"?"added missing FASTQ row":"added sample row"});
+      }
+      changed();model.step=1;model.page=Math.floor(first/PAGE_SIZE);render();
+      const input=dialog.querySelector(`input[data-row="${first}"][data-field="sample_id"]`);
+      input?.focus();input?.scrollIntoView({block:"nearest"});
+      message(action==="missing"?`Added ${ids.length} missing FASTQ metadata ${ids.length===1?"row":"rows"}. Showing the first added row; complete its host and collection details in the next steps.`:"Added a sample row. Enter its sample ID.");return;
     } else if(action==="editIssue"){
       const field=target.dataset.field;model.step=field==="sample_id"?1:field==="host"?2:3;model.page=Math.floor(Number(target.dataset.row)/PAGE_SIZE);render();
       dialog.querySelector(`[data-row="${target.dataset.row}"][data-field="${field==="coordinates"?"latitude":field}"]`)?.focus();return;

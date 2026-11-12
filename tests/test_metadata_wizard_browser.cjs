@@ -54,6 +54,25 @@ const server=http.createServer((request,response)=>{
     const duplicate='sample_id\thost\nsample_a\tSNGO\nsample_a\tCAGO';
     await dialog.locator('[data-action="step"][data-step="0"]').click();await dialog.locator('#mwPaste').fill(duplicate);await dialog.locator('[data-action="paste"]').click();await dialog.locator('[data-action="map"]').click();await dialog.locator('[data-action="step"][data-step="4"]').click();
     assert.equal(await dialog.locator('[data-action="use"]').isDisabled(),true);assert.equal(await dialog.locator('[data-action="download"]').isDisabled(),true);
+    // Missing FASTQ rows: visible no-op, pagination, idempotence, and absent files.
+    await dialog.locator('[data-action="step"][data-step="1"]').click();
+    await dialog.locator('[data-action="missing"]').click();
+    assert.match(await dialog.locator('#mwMessage').innerText(),/Added 1 missing FASTQ metadata row/);
+    await dialog.locator('[data-action="missing"]').click();
+    assert.match(await dialog.locator('#mwMessage').innerText(),/every selected FASTQ already has a metadata row/);
+    const large='sample_id\n'+Array.from({length:50},(_,i)=>'existing_'+i).join('\n');
+    await dialog.locator('[data-action="step"][data-step="0"]').click();
+    await dialog.locator('#mwPaste').fill(large);await dialog.locator('[data-action="paste"]').click();await dialog.locator('[data-action="map"]').click();
+    await dialog.locator('[data-action="missing"]').click();
+    assert.match(await dialog.locator('#mwMessage').innerText(),/Added 2 missing FASTQ metadata rows/);
+    assert.equal(await dialog.locator('input[data-row="50"][data-field="sample_id"]').inputValue(),'sample_a');
+    assert.equal(await dialog.locator('input[data-row="50"][data-field="sample_id"]').evaluate(node=>node===document.activeElement),true);
+    assert.match(await dialog.locator('.mw-pager').innerText(),/Rows 51–52 of 52/);
+    await dialog.locator('[data-action="missing"]').click();
+    assert.match(await dialog.locator('#mwMessage').innerText(),/No rows added/);
+    await page.locator('#readsFiles').setInputFiles([]);
+    await dialog.locator('[data-action="missing"]').click();
+    assert.match(await dialog.locator('#mwMessage').innerText(),/Select FASTQ files in the Sequences step/);
     await dialog.locator('[data-action="close"]').click();
     const css=fs.readFileSync(path.join(root,'scripts/report/sample-report.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'scripts/report/sample-navigation.css'),'utf8');
     const section=id=>`<section id="${id}"><div class="report-panel"><div class="escape-table-wrapper"><table><thead><tr><th>Segment</th><th>Result</th><th>Status</th></tr></thead><tbody><tr><td>PB2</td><td>Recorded</td><td>PASS</td></tr></tbody></table></div></div></section>`;
