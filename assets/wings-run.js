@@ -166,6 +166,7 @@
     $("stepSubtitle").textContent = stepMeta[state.step][1];
     $("backButton").disabled = state.step === 0;
     $("nextButton").hidden = state.step === 4;
+    $("nextButton").textContent = state.step < 4 ? `Continue to ${stepMeta[state.step + 1][0]}` : "Continue";
     if (state.step === 4) renderPreflight();
   }
 

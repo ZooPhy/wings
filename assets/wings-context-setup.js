@@ -37,7 +37,8 @@
     try {
       const value=await input();
       const plan=await request('/api/context/plan',{metadata:value.metadata,options:value.settings});
-      if(token!==folderCheckRequest || (await input()).signature!==value.signature)return;
+      const current=await input();
+      if(token!==folderCheckRequest || current.metadata!==value.metadata || ['days','ebird_source','ebird_package'].some(key=>current.settings[key]!==value.settings[key]) || current.settings.selected_sources.includes('ebird')!==value.settings.selected_sources.includes('ebird'))return;
       showRequest(plan.ebird_request || {});area.replaceChildren();
       const found=plan.ebird_folder;
       if(!found){area.textContent='This runner does not yet support folder checks. Restart the updated runner.';return;}
@@ -146,6 +147,11 @@
   function showStatus(data) {
     records={...records,...(data.providers || {})};
     renderCards();
+    const next=$('contextNextAction');if(next){
+      next.textContent=data.status==='PREPARING'?'Preparing context. Wait for preparation to finish, then continue to Analysis.':
+        data.status==='READY'?($('contextEbird').checked && records.ebird?.status!=='READY'?'eBird observations are unavailable. Review the folder details or continue to Analysis with the other available sources.':'Context preparation finished. Continue to Analysis to choose analysis options.'):
+        'Click Prepare context to build or reuse data. Continue to Analysis only changes the setup step.';
+    }
     const status=$('contextStatus');
     if(data.status==='PREPARING'){
       if(!progressStarted)progressStarted=Date.now();progressView=data;
@@ -218,6 +224,7 @@
     preparing=true;prepared=null;
     const unlock=lockInputs();
     $('contextPrepare').textContent='Preparing…';
+    if($('contextPrepareHere'))$('contextPrepareHere').textContent='Preparing…';
     let progress;
     try {
       if($('contextEbird').checked && ($('contextSource').value.trim() || $('contextPackage').value.trim()))await checkEbirdFolder();
@@ -242,6 +249,7 @@
     } finally {
       preparing=false;unlock();renderCards();
       $('contextPrepare').textContent='Prepare context';
+      if($('contextPrepareHere'))$('contextPrepareHere').textContent='Prepare context';
     }
   }
   async function readyForRun() {
@@ -258,11 +266,13 @@
     console.error('WINGS context:',error);
     $('contextStatus').textContent=['Select metadata.tsv first.','Finish choosing a folder first.'].includes(error.message) ? error.message : 'Preparation could not finish. Check the runner log, then try again.';
   }
-  function invalidate() {
+  function invalidate(event) {
     if(preparing)return;
-    folderCheckRequest++;
-    if($('contextFolderCheck'))$('contextFolderCheck').textContent='Selection changed. Check the folder again to confirm its contents and metadata coverage.';
-    if($('contextDownloadHelp'))$('contextDownloadHelp').hidden=false;
+    if(event?.target?.id!=='contextCoverage'){
+      folderCheckRequest++;
+      if($('contextFolderCheck'))$('contextFolderCheck').textContent='Selection changed. Check the folder again to confirm its contents and metadata coverage.';
+      if($('contextDownloadHelp'))$('contextDownloadHelp').hidden=false;
+    }
     prepared=null;records={};showStatus({status:'STALE'});
   }
   $('contextSetup').addEventListener('input',invalidate);
@@ -276,6 +286,7 @@
   $('contextRecacheRun')?.addEventListener('click',()=>rebuildEbirdCache());
   $('contextSource').addEventListener('change',()=>checkEbirdFolder());
   $('contextPrepare').addEventListener('click',()=>prepareOnly().catch(report));
+  $('contextPrepareHere')?.addEventListener('click',()=>prepareOnly().catch(report));
   renderCards();
   window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder,rebuildEbirdCache};
 })();

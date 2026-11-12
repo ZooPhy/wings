@@ -21,8 +21,8 @@ class Element {
 (async()=>{
   const sources=['ecology','phenology','public_genotypes','ebird','outbreak'];
   const controls={ecology:'contextEcology',phenology:'contextPhenology',public_genotypes:'contextGenotypes',ebird:'contextEbird',outbreak:'contextAphis'};
-  const ids=['contextProgressNote','contextRecache','contextRecachePanel','contextRecacheRun','contextRecacheStatus','contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
-  const elements=Object.fromEntries(ids.map(id=>[id,new Element(id==='contextPrepare'||id.startsWith('contextAction-')?'button':'div')]));
+  const ids=['contextPrepareHere','contextNextAction','contextProgressNote','contextRecache','contextRecachePanel','contextRecacheRun','contextRecacheStatus','contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
+  const elements=Object.fromEntries(ids.map(id=>[id,new Element(id==='contextPrepare'||id==='contextPrepareHere'||id.startsWith('contextAction-')?'button':'div')]));
   for(const id of ['contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage',...Object.values(controls)])elements[id].tagName='input';
   for(const [id,el] of Object.entries(elements))if(id!=='contextSetup'&&id!=='metadataFile')elements.contextSetup.append(el);
   for(const id of ['contextEbirdImport'])elements[id].append(new Element('summary'));
@@ -181,6 +181,15 @@ class Element {
   ui.showStatus({status:'PREPARING',active_provider:'ebird',providers:{ebird:{status:'PREPARING',import_progress:{stage:'fingerprinting',message:'Fingerprinting original observations file',bytes_processed:50,total_bytes:100}}}});
   assert.match(elements['contextCount-ebird'].textContent,/50% of this file read/);
   ui.showStatus({status:'READY',providers:{ebird:{status:'READY'}}});assert.equal(elements.contextProgressNote.hidden,true);assert.equal(heartbeat,null);
+  const beforeInline=calls.filter(c=>c.url.endsWith('/api/runs')).length;
+  await elements.contextPrepareHere.listeners.click();
+  assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,beforeInline+1);
+  assert.equal(elements.contextPrepareHere.textContent,'Prepare context');
+  assert.match(elements.contextNextAction.textContent,/Continue to Analysis/);
+  ui.showStatus({status:'STALE'});assert.match(elements.contextNextAction.textContent,/only changes the setup step/);
+  assert.equal(calls.filter(c=>c.url.endsWith('/start')).length,0);
+  elements.contextFolderCheck.textContent='Download files checked';elements.contextCoverage.id='contextCoverage';elements.contextSetup.listeners.input({target:elements.contextCoverage});assert.equal(elements.contextFolderCheck.textContent,'Download files checked');
+  console.log('PASS: inline Prepare context uses the existing preparation flow; Continue guidance remains navigation-only.');
   console.log('PASS: real row counters, per-file hashing percentages, elapsed status, and completion cleanup.');
   console.log('PASS: re-cache requires original source and coverage confirmation, prepares a new selection, and never starts sequencing.');
   console.log('PASS: prepared/download/invalid folder detection, inventory feedback, and conditional coverage confirmation.');

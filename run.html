@@ -172,7 +172,7 @@
                   <input id="contextPackage" type="hidden" value="">
                 </div>
                 <button id="contextCheckFolder" type="button" class="btn btn-secondary">Check folder</button>
-                <button id="contextRecache" type="button" class="btn btn-secondary">Re-cache eBird</button>
+                <button id="contextRecache" type="button" class="btn btn-secondary">Rebuild options…</button>
                 <div id="contextFolderCheck" class="context-note" role="status" aria-live="polite">No folder checked. With no selection, WINGS looks for compatible cached observations.</div>
                 <div id="contextRecachePanel" hidden>
                   <p>Rebuild observations for the current metadata and date window from your original extracted eBird download. The prepared cache cannot supply records outside its coverage. WINGS creates a new cache and keeps your previous dataset.</p>
@@ -188,6 +188,8 @@
                     <div id="contextRequest">Select metadata, then check the folder or prepare context to see the required regions and dates.</div>
                   </details>
                 </div>
+                <p class="context-note"><strong>Next:</strong> check the folder and confirm download coverage, then click <strong>Prepare context</strong>. This builds a cache from an original download or reuses a compatible prepared dataset.</p>
+                <div class="context-action-row"><button id="contextPrepareHere" type="button" class="btn context-primary">Prepare context</button><p id="contextNextAction" class="context-note" role="status">After preparation finishes, use Continue to Analysis. Continue only changes the setup step; it does not prepare or rebuild data.</p></div>
               </details>
             </details>
             <p id="contextPickerNotice" class="context-note" role="status" aria-live="polite" hidden></p>
@@ -302,8 +304,8 @@
 <script src="assets/wings-metadata-core.js?v=2"></script>
 <script src="assets/wings-metadata-wizard.js?v=6"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
-<script src="assets/wings-context-setup.js?ebird_folder=2&v=11"></script>
-<script src="assets/wings-run.js?v=20261111-metadata-wizard&wings_context=3"></script>
+<script src="assets/wings-context-setup.js?ebird_folder=2&v=12"></script>
+<script src="assets/wings-run.js?v=20261112-context-flow&wings_context=3"></script>
 <script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>
