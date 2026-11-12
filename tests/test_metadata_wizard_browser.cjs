@@ -32,9 +32,18 @@ const server=http.createServer((request,response)=>{
     await page.locator('.step-button[data-step="2"]').click();
     await page.locator('#openMetadataWizard').click();
     const dialog=page.locator('#metadataWizard');await dialog.waitFor({state:'visible'});
+    const hostOptions=await dialog.locator('#mwHostNames option').evaluateAll(options=>options.map(option=>({value:option.value,label:option.label})));
+    assert.deepEqual(hostOptions.filter(option=>option.label.startsWith('Mexican Duck · ')),[{value:'MEDU',label:'Mexican Duck · MEDU'}]);
+    assert.equal(hostOptions.filter(option=>option.label.startsWith('Canada Goose · ')).length,1);
+    assert.equal(hostOptions.some(option=>option.value==='Mexican Duck'),false);
+    assert.equal(new Set(hostOptions.map(option=>option.label.split(' · ')[0])).size,hostOptions.length);
     const csv='Sample ID,Bird,Date collected,Province,Country,Lat,Long,Notes\nsample_a,Snow Goose,13/04/2025,QC,Canada,46.8139,-71.2080,"one ""quoted"" note\nsecond line"\nsample_b,CAGO,2025-04-15,KY,United States,38,-85,other';
     await dialog.locator('#mwPaste').fill(csv);await dialog.locator('[data-action="paste"]').click();await dialog.locator('[data-action="map"]').click();
     await dialog.locator('[data-action="step"][data-step="2"]').click();await dialog.locator('[data-action="normalize"]').click();await dialog.locator('[data-action="apply"]').click();
+    const hostInput=dialog.locator('input[data-row="0"][data-field="host"]');
+    await hostInput.fill('MEDU');await hostInput.press('Tab');
+    assert.match(await hostInput.locator('..').innerText(),/Mexican Duck/);
+    await hostInput.fill('SNGO');await hostInput.press('Tab');
     await dialog.locator('[data-action="step"][data-step="3"]').click();
     for(const row of [0,1])await dialog.locator(`select[data-row="${row}"][data-field="specimen_type"]`).selectOption('Oropharyngeal + Cloacal');
     await dialog.locator('[data-action="normalize"]').click();await dialog.locator('[data-action="apply"]').click();

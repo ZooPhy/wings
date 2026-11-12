@@ -72,7 +72,10 @@
     const lists=[['mwCountryList',reference.countries.map(country=>[country.alpha3,country.name])],['mwRegionList',reference.regions.map(region=>[region.name,`${region.code} · ${region.country}`])]];
     for(const [id,values] of lists){const list=make("datalist");list.id=id;for(const [value,label] of values){const option=make("option");option.value=value;option.label=label;list.append(option);}dialog.append(list);}
     const hostNames=make("datalist");hostNames.id="mwHostNames";const seen=new Set();
-    for(const host of reference.hosts){for(const value of [host.code,host.name]){if(seen.has(value))continue;seen.add(value);const option=make("option");option.value=value;option.label=`${host.code} · ${host.name}`;hostNames.append(option);}}
+    for(const host of reference.hosts){
+      const species=Core.key(host.name);if(seen.has(species))continue;seen.add(species);
+      const option=make("option");option.value=host.code;option.label=`${host.name} · ${host.code}`;hostNames.append(option);
+    }
     dialog.append(hostNames);
   }
   function renderImport(body) {
