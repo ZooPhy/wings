@@ -1048,14 +1048,21 @@ cat('<script type="application/json" id="wings-distribution-data">',
 
 ### QC-qualified Genome Completeness
 
-Each influenza segment passes WINGS segment QC when median depth is at least **`r format(coverage_threshold, trim = TRUE)`x**; at least **`r format(100 * coverage_breadth_threshold, trim = TRUE)`%** of reference positions have depth of at least **`r format(coverage_threshold, trim = TRUE)`x**; consensus length is at least the configured segment-specific minimum; and the consensus N fraction is at most **`r format(100 * max_n_fraction, trim = TRUE)`%**. A consensus longer than the configured upper length guide is retained as **PASS** but receives a length warning for review. Genome status is based on the number of the eight influenza A segments that pass the hard QC criteria:
+**Segment PASS criteria:**
+
+- Median depth ≥ **`r format(coverage_threshold, trim = TRUE)`x**
+- Reference positions at ≥ **`r format(coverage_threshold, trim = TRUE)`x**: ≥ **`r format(100 * coverage_breadth_threshold, trim = TRUE)`%**
+- Consensus length ≥ configured segment minimum
+- Consensus N fraction ≤ **`r format(100 * max_n_fraction, trim = TRUE)`%**
+
+**Length warning:** above the configured upper length guide; still **PASS** if all criteria are met.
+
+**Genome status — segments passing QC:**
 
 - **Complete:** 8 of 8 segments pass segment QC
 - **Near-complete:** 6-7 of 8 segments pass segment QC
 - **Partial:** 1-5 of 8 segments pass segment QC
 - **Failed:** 0 of 8 segments pass segment QC
-
-These categories describe **QC-qualified genome recovery** and should not be interpreted as a substitute for downstream annotation, biological review, or other assay-specific quality checks.
 
 ```{r}
 asu_palette <- c(
