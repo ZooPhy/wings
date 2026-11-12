@@ -9,6 +9,32 @@
   let prepared = null;
   let preparing = false;
   let records = {};
+  let folderCheckRequest=0;
+  async function checkEbirdFolder() {
+    const area=$('contextFolderCheck');if(!area)return;
+    const token=++folderCheckRequest,path=$('contextSource').value.trim() || $('contextPackage').value.trim();
+    area.replaceChildren();$('contextDownloadHelp').hidden=false;
+    if(!$('contextEbird').checked){area.textContent='Select eBird observations and effort above to check this folder.';return;}
+    if(!path){area.textContent='No folder selected. WINGS will look for compatible cached observations during preparation.';return;}
+    if(!$('metadataFile').files[0]){area.textContent='Select metadata first, then check this folder against its regions and dates.';return;}
+    area.textContent='Checking folder contents and metadata coverage on the runner…';
+    try {
+      const value=await input();
+      const plan=await request('/api/context/plan',{metadata:value.metadata,options:value.settings});
+      if(token!==folderCheckRequest || (await input()).signature!==value.signature)return;
+      showRequest(plan.ebird_request || {});area.replaceChildren();
+      const found=plan.ebird_folder;
+      if(!found){area.textContent='This runner does not yet support folder checks. Restart the updated runner.';return;}
+      const label=document.createElement('strong');
+      label.textContent=found.kind==='prepared'?'WINGS-prepared observations dataset':found.kind==='download'?'Extracted eBird observations download':'Folder not recognized';
+      const detail=document.createElement('p');detail.textContent=found.message;
+      area.append(label,detail);
+      if(found.files?.length){const list=document.createElement('ul');for(const file of found.files){const item=document.createElement('li');item.textContent=file;list.append(item);}area.append(list);}
+      $('contextDownloadHelp').hidden=found.kind==='prepared';
+      $('contextCoverageRow').hidden=found.kind!=='download' || found.status==='INVALID';
+      if(found.kind==='prepared')$('contextCoverage').checked=false;
+    } catch(error){if(token===folderCheckRequest)area.textContent='Folder check failed: '+error.message;}
+  }
   function setCreateSettings(provider) {
     if (typeof provider !== 'function') throw new Error('Context run settings must be a function');
     createSettings = provider;
@@ -146,6 +172,7 @@
     $('contextPrepare').textContent='Preparing…';
     let progress;
     try {
+      if($('contextEbird').checked && ($('contextSource').value.trim() || $('contextPackage').value.trim()))await checkEbirdFolder();
       const value=await review();
       showStatus({status:'PREPARING'});
       const run=await request('/api/runs',{...createSettings(),name:'Context preparation',options:{context_setup:true}});
@@ -185,12 +212,17 @@
   }
   function invalidate() {
     if(preparing)return;
+    folderCheckRequest++;
+    if($('contextFolderCheck'))$('contextFolderCheck').textContent='Selection changed. Check the folder again to confirm its contents and metadata coverage.';
+    if($('contextDownloadHelp'))$('contextDownloadHelp').hidden=false;
     prepared=null;records={};showStatus({status:'STALE'});
   }
   $('contextSetup').addEventListener('input',invalidate);
   $('metadataFile').addEventListener('change',()=>{invalidate();$('contextRequest').textContent='Prepare context to determine the required regions and dates.';});
   $('contextAction-ebird').addEventListener('click',()=>openSettings('contextEbirdImport','contextSource'));
+  $('contextCheckFolder')?.addEventListener('click',()=>checkEbirdFolder());
+  $('contextSource').addEventListener('change',()=>checkEbirdFolder());
   $('contextPrepare').addEventListener('click',()=>prepareOnly().catch(report));
   renderCards();
-  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings};
+  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder};
 })();

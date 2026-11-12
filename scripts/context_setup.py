@@ -133,7 +133,11 @@ def metadata_scope(path,days):
 
 def find_ebird(metadata,opts):
     if opts['ebird_source'] and not opts['ebird_package']:
-        return {'status':'NEEDS_IMPORT','reason':'Import the selected eBird download'}
+        selected=Path(opts['ebird_source']).expanduser()
+        if (selected/'context_manifest.json').is_file():
+            opts={**opts,'ebird_package':str(selected)}
+        else:
+            return {'status':'NEEDS_IMPORT','reason':'Import the selected eBird download'}
     api=load('ebird_context_package.py')
     candidates=[Path(opts['ebird_package']).expanduser()] if opts['ebird_package'] else sorted((cache_root()/'ebird').glob('*/context_manifest.json'))
     reasons=[]
@@ -150,7 +154,11 @@ def plan(metadata,settings=None):
     opts=options(settings);scope=metadata_scope(metadata,opts['days'])
     source=find_ebird(metadata,opts) if source_enabled(opts,'ebird') else {'status':'DISABLED','reason':'Not selected'}
     windows=sorted({(r['country'],r['state_name'],r['date_from'],r['date_to']) for r in scope['scopes'] if r['country']!='UNKNOWN'})
-    proposal={'schema':'wings.context-plan.v1','metadata_sha256':sha(metadata),'options':opts,**scope,
+    folder=inspect_ebird_folder(opts['ebird_package'] or opts['ebird_source']) if source_enabled(opts,'ebird') and (opts['ebird_package'] or opts['ebird_source']) else None
+    if folder and folder['kind']=='prepared' and folder['status']=='RECOGNIZED':
+        folder.update(status='READY' if source['status']=='READY' else ('RECOGNIZED' if source['status']=='DISABLED' else 'INVALID'),
+                      message=source['reason'] if source['status']!='DISABLED' else 'Dataset files found. Select eBird observations to validate integrity and metadata coverage.')
+    proposal={'schema':'wings.context-plan.v1','metadata_sha256':sha(metadata),'options':opts,**scope,'ebird_folder':folder,
             'ebird_request':{'url':'https://ebird.org/data/download','species':'All species','include_sampling_event_data':True,
                              'include_unvetted':False,'windows':[dict(zip(('country','state','date_from','date_to'),v)) for v in windows],
                              'instructions':'Request all species for these regions and complete date windows. Include sampling-event data. Extract the downloaded archive and retain its terms and citation. If a window extends beyond the release, use a covering release or an explicitly revised analysis window.'},
@@ -198,20 +206,55 @@ def command(args,log,timeout=900,env=None):
     if p.returncode:raise ValueError('Provider command failed; see '+Path(log).name)
 
 
-def import_ebird(metadata,opts):
-    directory=Path(opts['ebird_source']).expanduser().resolve()
-    if not opts['all_species_confirmed']:raise ValueError('Confirm all-species and geographic/date download coverage before importing')
+def ebird_download_files(directory):
+    """Share folder checks between the browser preview and the real importer."""
+    directory=Path(directory)
+    if not directory.is_dir():raise ValueError('Choose an existing eBird folder on the runner computer.')
     files=[p for p in directory.rglob('*') if p.is_file() and not p.is_symlink()]
     obs=[p for p in files if re.search(r'^ebd_.*rel[A-Z][a-z]{2}-\d{4}.*\.txt(?:\.gz)?$',p.name) and 'sampling' not in p.name.lower()]
     sed=[p for p in files if 'sampling' in p.name.lower() and re.search(r'\.txt(?:\.gz)?$',p.name)]
     docs=[p.parent for p in files if p.name=='terms_of_use.txt' and (p.parent/'recommended_citation.txt').is_file()]
-    if len(obs)!=1 or len(sed)!=1 or len(set(docs))!=1:raise ValueError('Use one extracted release folder containing one EBD file, one sampling file, and matching terms/citation documents')
+    problems=[]
+    if len(obs)!=1:problems.append(f'expected one EBD observations file; found {len(obs)}')
+    if len(sed)!=1:problems.append(f'expected one sampling-event file; found {len(sed)}')
+    if len(set(docs))!=1:problems.append(f'expected one folder containing both terms_of_use.txt and recommended_citation.txt; found {len(set(docs))}')
+    if problems:raise ValueError('Folder is not a complete extracted eBird download: '+ '; '.join(problems))
     labels=[re.findall(r'rel([A-Z][a-z]{2}-\d{4})',p.name) for p in (obs[0],sed[0])]
     if not labels[0] or not labels[1] or labels[0]!=labels[1]:raise ValueError('EBD and sampling filenames must identify the same release')
-    destination=cache_root()/'ebird'/(labels[0][0]+'-'+sha(metadata)[:12]+'-'+uuid.uuid4().hex[:6])
+    return obs[0],sed[0],docs[0],labels[0][0]
+
+
+def inspect_ebird_folder(value):
+    """Read-only inventory; raw file presence does not establish data coverage."""
+    directory=Path(value).expanduser().resolve()
+    result={'path':str(directory),'kind':'unknown','status':'INVALID','files':[]}
+    if not directory.is_dir():
+        return {**result,'message':'Folder not found or not accessible on the runner computer.'}
+    if any((directory/name).exists() for name in ('context_manifest.json','cache_manifest.json','sampling_manifest.json')):
+        names=['context_manifest.json','observations.txt.gz','sampling.txt','species_catalog.tsv','cache_manifest.json','sampling_manifest.json','terms_of_use.txt','recommended_citation.txt']
+        result.update(kind='prepared',files=[name for name in names if (directory/name).is_file() and not (directory/name).is_symlink()])
+        missing=[name for name in names if name not in result['files']]
+        if missing:return {**result,'message':'Incomplete WINGS dataset. Missing or symlinked files: '+', '.join(missing)}
+        return {**result,'status':'RECOGNIZED','message':'WINGS-prepared dataset found. Checking integrity and metadata coverage.'}
+    try:
+        obs,sed,docs,release=ebird_download_files(directory)
+    except (OSError,ValueError) as error:return {**result,'message':str(error)}
+    return {**result,'kind':'download','status':'RECOGNIZED','release':release,
+            'files':[str(p.relative_to(directory)) for p in (obs,sed,docs/'terms_of_use.txt',docs/'recommended_citation.txt')],
+            'message':'Extracted eBird download found. File presence is confirmed; species, regions and dates still require your confirmation and import validation.'}
+
+
+def import_ebird(metadata,opts):
+    directory=Path(opts['ebird_source']).expanduser().resolve()
+    if (directory/'context_manifest.json').exists():
+        load('ebird_context_package.py')['verify'](directory,metadata,opts['days'])
+        return str(directory)
+    if not opts['all_species_confirmed']:raise ValueError('Confirm all-species and geographic/date download coverage before importing')
+    obs,sed,docs,release=ebird_download_files(directory)
+    destination=cache_root()/'ebird'/(release+'-'+sha(metadata)[:12]+'-'+uuid.uuid4().hex[:6])
     api=load('ebird_context_package.py')
-    args=argparse.Namespace(command='build',output=destination,documents=docs[0],observations=obs[0],sampling=sed[0],
-         metadata=Path(metadata),days=opts['days'],release=labels[0][0],taxonomy_version='unknown',acquired_at='unknown')
+    args=argparse.Namespace(command='build',output=destination,documents=docs,observations=obs,sampling=sed,
+         metadata=Path(metadata),days=opts['days'],release=release,taxonomy_version='unknown',acquired_at='unknown')
     api['prepare'](args)
     return str(destination)
 

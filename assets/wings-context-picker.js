@@ -15,7 +15,7 @@
   function changed(field) {
     if(field==='contextSource' && $(field).value){$('contextPackage').value='';$('contextCoverage').checked=false;}
     if(field==='contextPackage' && $(field).value){$('contextSource').value='';$('contextCoverage').checked=false;}
-    $('contextCoverageRow').hidden=!$('contextSource').value.trim();
+    $('contextCoverageRow').hidden=true;
     $(field).dispatchEvent(new Event('input',{bubbles:true}));
   }
   function finish() {generation++;active=null;listing=null;busy=false;if(dialog.open)dialog.close();}
@@ -23,7 +23,8 @@
     if(!active)return;
     const target=active.target;
     $(target).value=path;changed(target);
-    finish();notice('Selection saved. Prepare context to use it.');$(target).focus();
+    finish();notice('Selection saved. Check the folder, then prepare context.');$(target).focus();
+    if(target==='contextSource')window.WINGS_CONTEXT_SETUP?.checkEbirdFolder?.();
   }
   function error() {$('contextFolderMessage').textContent='Could not open this location. Choose another folder.';}
   function navigationDisabled(value) {
@@ -86,10 +87,10 @@
   for(const button of document.querySelectorAll('[data-context-clear]'))button.addEventListener('click',()=>{const target=button.dataset.contextClear;$(target).value='';if(target==='contextSource')$('contextCoverage').checked=false;changed(target);});
   // Manual path entry stays available for advanced and unusual mount setups.
   for(const id of ['contextSource','contextPackage'])$(id).addEventListener('input',()=>{
-    $('contextCoverageRow').hidden=!$('contextSource').value.trim();
+    $('contextCoverageRow').hidden=true;
     if(!$(id).value)return;
     $(id==='contextSource'?'contextPackage':'contextSource').value='';$('contextCoverage').checked=false;
-    $('contextCoverageRow').hidden=!$('contextSource').value.trim();
+    $('contextCoverageRow').hidden=true;
   });
   $('contextFolderRoot').addEventListener('change',()=>browse());
   $('contextFolderUp').addEventListener('click',()=>listing&&listing.parent!==null&&browse(listing.parent));
@@ -98,6 +99,6 @@
   $('contextFolderUse').addEventListener('click',()=>listing&&select(listing.relative));
   $('contextFolderCancel').addEventListener('click',()=>{finish();notice('');});
   dialog.addEventListener('cancel',()=>{finish();notice('');});
-  $('contextCoverageRow').hidden=!$('contextSource').value.trim();
+  $('contextCoverageRow').hidden=true;
   window.WINGS_CONTEXT_PICKER={isBusy:()=>busy};
 })();

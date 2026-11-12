@@ -1,0 +1,21 @@
+name: eBird folder checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  ebird-folders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Folder inventory and reuse checks
+        run: python -m unittest discover -s tests -p test_ebird_folder_check.py
+      - name: Context preparation and picker checks
+        run: node --test tests/test_context_setup_ui.cjs tests/test_context_picker_ui.cjs tests/test_run_context_guard.cjs

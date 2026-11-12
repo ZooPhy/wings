@@ -21,7 +21,7 @@ class Element {
 (async()=>{
   const sources=['ecology','phenology','public_genotypes','ebird','outbreak'];
   const controls={ecology:'contextEcology',phenology:'contextPhenology',public_genotypes:'contextGenotypes',ebird:'contextEbird',outbreak:'contextAphis'};
-  const ids=['contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
+  const ids=['contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
   const elements=Object.fromEntries(ids.map(id=>[id,new Element(id==='contextPrepare'||id.startsWith('contextAction-')?'button':'div')]));
   for(const id of ['contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage',...Object.values(controls)])elements[id].tagName='input';
   for(const [id,el] of Object.entries(elements))if(id!=='contextSetup'&&id!=='metadataFile')elements.contextSetup.append(el);
@@ -144,5 +144,22 @@ class Element {
     assert.equal(JSON.stringify(plan.ebird_request),before);
   }
   plan.ebird_request={windows};
+  elements.contextEbird.checked=true;elements.contextSource.value='/selected/ebird-context';
+  const runsBefore=calls.filter(c=>c.url.endsWith('/api/runs')).length;
+  plan.ebird_folder={kind:'prepared',status:'READY',message:'Dataset integrity and metadata coverage verified.',files:['context_manifest.json','observations.txt.gz','sampling.txt']};
+  await ui.checkEbirdFolder();
+  assert.match(elements.contextFolderCheck.textContent,/WINGS-prepared observations dataset/);
+  assert.match(elements.contextFolderCheck.textContent,/context_manifest.json/);
+  assert.equal(elements.contextDownloadHelp.hidden,true);assert.equal(elements.contextCoverageRow.hidden,true);
+  plan.ebird_folder={kind:'download',status:'RECOGNIZED',message:'File presence confirmed; review source coverage.',files:['ebd_US_relSep-2026.txt','ebd_US_sampling_relSep-2026.txt','terms_of_use.txt','recommended_citation.txt']};
+  await ui.checkEbirdFolder();
+  assert.match(elements.contextFolderCheck.textContent,/Extracted eBird observations download/);
+  assert.equal(elements.contextDownloadHelp.hidden,false);assert.equal(elements.contextCoverageRow.hidden,false);
+  assert.equal(elements.contextCoverage.checked,false);
+  plan.ebird_folder={kind:'unknown',status:'INVALID',message:'Missing sampling-event file.',files:[]};
+  await ui.checkEbirdFolder();
+  assert.match(elements.contextFolderCheck.textContent,/Missing sampling-event file/);assert.equal(elements.contextCoverageRow.hidden,true);
+  assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,runsBefore,'Folder checks must not create runs');
+  console.log('PASS: prepared/download/invalid folder detection, inventory feedback, and conditional coverage confirmation.');
   console.log('PASS: source-card behavior; automatic APHIS acquisition; removed settings panels; fallback labels and dates; safe attachment; no sequencing launches.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

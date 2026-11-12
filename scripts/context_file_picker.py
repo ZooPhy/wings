@@ -14,7 +14,7 @@ KINDS={'ebird_download','ebird_package','aphis_csv'}
 PAGE_SIZE=100
 NATIVE_LOCK=threading.Lock()
 SCRIPTS={
-    'ebird_download':'POSIX path of (choose folder with prompt "Choose the extracted eBird download folder")',
+    'ebird_download':'POSIX path of (choose folder with prompt "Choose eBird observations: an extracted download or WINGS-prepared dataset")',
     'ebird_package':'POSIX path of (choose folder with prompt "Choose previously prepared WINGS eBird data")',
     'aphis_csv':'POSIX path of (choose file with prompt "Choose an APHIS wild-bird detection CSV" of type {"csv"})',
 }

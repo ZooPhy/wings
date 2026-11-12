@@ -51,7 +51,7 @@ Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])th
   assert.equal(elements.contextFolderRoot.value,'home');assert.equal(elements.contextFolderUp.disabled,true);
   const folder=elements.contextFolderEntries.children[0];assert.match(folder.textContent,/<img>/);assert.equal(folder.querySelector('img'),null);
   await folder.listeners.click();assert.equal(elements.contextFolderPath.textContent,'/home/user/Bird folder <img>');assert.equal(elements.contextFolderUp.disabled,false);
-  await elements.contextFolderUse.listeners.click();assert.equal(elements.contextSource.value,'/home/user/Bird folder <img>');assert.equal(elements.contextPackage.value,'');assert.equal(elements.contextCoverage.checked,false);assert.equal(invalidations,1);assert.equal(elements.contextCoverageRow.hidden,false);assert.equal(picker.isBusy(),false);assert.equal(elements.contextFolderDialog.open,false);
+  await elements.contextFolderUse.listeners.click();assert.equal(elements.contextSource.value,'/home/user/Bird folder <img>');assert.equal(elements.contextPackage.value,'');assert.equal(elements.contextCoverage.checked,false);assert.equal(invalidations,1);assert.equal(elements.contextCoverageRow.hidden,true);assert.equal(picker.isBusy(),false);assert.equal(elements.contextFolderDialog.open,false);
   const original=elements.contextSource.value;nativeStatus='CANCELLED';await buttons[0].listeners.click();assert.equal(elements.contextSource.value,original);assert.equal(invalidations,1);
   nativeStatus='SELECTED';nativePath='/mounted/disk/Prepared birds';await buttons[1].listeners.click();assert.equal(elements.contextPackage.value,nativePath);assert.equal(elements.contextSource.value,'');assert.equal(invalidations,2);assert.equal(elements.contextCoverageRow.hidden,true);
   nativeStatus='BROWSE';
@@ -69,8 +69,10 @@ Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])th
   assert.equal(calls.some(c=>c.action==='start'||c.action==='prepare'),false);
   const html=fs.readFileSync(path.join(__dirname,'../run.html'),'utf8');
   for(const id of ids)assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,id);
-  assert.equal((html.match(/data-context-pick=/g)||[]).length,2);
-  assert.ok(html.indexOf('Downloaded eBird folder')<html.indexOf('Use previously prepared eBird data'));
+  assert.equal((html.match(/data-context-pick=/g)||[]).length,1);
+  assert.ok(html.includes('eBird observations folder'));
+  assert.ok(html.includes('id="contextCheckFolder"'));
+  assert.ok(!html.includes('Use previously prepared eBird data</summary>'));
   assert.ok(html.indexOf('assets/wings-context-picker.js')<html.indexOf('assets/wings-context-setup.js'));
   console.log('PASS: native selection/cancellation; runner-folder navigation and pagination; safe names; import exclusivity; coverage reset; stale-response protection; cache wording and script order.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
