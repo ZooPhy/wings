@@ -25,6 +25,9 @@ class StorageFolderPickerTests(unittest.TestCase):
         function = next(n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name == 'browse_storage_directories')
         exec(compile(ast.Module(body=[function], type_ignores=[]), '<folder listing>', 'exec'), self.scope)
         self.browse = self.scope['browse_storage_directories']
+        create = next(n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name == 'create_storage_folder')
+        exec(compile(ast.Module(body=[create], type_ignores=[]), '<folder creation>', 'exec'), self.scope)
+        self.create = self.scope['create_storage_folder']
 
     def test_only_folders_are_listed_and_hidden_is_opt_in(self):
         for name in ['beta', 'Alpha', '.cache', '<folder>']:
@@ -67,7 +70,26 @@ class StorageFolderPickerTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 self.browse({'path': str(self.root)})
 
-    def request(self, origin, content_type='application/json'):
+    def test_create_folder_preserves_storage_settings_and_existing_paths(self):
+        result = self.create({'path': str(self.root), 'name': 'New run storage'})
+        self.assertTrue(Path(result['path']).is_dir())
+        self.assertEqual(result['status'], 'CREATED')
+        self.assertEqual(self.scope['RUNS_ROOT'], self.root)
+        with self.assertRaises(FileExistsError):
+            self.create({'path': str(self.root), 'name': 'New run storage'})
+        (self.root / 'file').write_text('preserve')
+        with self.assertRaises(FileExistsError):
+            self.create({'path': str(self.root), 'name': 'file'})
+        self.assertEqual((self.root / 'file').read_text(), 'preserve')
+
+    def test_create_rejects_traversal_and_missing_parents(self):
+        for name in ['', '..', '.', '../outside', 'a/b', 'a\\b', ' spaced ', 'bad\x00name']:
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                self.create({'path': str(self.root), 'name': name})
+        with self.assertRaises(ValueError):
+            self.create({'path': str(self.root/'missing'), 'name': 'child'})
+
+    def request(self, origin, content_type='application/json', route='/api/storage/directories'):
         handler = next(n for n in TREE.body if isinstance(n, ast.ClassDef) and n.name == 'Handler')
         method = next(n for n in handler.body if isinstance(n, ast.FunctionDef) and n.name == 'do_POST')
         exec(compile(ast.Module(body=[method], type_ignores=[]), '<POST handler>', 'exec'), self.scope)
@@ -77,8 +99,8 @@ class StorageFolderPickerTests(unittest.TestCase):
         if origin is not None:
             headers['Origin'] = origin
         result = {}
-        fake = types.SimpleNamespace(headers=headers, parsed=lambda: types.SimpleNamespace(path='/api/storage/directories'),
-            read_json=lambda: {'path': str(self.root)},
+        fake = types.SimpleNamespace(headers=headers, parsed=lambda: types.SimpleNamespace(path=route),
+            read_json=lambda: {'path': str(self.root), 'name': 'created'},
             json_response=lambda body, status=200: result.update(body=body, status=status),
             error_response=lambda error, status=400: result.update(error=error, status=status))
         self.scope['do_POST'](fake)
@@ -92,6 +114,9 @@ class StorageFolderPickerTests(unittest.TestCase):
     def test_cross_origin_and_simple_requests_are_rejected(self):
         self.assertEqual(self.request('https://unrelated.example')['status'], 403)
         self.assertEqual(self.request(None, 'text/plain')['status'], 403)
+        self.assertEqual(self.request('https://unrelated.example', route='/api/storage/directories/create')['status'], 403)
+        self.assertFalse((self.root/'created').exists())
+        self.assertEqual(self.request('http://127.0.0.1:8765', route='/api/storage/directories/create')['status'], 200)
 
 
 if __name__ == '__main__':

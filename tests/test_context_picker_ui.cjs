@@ -69,7 +69,7 @@ Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])th
   assert.equal(calls.some(c=>c.action==='start'||c.action==='prepare'),false);
   const html=fs.readFileSync(path.join(__dirname,'../run.html'),'utf8');
   for(const id of ids)assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,id);
-  assert.equal((html.match(/data-context-pick=/g)||[]).length,1);
+  assert.equal((html.match(/data-context-pick=/g)||[]).length,2);
   assert.ok(html.includes('eBird observations folder'));
   assert.ok(html.includes('id="contextCheckFolder"'));
   assert.ok(!html.includes('Use previously prepared eBird data</summary>'));

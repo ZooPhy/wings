@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="assets/wings-portal.css">
   <link rel="stylesheet" href="assets/wings-context-layout.css?v=4">
   <link rel="stylesheet" href="assets/wings-metadata-wizard.css?v=2">
-  <link rel="stylesheet" href="assets/wings-folder-picker.css?v=1">
+  <link rel="stylesheet" href="assets/wings-folder-picker.css?v=2">
 </head>
 <body>
 <header class="portal-header">
@@ -171,7 +171,15 @@
                   <input id="contextPackage" type="hidden" value="">
                 </div>
                 <button id="contextCheckFolder" type="button" class="btn btn-secondary">Check folder</button>
+                <button id="contextRecache" type="button" class="btn btn-secondary">Re-cache eBird</button>
                 <div id="contextFolderCheck" class="context-note" role="status" aria-live="polite">No folder checked. With no selection, WINGS looks for compatible cached observations.</div>
+                <div id="contextRecachePanel" hidden>
+                  <p>Rebuild observations for the current metadata and date window from your original extracted eBird download. The prepared cache cannot supply records outside its coverage. WINGS creates a new cache and keeps your previous dataset.</p>
+                  <button type="button" class="btn btn-secondary" data-context-pick="ebird_download" data-context-target="contextSource">Choose original download…</button>
+                  <p class="context-note">Check the selected download and confirm its coverage below, then rebuild. This also refreshes the other selected context sources; it does not start sequencing.</p>
+                  <button id="contextRecacheRun" type="button" class="btn context-primary">Rebuild cache for current metadata</button>
+                  <p id="contextRecacheStatus" class="context-note" role="status" aria-live="polite"></p>
+                </div>
                 <div id="contextDownloadHelp">
                   <label id="contextCoverageRow" class="context-check" hidden><input id="contextCoverage" type="checkbox"><span>I requested all species, all listed regions, and the required dates. File presence alone does not confirm this coverage.</span></label>
                   <details class="context-nested"><summary>Need to request an observations download?</summary>
@@ -293,8 +301,8 @@
 <script src="assets/wings-metadata-core.js?v=2"></script>
 <script src="assets/wings-metadata-wizard.js?v=5"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
-<script src="assets/wings-context-setup.js?ebird_folder=1&v=10"></script>
+<script src="assets/wings-context-setup.js?ebird_folder=2&v=10"></script>
 <script src="assets/wings-run.js?v=20261111-metadata-wizard&wings_context=3"></script>
-<script src="assets/wings-folder-picker.js?v=2"></script>
+<script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>

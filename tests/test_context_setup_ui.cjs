@@ -21,7 +21,7 @@ class Element {
 (async()=>{
   const sources=['ecology','phenology','public_genotypes','ebird','outbreak'];
   const controls={ecology:'contextEcology',phenology:'contextPhenology',public_genotypes:'contextGenotypes',ebird:'contextEbird',outbreak:'contextAphis'};
-  const ids=['contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
+  const ids=['contextRecache','contextRecachePanel','contextRecacheRun','contextRecacheStatus','contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
   const elements=Object.fromEntries(ids.map(id=>[id,new Element(id==='contextPrepare'||id.startsWith('contextAction-')?'button':'div')]));
   for(const id of ['contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage',...Object.values(controls)])elements[id].tagName='input';
   for(const [id,el] of Object.entries(elements))if(id!=='contextSetup'&&id!=='metadataFile')elements.contextSetup.append(el);
@@ -34,9 +34,9 @@ class Element {
   const windows=[['2025-09-20','2025-11-19'],['2026-03-09','2026-05-08'],['2025-03-16','2025-05-15'],['2025-09-21','2025-11-20'],['2025-09-27','2025-11-26'],['2025-11-11','2026-01-10']].map(([date_from,date_to])=>({country:'US',state:'Kentucky',date_from,date_to}));
   const originalWindows=JSON.stringify(windows);
   const plan={sample_count:30,species:['Canada Goose'],issues:[{sample_id:'A',issue}],ebird_request:{windows},providers:{phenology:{status:'NEEDS_ACCESS',reason:'private diagnostic'}}};
-  let responseStatus='READY',counter=0,settings={},poll=false,failRequest=false;
+  let responseStatus='READY',counter=0,settings={},poll=false,failRequest=false,ebirdReady=false;
   const calls=[];
-  const providers=()=>Object.fromEntries(sources.map(s=>[s,settings.selected_sources.includes(s)?(s==='ecology'?{status:'PARTIAL',weather_ready:10,migration_ready:28,sample_count:30,reason:issue}:s==='ebird'?{status:'NEEDS_IMPORT',reason:'<img src=x onerror=evil()>'}:s==='phenology'?{status:'NEEDS_ACCESS',reason:'secret path'}:{status:'READY',included_runs:10}):{status:'DISABLED',reason:'Not selected'}]));
+  const providers=()=>Object.fromEntries(sources.map(s=>[s,settings.selected_sources.includes(s)?(s==='ecology'?{status:'PARTIAL',weather_ready:10,migration_ready:28,sample_count:30,reason:issue}:s==='ebird'?(ebirdReady?{status:'READY',reason:'New cache prepared'}:{status:'NEEDS_IMPORT',reason:'<img src=x onerror=evil()>'}):s==='phenology'?{status:'NEEDS_ACCESS',reason:'secret path'}:{status:'READY',included_runs:10}):{status:'DISABLED',reason:'Not selected'}]));
   const fetch=async(url,opts={})=>{
     calls.push({url,opts});let data={};
     if(failRequest)throw new Error('SECRET /private/local/path stack trace');
@@ -160,6 +160,19 @@ class Element {
   await ui.checkEbirdFolder();
   assert.match(elements.contextFolderCheck.textContent,/Missing sampling-event file/);assert.equal(elements.contextCoverageRow.hidden,true);
   assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,runsBefore,'Folder checks must not create runs');
+  elements.contextRecachePanel.hidden=true;elements.contextRecache.listeners.click();assert.equal(elements.contextRecachePanel.hidden,false);
+  plan.ebird_folder={kind:'prepared',status:'INVALID',message:'Outside cache coverage',files:[]};
+  await ui.rebuildEbirdCache();assert.match(elements.contextRecacheStatus.textContent,/original extracted eBird download/);
+  assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,runsBefore);
+  plan.ebird_folder={kind:'download',status:'RECOGNIZED',message:'Raw download found',files:[]};
+  elements.contextCoverage.checked=false;
+  await ui.rebuildEbirdCache();assert.match(elements.contextRecacheStatus.textContent,/Confirm the original download covers/);
+  assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,runsBefore);
+  elements.contextCoverage.checked=true;ebirdReady=true;
+  await ui.rebuildEbirdCache();assert.match(elements.contextRecacheStatus.textContent,/previous dataset is unchanged/);
+  assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,runsBefore+1);
+  assert.equal(calls.filter(c=>c.url.endsWith('/start')).length,0);
+  console.log('PASS: re-cache requires original source and coverage confirmation, prepares a new selection, and never starts sequencing.');
   console.log('PASS: prepared/download/invalid folder detection, inventory feedback, and conditional coverage confirmation.');
   console.log('PASS: source-card behavior; automatic APHIS acquisition; removed settings panels; fallback labels and dates; safe attachment; no sequencing launches.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

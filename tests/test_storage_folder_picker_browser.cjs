@@ -11,6 +11,11 @@ const server=http.createServer((req,res)=>{
     res.setHeader('Content-Type','text/html');
     res.end('<link rel="stylesheet" href="/assets/wings-folder-picker.css"><label for="runsDirectory">Runs</label><input id="runsDirectory" value="/runs"><button data-storage-browse="runsDirectory">Browse runs</button><input id="condaCacheDirectory" value=""><button data-storage-browse="condaCacheDirectory">Browse cache</button><p id="storageMessage"></p><script>window.edits=0;document.getElementById("runsDirectory").addEventListener("input",()=>window.edits++);</script><script src="/assets/wings-folder-picker.js"></script>');return;
   }
+  if(req.url==='/api/storage/directories/create'){
+    let data='';req.on('data',chunk=>data+=chunk);req.on('end',()=>{
+      const payload=JSON.parse(data);requests.push(payload);res.setHeader('Content-Type','application/json');res.end(JSON.stringify({status:'CREATED',path:payload.path+'/'+payload.name}));
+    });return;
+  }
   if(req.url==='/api/storage/directories'){
     let data='';req.on('data',chunk=>data+=chunk);req.on('end',()=>{
       const payload=JSON.parse(data);requests.push(payload);res.setHeader('Content-Type','application/json');
@@ -40,8 +45,12 @@ const server=http.createServer((req,res)=>{
     await dialog.getByRole('button',{name:'New project /',exact:true}).click();
     await page.waitForFunction(()=>document.getElementById('folderPickerPath').textContent==='/runs/New project');
     assert.equal(await page.locator('#runsDirectory').inputValue(),'/runs');
+    await dialog.locator('#folderPickerNew').click();await dialog.locator('#folderPickerName').fill('New cache');
+    await dialog.locator('#folderPickerCreate').click();
+    await page.waitForFunction(()=>document.getElementById('folderPickerPath').textContent==='/runs/New project/New cache' && !document.getElementById('folderPickerChoose').disabled);
+    assert.equal(await page.locator('#runsDirectory').inputValue(),'/runs');
     await dialog.locator('#folderPickerChoose').click();
-    assert.equal(await page.locator('#runsDirectory').inputValue(),'/runs/New project');
+    assert.equal(await page.locator('#runsDirectory').inputValue(),'/runs/New project/New cache');
     assert.equal(await page.evaluate(()=>window.edits),1);
     assert.match(await page.locator('#storageMessage').innerText(),/Validate and apply/);
     await page.locator('[data-storage-browse="condaCacheDirectory"]').click();

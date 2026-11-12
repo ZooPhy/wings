@@ -78,5 +78,17 @@ class EbirdFolderCheckTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Confirm all-species'):
             setup.import_ebird(self.root/'metadata.tsv',setup.options({'ebird_source':str(self.root)}))
 
+    def test_recaching_builds_unique_outputs_from_original_download(self):
+        self.raw();metadata=self.root/'metadata.tsv';metadata.write_text('sample_id\na\n')
+        original=(self.root/'ebd_US_relSep-2026.txt').read_bytes();created=[]
+        def prepare(args):
+            created.append(args);args.output.mkdir(parents=True);(args.output/'new-cache').write_text('fixture')
+        opts=setup.options({'ebird_source':str(self.root),'all_species_confirmed':True,'days':14})
+        with patch.object(setup,'cache_root',return_value=self.root/'cache'),patch.object(setup,'load',return_value={'prepare':prepare}):
+            first=setup.import_ebird(metadata,opts);second=setup.import_ebird(metadata,opts)
+        self.assertNotEqual(first,second);self.assertTrue((Path(first)/'new-cache').is_file())
+        self.assertEqual((self.root/'ebd_US_relSep-2026.txt').read_bytes(),original)
+        self.assertTrue(all(args.metadata==metadata and args.days==14 for args in created))
+
 
 if __name__=='__main__':unittest.main()

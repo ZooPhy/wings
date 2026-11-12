@@ -10,6 +10,7 @@
   let preparing = false;
   let records = {};
   let folderCheckRequest=0;
+  let recaching=false;
   async function checkEbirdFolder() {
     const area=$('contextFolderCheck');if(!area)return;
     const token=++folderCheckRequest,path=$('contextSource').value.trim() || $('contextPackage').value.trim();
@@ -33,7 +34,26 @@
       $('contextDownloadHelp').hidden=found.kind==='prepared';
       $('contextCoverageRow').hidden=found.kind!=='download' || found.status==='INVALID';
       if(found.kind==='prepared')$('contextCoverage').checked=false;
+      return found;
     } catch(error){if(token===folderCheckRequest)area.textContent='Folder check failed: '+error.message;}
+  }
+  async function rebuildEbirdCache() {
+    if(recaching || preparing)return;
+    if(window.WINGS_CONTEXT_PICKER?.isBusy()){$('contextRecacheStatus').textContent='Finish choosing the original download first.';return;}
+    recaching=true;$('contextRecacheRun').disabled=true;
+    const status=$('contextRecacheStatus');status.textContent='Checking the original download…';
+    try {
+      if(!$('metadataFile').files[0])throw new Error('Select metadata.tsv first.');
+      if(!$('contextEbird').checked)throw new Error('Select eBird observations and effort above.');
+      const found=await checkEbirdFolder();
+      if(found?.kind!=='download' || found.status!=='RECOGNIZED')throw new Error('Choose the original extracted eBird download, including observations, sampling-event data, terms and citation files. A prepared cache cannot be expanded on its own.');
+      if(!$('contextCoverage').checked)throw new Error('Confirm the original download covers all species, required regions and dates before rebuilding.');
+      status.textContent='Building a new observations cache for the current metadata…';
+      await prepareOnly();
+      if(records.ebird?.status!=='READY')throw new Error(records.ebird?.reason || 'eBird cache could not be rebuilt. Check the download coverage and try again.');
+      status.textContent='New eBird cache prepared for this metadata. Your previous dataset is unchanged. Context is ready for the selected available sources.';
+    }catch(error){status.textContent=error.message;}
+    finally{recaching=false;$('contextRecacheRun').disabled=false;}
   }
   function setCreateSettings(provider) {
     if (typeof provider !== 'function') throw new Error('Context run settings must be a function');
@@ -221,8 +241,13 @@
   $('metadataFile').addEventListener('change',()=>{invalidate();$('contextRequest').textContent='Prepare context to determine the required regions and dates.';});
   $('contextAction-ebird').addEventListener('click',()=>openSettings('contextEbirdImport','contextSource'));
   $('contextCheckFolder')?.addEventListener('click',()=>checkEbirdFolder());
+  $('contextRecache')?.addEventListener('click',()=>{
+    $('contextRecachePanel').hidden=!$('contextRecachePanel').hidden;
+    if(!$('contextRecachePanel').hidden){$('contextRecacheStatus').textContent='Choose the original download above, then confirm its coverage and rebuild.';$('contextRecachePanel').scrollIntoView({block:'nearest'});}
+  });
+  $('contextRecacheRun')?.addEventListener('click',()=>rebuildEbirdCache());
   $('contextSource').addEventListener('change',()=>checkEbirdFolder());
   $('contextPrepare').addEventListener('click',()=>prepareOnly().catch(report));
   renderCards();
-  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder};
+  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder,rebuildEbirdCache};
 })();

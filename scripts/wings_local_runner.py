@@ -1081,11 +1081,14 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if context_runner.handle_post(self, globals()):
                 return
-            if parsed.path in {"/api/storage", "/api/storage/directories"}:
+            if parsed.path in {"/api/storage", "/api/storage/directories", "/api/storage/directories/create"}:
                 origin = self.headers.get("Origin")
                 expected_origin = f"http://{self.headers.get('Host', '')}"
                 if self.headers.get_content_type() != "application/json" or (origin and origin != expected_origin):
                     self.error_response("Use the local WINGS portal to browse or change storage settings.", 403)
+                    return
+                if parsed.path == "/api/storage/directories/create":
+                    self.json_response(create_storage_folder(self.read_json()))
                     return
                 if parsed.path == "/api/storage/directories":
                     self.json_response(browse_storage_directories(self.read_json()))
@@ -1201,6 +1204,26 @@ def browse_storage_directories(payload: dict) -> dict:
     return {"path": str(path), "parent": str(path.parent), "directories": folders[offset:offset + limit],
             "total": len(folders), "offset": offset, "limit": limit, "shortcuts": shortcuts,
             "notice": "Showing the nearest existing folder." if path != requested else ""}
+
+
+def create_storage_folder(payload: dict) -> dict:
+    """Create one explicitly named child folder; never replace an existing path."""
+    if not isinstance(payload, dict):
+        raise ValueError("Folder creation must be an object")
+    value, name = payload.get("path"), payload.get("name")
+    if not isinstance(value, str) or not value or len(value) > 4096 or "\x00" in value:
+        raise ValueError("Choose a parent folder first")
+    if not isinstance(name, str) or not name.strip() or name != name.strip() or len(name) > 255 or name in {".", ".."} or any(c in name for c in ("/", "\\", "\x00", "\n", "\r")):
+        raise ValueError("Enter one folder name without slashes or surrounding spaces")
+    parent = Path(value).expanduser()
+    if not parent.is_absolute():
+        raise ValueError("Choose an absolute parent folder")
+    parent = parent.resolve()
+    if not parent.is_dir():
+        raise ValueError("The parent folder no longer exists")
+    destination = parent / name
+    destination.mkdir(exist_ok=False)
+    return {"path": str(destination), "status": "CREATED"}
 
 
 def prepare_storage_directory(value: str) -> Path:

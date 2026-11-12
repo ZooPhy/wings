@@ -16,12 +16,19 @@
   const searchButton=button("Search",()=>load(path,0,true));
   search.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();load(path,0,true);}});
   const hiddenLabel=make("label"),hidden=make("input");hidden.type="checkbox";hidden.addEventListener("change",()=>load(path,0,true));hiddenLabel.append(hidden,document.createTextNode(" Show hidden folders"));
-  toolbar.append(up,search,searchButton,hiddenLabel);
+  const newFolder=button("New folder",()=>{creation.hidden=!creation.hidden;if(!creation.hidden)folderName.focus();});newFolder.id="folderPickerNew";
+  toolbar.append(up,search,searchButton,hiddenLabel,newFolder);
+  const creation=make("div",undefined,"folder-actions");creation.hidden=true;
+  const folderName=make("input");folderName.type="text";folderName.id="folderPickerName";folderName.placeholder="New folder name";
+  const folderLabel=make("label","Folder name");folderLabel.htmlFor=folderName.id;
+  const create=button("Create folder",createFolder);create.id="folderPickerCreate";
+  creation.append(folderLabel,folderName,create);
+  folderName.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();createFolder();}});
   const list=make("ul",undefined,"folder-list");list.id="folderPickerList";list.setAttribute("aria-label","Folders");
   const pager=make("div",undefined,"folder-actions"),count=make("span");
   const previous=button("Previous folders",()=>load(path,Math.max(0,offset-limit),true)),next=button("Next folders",()=>load(path,offset+limit,true));pager.append(previous,count,next);
   const footer=make("footer",undefined,"folder-actions"),cancel=button("Cancel",()=>dialog.close()),choose=button("Use this folder",select);choose.className="btn btn-primary";choose.id="folderPickerChoose";footer.append(cancel,choose);
-  dialog.append(title,make("p","Browse folders on the computer running WINGS. Choose a folder, then validate and apply the storage locations.","help"),shortcuts,current,toolbar,status,list,pager,footer);document.body.append(dialog);
+  dialog.append(title,make("p","Browse folders on the computer running WINGS. Choose a folder, then validate and apply the storage locations.","help"),shortcuts,current,toolbar,creation,status,list,pager,footer);document.body.append(dialog);
   let target,path="",parent="",offset=0,limit=200,request=0,selectedPath=null;
   dialog.addEventListener("close",()=>{
     // Native close events are queued: a new picker session may already be open.
@@ -29,7 +36,7 @@
     request++;selectedPath=null;target?.focus();
   });
   async function load(value="",start=0,keepSearch=false) {
-    const revision=++request;selectedPath=null;choose.disabled=true;up.disabled=true;previous.disabled=true;next.disabled=true;
+    const revision=++request;selectedPath=null;choose.disabled=true;newFolder.disabled=true;up.disabled=true;previous.disabled=true;next.disabled=true;
     status.textContent="Loading folders…";list.replaceChildren();count.textContent="";
     if(!keepSearch)search.value="";
     try {
@@ -44,12 +51,26 @@
       for(const item of result.directories){const row=make("li");row.append(button(item.name+" /",()=>load(item.path)));list.append(row);}
       status.textContent=result.notice || (result.total?"Open a folder below, or use the current folder.":search.value?"No folders match this search.":"No subfolders. You can use this folder.");
       count.textContent=result.total?`${offset+1}–${Math.min(offset+limit,result.total)} of ${result.total} folders`:"0 folders";
-      choose.disabled=false;up.disabled=path===parent;previous.disabled=offset===0;next.disabled=offset+limit>=result.total;
+      choose.disabled=false;newFolder.disabled=false;up.disabled=path===parent;previous.disabled=offset===0;next.disabled=offset+limit>=result.total;
     } catch(error) {
       if(revision!==request || !dialog.open)return;
       status.textContent=error instanceof TypeError?"Connect to the updated local WINGS runner to browse folders. You can still enter a path manually.":error.message;
       up.disabled=!parent; // Keep navigation available after an inaccessible folder.
     }
+  }
+  async function createFolder() {
+    if(!selectedPath || create.disabled)return;
+    const base=selectedPath,revision=++request;
+    create.disabled=true;choose.disabled=true;newFolder.disabled=true;status.textContent="Creating folder…";
+    try {
+      const response=await fetch(`${origin}/api/storage/directories/create`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:base,name:folderName.value})});
+      if(response.status===404)throw new Error("Restart the updated runner to create folders.");
+      const result=await response.json();if(!response.ok)throw new Error(result.error || "Could not create this folder.");
+      if(revision!==request || !dialog.open)return;
+      creation.hidden=true;folderName.value="";await load(result.path);
+      if(dialog.open && selectedPath===result.path)status.textContent="Folder created. Select Use this folder, then validate and apply locations.";
+    }catch(error){if(revision===request && dialog.open){status.textContent=error.message;choose.disabled=false;newFolder.disabled=false;}}
+    finally{create.disabled=false;}
   }
   function select() {
     if(!selectedPath || !target || target.disabled)return;
@@ -59,7 +80,7 @@
   for(const trigger of triggers)trigger.addEventListener("click",()=>{
     target=document.getElementById(trigger.dataset.storageBrowse);if(!target || target.disabled)return;
     title.textContent=target.id==="runsDirectory"?"Choose run storage folder":"Choose Conda cache folder";
-    hidden.checked=false;path="";parent="";current.textContent="";shortcuts.replaceChildren();
+    hidden.checked=false;path="";parent="";current.textContent="";shortcuts.replaceChildren();creation.hidden=true;folderName.value="";
     dialog.showModal();load(target.value.trim());
   });
 })();
