@@ -36,7 +36,7 @@ const server=http.createServer((request,response)=>{
     await dialog.locator('#mwPaste').fill(csv);await dialog.locator('[data-action="paste"]').click();await dialog.locator('[data-action="map"]').click();
     await dialog.locator('[data-action="step"][data-step="2"]').click();await dialog.locator('[data-action="normalize"]').click();await dialog.locator('[data-action="apply"]').click();
     await dialog.locator('[data-action="step"][data-step="3"]').click();
-    for(const row of [0,1]){const input=dialog.locator(`input[data-row="${row}"][data-field="specimen_type"]`);await input.fill('Dry (Oral+Cloacal)');await input.press('Tab');}
+    for(const row of [0,1])await dialog.locator(`select[data-row="${row}"][data-field="specimen_type"]`).selectOption('Oropharyngeal + Cloacal');
     await dialog.locator('[data-action="normalize"]').click();await dialog.locator('[data-action="apply"]').click();
     await dialog.locator('[data-action="step"][data-step="4"]').click();
     assert.match(await dialog.locator('#mwSummary').innerText(),/0 errors · 0 warnings/);
@@ -51,6 +51,28 @@ const server=http.createServer((request,response)=>{
     assert.equal(await page.locator('#metadataFile').evaluate(input=>input.files[0].name),'metadata.tsv');
     await page.setViewportSize({width:390,height:844});await page.locator('#openMetadataWizard').click();
     assert.equal(await dialog.evaluate(node=>node.getBoundingClientRect().width<=innerWidth),true);
+    // Native date selection, specimen choices, and preservation of imported values.
+    await dialog.locator('[data-action="step"][data-step="0"]').click();
+    await dialog.locator('#mwPaste').fill('sample_id,specimen_type,collection_date\nsample_a,Legacy specimen,03/04/2025\nsample_b,,2025-04-15');
+    await dialog.locator('[data-action="paste"]').click();await dialog.locator('[data-action="map"]').click();
+    await dialog.locator('[data-action="step"][data-step="3"]').click();
+    const specimen=dialog.locator('select[data-row="0"][data-field="specimen_type"]');
+    assert.equal(await specimen.inputValue(),'Legacy specimen');
+    const choices=await specimen.locator('option').allTextContents();
+    for(const choice of ['Cloacal','Oropharyngeal','Choanal','Pooled Sample','Other','Unknown'])assert.ok(choices.includes(choice));
+    assert.equal(await dialog.locator('input[type="text"][data-row="0"][data-field="collection_date"]').inputValue(),'03/04/2025');
+    assert.equal(await dialog.locator('input[type="date"][data-row="0"][data-field="collection_date"]').inputValue(),'');
+    assert.equal(await dialog.locator('input[type="date"][data-row="1"][data-field="collection_date"]').inputValue(),'2025-04-15');
+    await specimen.selectOption('Cloacal');
+    await dialog.locator('input[type="date"][data-row="0"][data-field="collection_date"]').fill('2025-04-03');
+    await dialog.locator('input[type="date"][data-row="0"][data-field="collection_date"]').press('Tab');
+    await dialog.locator('[data-action="step"][data-step="4"]').click();
+    await dialog.locator('#mwAcknowledge').check();
+    const [controlsDownload]=await Promise.all([page.waitForEvent('download'),dialog.locator('[data-action="download"]').click()]);
+    const controlsStream=await controlsDownload.createReadStream(),controlsChunks=[];for await(const chunk of controlsStream)controlsChunks.push(chunk);
+    const controlsParsed=Core.parseTable(Buffer.concat(controlsChunks).toString('utf8'),'\t');
+    assert.equal(controlsParsed.rows[0][controlsParsed.headers.indexOf('specimen_type')],'Cloacal');
+    assert.equal(controlsParsed.rows[0][controlsParsed.headers.indexOf('collection_date')],'2025-04-03');
     const duplicate='sample_id\thost\nsample_a\tSNGO\nsample_a\tCAGO';
     await dialog.locator('[data-action="step"][data-step="0"]').click();await dialog.locator('#mwPaste').fill(duplicate);await dialog.locator('[data-action="paste"]').click();await dialog.locator('[data-action="map"]').click();await dialog.locator('[data-action="step"][data-step="4"]').click();
     assert.equal(await dialog.locator('[data-action="use"]').isDisabled(),true);assert.equal(await dialog.locator('[data-action="download"]').isDisabled(),true);

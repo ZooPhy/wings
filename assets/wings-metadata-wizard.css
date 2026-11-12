@@ -29,6 +29,8 @@
 .mw-table tr:nth-child(even) td { background:#FAF6F7; }
 .mw-table tbody tr:last-child td { border-bottom:0; }
 .mw-table input { width:100%; min-width:120px; }
+.mw-table select { width:100%; min-width:190px; }
+.mw-table input[type="date"] { min-width:160px; min-height:38px; color-scheme:light; }
 .mw-table input[data-field="sample_id"] { min-width:230px; }
 .mw-table input[data-field="host"] { min-width:200px; }
 .mw-table small { display:block; margin-top:4px; color:#5F5360; }

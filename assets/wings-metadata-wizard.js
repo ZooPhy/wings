@@ -8,6 +8,7 @@
   const STEPS=["Import","Match samples","Hosts","Collection details","Review & export"];
   const LABELS={sample_id:"Sample ID",host:"Host name or WINGS code",specimen_type:"Specimen type",collection_date:"Collection date",state:"State / province / territory",country:"Country",latitude:"Latitude",longitude:"Longitude"};
   const PAGE_SIZE=50;
+  const SPECIMEN_TYPES=["Cloacal","Oropharyngeal","Choanal","Oropharyngeal + Cloacal","Choanal + Cloacal","Tracheal","Oral","Nasal","Fecal","Tissue","Blood","Environmental","Pooled Sample","Other","Unknown"];
   const model={step:0,page:0,rows:[],fields:[...Core.FIELDS],parsed:null,pending:null,revision:0,audit:[],dateFormat:"ask",acknowledged:false};
   let dialog,reference,index,referencePromise;
   const make=(tag,cls,value)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(value!==undefined)node.textContent=value;return node;};
@@ -61,6 +62,9 @@
       if(target.dataset.field!==undefined) {
         const rowIndex=Number(target.dataset.row),field=target.dataset.field,row=model.rows[rowIndex],before=row[field] || "";
         if(before!==target.value){row[field]=target.value;model.audit.push({sample_id:row.sample_id,row:rowIndex+1,field,before,after:target.value,action:"manual edit"});changed();}
+        if(field==="collection_date")for(const control of target.parentElement.querySelectorAll('[data-field="collection_date"]')){
+          if(control!==target)control.value=control.type!=="date" || Core.validDate(target.value)?target.value:"";
+        }
         if(field==="host")target.parentElement.querySelector("small").textContent=Core.hostMatch(row.host,index)?.name || "Not recognized / not recorded";
         get("mwProposals").replaceChildren();renderIssues();updateSummary();
       }
@@ -100,13 +104,30 @@
   }
   function editableCell(rowIndex,field,readonly=false) {
     const cell=make("td");if(readonly){cell.append(make("strong","",model.rows[rowIndex][field] || "—"));return cell;}
+    if(field==="specimen_type"){
+      const select=make("select");select.dataset.row=String(rowIndex);select.dataset.field=field;select.setAttribute("aria-label",`Specimen type, row ${rowIndex+1}`);
+      const current=model.rows[rowIndex][field] || "";
+      for(const value of ["",...SPECIMEN_TYPES,...(current && !SPECIMEN_TYPES.includes(current)?[current]:[])]){
+        const option=make("option","",value || "Select specimen type…");option.value=value;select.append(option);
+      }
+      select.value=current;cell.append(select);return cell;
+    }
     const input=make("input");input.type="text";input.value=model.rows[rowIndex][field] || "";input.dataset.row=String(rowIndex);input.dataset.field=field;input.setAttribute("aria-label",`${LABELS[field] || field}, row ${rowIndex+1}`);
     if(field==="host")input.setAttribute("list","mwHostNames");
     if(field==="state")input.setAttribute("list","mwRegionList");
     if(field==="country")input.setAttribute("list","mwCountryList");
     if(field==="sample_id")input.setAttribute("list","mwSampleList");
     if(field==="latitude" || field==="longitude")input.inputMode="decimal";
-    if(field==="collection_date")input.placeholder="YYYY-MM-DD";
+    if(field==="collection_date"){
+      const raw=model.rows[rowIndex][field] || "";
+      if(!raw || Core.validDate(raw)){input.type="date";input.value=raw;}
+      else {
+        // A native date input would erase an imported non-ISO or ambiguous date.
+        input.setAttribute("aria-label",`Imported collection date, row ${rowIndex+1}`);
+        cell.append(input,make("small","","Imported date retained. Review the source format above, or choose a replacement date below."));
+        const picker=make("input");picker.type="date";picker.dataset.row=String(rowIndex);picker.dataset.field=field;picker.setAttribute("aria-label",`Choose collection date, row ${rowIndex+1}`);cell.append(picker);return cell;
+      }
+    }
     cell.append(input);
     if(field==="host")cell.append(make("small","",Core.hostMatch(model.rows[rowIndex].host,index)?.name || "Not recognized / not recorded"));
     return cell;
