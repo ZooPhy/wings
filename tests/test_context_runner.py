@@ -20,6 +20,7 @@ class RunnerContextTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('fixture_runner',ROOT/'scripts/wings_local_runner.py')
         self.runner=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.runner)
         self.runner.RUNS_ROOT=self.root/'runs';self.runner.RUNS_ROOT.mkdir()
+        docker=patch.object(self.runner,'require_docker');docker.start();self.addCleanup(docker.stop)
         self.env=patch.dict(os.environ,{'WINGS_CONTEXT_CACHE':str(self.root/'cache')});self.env.start();self.addCleanup(self.env.stop)
         routes.JOBS.clear();routes.UPLOADS.clear()
         self.addCleanup(routes.JOBS.clear);self.addCleanup(routes.UPLOADS.clear)

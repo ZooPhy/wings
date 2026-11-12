@@ -21,6 +21,7 @@
   const state = {
     step: 0,
     runner: null,
+    docker: null,
     reads: [],
     metadata: null,
     metadataIds: [],
@@ -39,6 +40,28 @@
   let storageDirty = false;
   let storagePending = false;
   let storageRevision = null;
+  let dockerPending=false,dockerChecked=0;
+  function renderDocker() {
+    const status=$('dockerStatus');
+    if(status){status.textContent=dockerPending?'Checking Docker engine access…':state.docker?.message || 'Docker has not been checked.';status.className='help'+(state.docker?(state.docker.ready?' status-ok':' status-error'):'');}
+    for(const id of ['checkDocker','checkDockerPreflight'])if($(id))$(id).disabled=dockerPending || !state.runner;
+  }
+  async function checkDocker(force=true) {
+    if(dockerPending)return false;
+    const vadr=$('optVadr').checked;
+    if(!force && state.docker?.selection_vadr===vadr && Date.now()-dockerChecked<30000)return state.docker.ready;
+    if(!state.runner?.docker_check_available){state.docker={ready:false,message:'Connect to the updated local runner to check Docker.'};renderDocker();return false;}
+    dockerPending=true;state.docker=null;renderDocker();if(state.step===4)renderPreflight();
+    try {
+      const response=await fetch(`${localOrigin}/api/docker/check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vadr})});
+      if(response.status===404)throw new Error('Restart the updated runner to enable Docker checks.');
+      const result=await response.json();if(!response.ok)throw new Error(result.error || 'Docker check failed.');
+      state.docker={...result,selection_vadr:vadr};dockerChecked=Date.now();
+    }catch(error){state.docker={ready:false,message:error.message,selection_vadr:vadr};}
+    finally{dockerPending=false;renderDocker();if(state.step===4)renderPreflight();}
+    if(vadr!==$('optVadr').checked)return checkDocker(true);
+    return Boolean(state.docker?.ready);
+  }
 
   function syncStorage() {
     if (!$("runsDirectory")) return;
@@ -168,6 +191,7 @@
     $("nextButton").hidden = state.step === 4;
     $("nextButton").textContent = state.step < 4 ? `Continue to ${stepMeta[state.step + 1][0]}` : "Continue";
     if (state.step === 4) renderPreflight();
+    if (state.step === 4)checkDocker(true);
   }
 
   async function checkRunner() {
@@ -189,6 +213,7 @@
       $("openLocalRunner").hidden = localMode;
     }
     syncStorage();
+    if(!state.runId)checkDocker(false);
     if (state.step === 4) renderPreflight();
   }
 
@@ -378,6 +403,7 @@
     return [
       ...(briefing.briefing ? [[Boolean(briefingReady), "Local agency briefing", briefingReady ? "Selected model is installed." : "Use Check local model under Analysis before starting."]] : []),
       [runnerOk, "Local WINGS runner", runnerDetail],
+      [Boolean(state.docker?.ready && state.docker.selection_vadr===$('optVadr').checked && !dockerPending), "Docker / container runtime", dockerPending?'Checking engine access…':state.docker?.message || 'Use Check Docker before launching.'],
       [Boolean(state.runner?.storage_revision && !storageDirty && !storagePending && storageRevision === state.runner.storage_revision), "Storage locations",
         storageDirty || storagePending ? "Validate and apply your edited locations under Run details." : state.runner?.storage_revision
           ? `Runs: ${state.runner.runs_root} · Conda cache: ${state.runner.conda_pkgs_dir || state.runner.conda_pkgs_default}`
@@ -412,7 +438,7 @@
       `Parallel tasks: ${$("maxParallelJobs").value}`,
       `Analysis: ${enabled.join(", ") || "core workflow only"}`
     ].join("\n");
-    $("startRun").disabled = !rows.every((row) => row[0]);
+    $("startRun").disabled = Boolean(state.launchPending) || !rows.every((row) => row[0]);
   }
 
   async function uploadFile(runId, kind, file) {
@@ -430,7 +456,9 @@
   }
 
   async function startRun() {
+    if(state.launchPending)return;
     if (!preflightRows().every(row => row[0])) { renderPreflight(); return; }
+    state.launchPending=true;
     $("startRun").disabled = true;
     $("startRun").textContent = "Preparing local run…";
     try {
@@ -440,6 +468,7 @@
         throw new Error("Context setup did not load. Reload this page before starting a new run. Saved runs remain available.");
       }
       await window.WINGS_CONTEXT_SETUP.readyForRun();
+      if(!await checkDocker(true))throw new Error(state.docker?.message || 'Docker is not ready.');
       const create = await fetch(`${localOrigin}/api/runs`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -478,6 +507,9 @@
       alert(`WINGS could not start the run.\n\n${error.message}`);
       $("startRun").disabled = false;
       $("startRun").textContent = "Run WINGS Pipeline";
+    } finally {
+      state.launchPending=false;
+      if(state.step===4)renderPreflight();
     }
   }
 
@@ -846,6 +878,9 @@
   syncBriefing();
   $("startRun").addEventListener("click", startRun);
   $("applyStorage")?.addEventListener("click", applyStorage);
+  $('checkDocker')?.addEventListener('click',()=>checkDocker(true));
+  $('checkDockerPreflight')?.addEventListener('click',()=>checkDocker(true));
+  $('optVadr').addEventListener('change',()=>{state.docker=null;dockerChecked=0;checkDocker(true);});
   ["runsDirectory", "condaCacheDirectory"].forEach(id => $(id)?.addEventListener("input", () => {
     storageDirty = true;
     $("storageMessage").textContent = "Locations edited. Validate and apply before starting a run.";

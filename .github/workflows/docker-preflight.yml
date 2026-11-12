@@ -1,0 +1,25 @@
+name: Docker preflight
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  docker-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Runtime selection and launch guards
+        run: python -m unittest discover -s tests -p test_docker_preflight.py
+      - name: Install browser test dependencies
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+      - name: Docker status interface
+        run: node tests/test_docker_preflight_browser.cjs

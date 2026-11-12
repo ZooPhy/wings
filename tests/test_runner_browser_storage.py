@@ -103,6 +103,7 @@ class BrowserStorageTests(unittest.TestCase):
             def wait(run_id, proc, handle):
                 handle.close()
             with patch.object(runner, 'runtime_preflight', return_value='/tools/snakemake'), \
+                 patch.object(runner, 'require_docker'), \
                  patch.object(runner, 'build_config', return_value=(config, 1)), \
                  patch.object(runner, 'capture_attempt_provenance'), \
                  patch.object(runner, 'wait_for_process', side_effect=wait), \

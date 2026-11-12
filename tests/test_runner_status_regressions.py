@@ -15,6 +15,8 @@ class RunnerStatusTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.runner.RUNS_ROOT = Path(self.temp.name).resolve()
+        docker = patch.object(self.runner, "require_docker")
+        docker.start(); self.addCleanup(docker.stop)
 
     def test_incomplete_completion_record_is_not_counted(self):
         log = Path(self.temp.name) / "scheduler.log"

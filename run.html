@@ -103,6 +103,11 @@
             <p id="storageMessage" class="help" role="status">Connect to the local runner to configure storage.</p>
             <p class="help">New directories are created if needed. Files are not moved. Saved runs are listed from the selected run directory. Settings reset to the launch options when the runner restarts.</p>
           </details>
+          <div class="field">
+            <strong>Docker / container runtime</strong>
+            <p id="dockerStatus" class="help" role="status" aria-live="polite">Connect to the local runner to check Docker engine access.</p>
+            <button id="checkDocker" class="btn btn-secondary" type="button">Check Docker</button>
+          </div>
         </section>
 
         <section class="wizard-step" data-step-panel="1" hidden>
@@ -235,6 +240,7 @@
 
         <section class="wizard-step" data-step-panel="4" hidden>
           <ul id="preflightList" class="preflight-list"></ul>
+          <button id="checkDockerPreflight" class="btn btn-secondary" type="button">Recheck Docker</button>
           <div id="reviewBox" class="summary-box" style="margin-top:1rem"></div>
           <div class="actions">
             <div></div>
@@ -305,7 +311,7 @@
 <script src="assets/wings-metadata-wizard.js?v=6"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
 <script src="assets/wings-context-setup.js?ebird_folder=2&v=12"></script>
-<script src="assets/wings-run.js?v=20261112-context-flow&wings_context=3"></script>
+<script src="assets/wings-run.js?v=20261112-docker-check&wings_context=3"></script>
 <script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>

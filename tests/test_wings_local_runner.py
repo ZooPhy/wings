@@ -446,6 +446,7 @@ def test_start_uses_persisted_task_limit_for_the_subprocess(tmp_path, monkeypatc
 
     monkeypatch.setattr(runner.shutil, "which", lambda _: "/tools/snakemake")
     monkeypatch.setattr(runner, "runtime_preflight", lambda: "/tools/snakemake")
+    monkeypatch.setattr(runner, "require_docker", lambda config: None)
     monkeypatch.setattr(runner, "build_config", lambda _: (config_path, 5))
     monkeypatch.setattr(runner.subprocess, "Popen", popen)
     monkeypatch.setattr(

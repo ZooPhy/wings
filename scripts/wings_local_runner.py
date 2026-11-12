@@ -331,6 +331,57 @@ def execution_limits(payload: dict) -> tuple[int, int]:
 
 
 
+def check_docker(config: dict | None = None, run_vadr: bool | None = None) -> dict:
+    """Match workflow runtime selection and probe the engine only when required."""
+    if config is None:
+        config = yaml.safe_load((REPO_ROOT / 'config/config.example.yaml').read_text(encoding='utf-8')) or {}
+    if not isinstance(config, dict):
+        raise ValueError('Workflow configuration must be a mapping')
+    if run_vadr is not None and type(run_vadr) is not bool:
+        raise ValueError('VADR selection must be true or false')
+    runtimes = {}
+    missing = []
+    for label, key, choices in [('IRMA', 'irma_runtime', [('apptainer','apptainer'),('singularity','singularity'),('docker','docker'),('local','IRMA')]),
+                                 ('VADR', 'vadr_runtime', [('local','v-annotate.pl'),('docker','docker'),('apptainer','apptainer'),('singularity','singularity')])]:
+        if label == 'VADR' and not (run_vadr if run_vadr is not None else config.get('run_vadr', True)):
+            continue
+        selected = str(config.get(key, 'auto')).lower()
+        if selected not in {'auto','local','docker','apptainer','singularity'}:
+            raise ValueError('Unsupported '+key)
+        if selected == 'auto':
+            selected = next((runtime for runtime, executable in choices if shutil.which(executable)), 'unavailable')
+        executable = dict(choices).get(selected)
+        runtimes[label] = selected
+        if not executable or not shutil.which(executable):
+            missing.append(label+' ('+selected+')')
+    required = [name for name, runtime in runtimes.items() if runtime == 'docker']
+    result = {'required': bool(required), 'required_by': required, 'runtimes': runtimes, 'checked_at': utc_now()}
+    if missing:
+        return {**result, 'ready': False, 'status': 'missing_runtime',
+                'message': 'Runtime not found for '+', '.join(missing)+'. Install the configured runtime and restart the runner if PATH changed.'}
+    if not required:
+        return {**result, 'ready': True, 'status': 'not_required',
+                'message': 'Docker is not required: '+', '.join(name+' uses '+runtime for name,runtime in runtimes.items())+'.'}
+    try:
+        probe = subprocess.run([shutil.which('docker'), 'info', '--format', '{{.ServerVersion}}'],
+                               capture_output=True, text=True, timeout=8)
+    except subprocess.TimeoutExpired:
+        return {**result, 'ready': False, 'status': 'timeout', 'message': 'Docker did not respond. Start Docker Desktop or the Docker service, wait until ready, then check again.'}
+    except OSError:
+        return {**result, 'ready': False, 'status': 'unavailable', 'message': 'Docker could not be started from the runner environment. Check Docker installation and access.'}
+    if probe.returncode:
+        return {**result, 'ready': False, 'status': 'engine_unavailable',
+                'message': 'Docker engine is unavailable to WINGS. Start Docker Desktop or the Docker service and check access, then check again.'}
+    return {**result, 'ready': True, 'status': 'ready',
+            'message': 'Docker engine is responding. Required by '+', '.join(required)+'.'}
+
+
+def require_docker(config: dict) -> None:
+    result = check_docker(config)
+    if not result['ready']:
+        raise ValueError(result['message'])
+
+
 def runtime_preflight() -> str:
     """Validate the actual executables before creating workflow environments."""
     machine = platform.machine().lower()
@@ -840,6 +891,7 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
         if (state.get("options") or {}).get("context_setup"):
             context_setup.validate_config(saved_config, directory / "inputs" / "metadata.tsv")
         require_briefing_model(saved_config)
+        require_docker(saved_config)
         attempts = list(state.get("attempts") or [])
         if resume and not attempts:
             attempts.append({
@@ -938,6 +990,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "snakemake_available": bool(snakemake),
                     "config_yaml_present": (REPO_ROOT / "config.yaml").is_file(),
                     "config_yaml_path": str(REPO_ROOT / "config.yaml"),
+                    "docker_check_available": True,
                 })
                 return
             if parsed.path == "/api/runs":
@@ -1080,6 +1133,16 @@ class Handler(SimpleHTTPRequestHandler):
         parsed = self.parsed()
         try:
             if context_runner.handle_post(self, globals()):
+                return
+            if parsed.path == '/api/docker/check':
+                origin = self.headers.get('Origin')
+                if self.headers.get_content_type() != 'application/json' or (origin and origin != f"http://{self.headers.get('Host', '')}"):
+                    self.error_response('Use the local WINGS portal to check Docker.', 403)
+                    return
+                payload = self.read_json()
+                if not isinstance(payload, dict):
+                    raise ValueError('Expected a JSON object')
+                self.json_response(check_docker(run_vadr=payload.get('vadr')))
                 return
             if parsed.path in {"/api/storage", "/api/storage/directories", "/api/storage/directories/create"}:
                 origin = self.headers.get("Origin")

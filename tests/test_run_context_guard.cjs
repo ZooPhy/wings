@@ -15,7 +15,7 @@ const launch = source.slice(start, end);
   for (const api of [undefined, {}, {setCreateSettings() {}}]) {
     const button = {}, messages = [];
     let writes = 0;
-    const sandbox = {window: {WINGS_CONTEXT_SETUP: api},
+    const sandbox = {state:{step:0},window: {WINGS_CONTEXT_SETUP: api},
       preflightRows: () => [[true]],
       renderPreflight: () => {throw new Error('Valid preflight should not block');},
       $: id => {assert.equal(id, 'startRun'); return button;},
@@ -30,7 +30,7 @@ const launch = source.slice(start, end);
   }
   let settings;
   const api = {setCreateSettings(fn) {settings = fn;}};
-  const sandbox = {window: {WINGS_CONTEXT_SETUP: api}, storageRevision: 'revision-one'};
+  const sandbox = {state:{step:0},window: {WINGS_CONTEXT_SETUP: api}, storageRevision: 'revision-one'};
   vm.runInNewContext(registration, sandbox);
   assert.equal(settings().storage_revision, 'revision-one');
   sandbox.storageRevision = 'revision-two';
@@ -51,6 +51,11 @@ const launch = source.slice(start, end);
   await sandbox.startRun();
   assert.equal(checked, 1); assert.equal(writes, 0);
   assert.match(messages[0], /Prepare context first/);
+  api.readyForRun = async () => {checked++;};
+  sandbox.state.docker={ready:false,message:'Start Docker Desktop'};
+  sandbox.checkDocker=async()=>false;checked=0;writes=0;messages.length=0;
+  await sandbox.startRun();assert.equal(checked,1);assert.equal(writes,0);assert.match(messages[0],/Start Docker Desktop/);
+  sandbox.state.launchPending=true;checked=0;await sandbox.startRun();assert.equal(checked,0);sandbox.state.launchPending=false;
   // Preserve the pre-existing preflight gate in launchers that have it.
   if (/\bpreflightRows\s*\(/.test(launch)) {
     checked = 0; writes = 0; messages.length = 0;
