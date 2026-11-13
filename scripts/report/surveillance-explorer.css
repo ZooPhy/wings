@@ -579,6 +579,13 @@
 @media(max-width:620px){.wbc{padding:13px;border-radius:0}.wbc-masthead{display:block}.wbc-release{display:inline-block;margin-top:16px}.wbc-card{padding:15px}.wbc-stats{gap:8px}.wbc-stats>div{padding:12px}.wbc-stats strong{font-size:22px}.wbc-tools{gap:10px}.wbc-tools>label{width:100%}.wbc-tools select{width:100%}.wbc-switch{width:100%}.wbc-switch button{flex:1}.wbc-presence{grid-template-columns:repeat(4,1fr)}.wbc h3{font-size:20px}.wbc-file-tools{flex-wrap:wrap}.wbc-release{font-size:9px}}
 @media(prefers-reduced-motion:reduce){.wbc *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media print{.wbc-tools,.wbc-export{display:none}.wbc{background:white;padding:0}.wbc-workbench{display:block}.wbc-card{break-inside:avoid;box-shadow:none}.wbc-braid,.wbc-clock{min-width:0}.wbc-focus{margin-top:12px}}
+
+/* Keep host keys and long reference provenance within their cards. */
+.wbc-host-legend{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin:7px 0;min-width:0}
+.wbc-host-key{display:inline-flex;align-items:baseline;gap:5px;min-width:0;max-width:100%;overflow-wrap:anywhere}
+.wbc-host-key .wbc-dot{flex:0 0 8px;margin-right:0}
+.wbc-linkage{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.wbc-linkage code{white-space:normal;overflow-wrap:anywhere;font-size:inherit}
 /* WINGS_BRAID_CLOCK_CSS_END */
 
 

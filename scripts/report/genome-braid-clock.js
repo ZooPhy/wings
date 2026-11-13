@@ -1,4 +1,4 @@
-/* WINGS Genome Braid + Ecological Clock v0.2.3. Offline, dependency-free. */
+/* WINGS Genome Braid + Ecological Clock v0.2.5. Offline, dependency-free. */
 (function (root, factory) {
   'use strict';
   const api = factory();
@@ -6,7 +6,7 @@
   root.WINGS_BRAID_CLOCK = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const VERSION = '0.2.4';
+  const VERSION = '0.2.5';
   const SEGMENTS = ['PB2', 'PB1', 'PA', 'HA', 'NP', 'NA', 'MP', 'NS'];
   const DAY = 86400000;
   const COLORS = ['#8c1d40', '#007f84', '#80601d', '#496ea0', '#7b5a8f', '#417b62', '#b05730'];
@@ -17,6 +17,13 @@
   const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   const pct = x => x === null ? 'Not estimable' : `${Math.round(x * 100)}%`;
   const signed = n => n > 0 ? `+${n}` : String(n);
+  function linkageEvidenceMarkup(basis) {
+    const value=text(basis);
+    const summary=value==='algorithmic_exact_metadata_group:isolate+collection_date+country+state+host'
+      ? 'Matching isolate name, date, country, state and host. Metadata-based grouping; specimen identity is unverified.'
+      : value ? 'Grouping supplied with this public reference.' : 'Not recorded.';
+    return `<p class="wbc-muted wbc-linkage"><strong>Linkage basis:</strong> ${summary}</p>${value?`<details class="wbc-method wbc-linkage"><summary>Grouping details</summary><code>${esc(value)}</code></details>`:''}<p class="wbc-muted">Public groups are excluded from sample-neighborhood comparisons.</p>`;
+  }
   function strictDate(s) {
     s = text(s);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
@@ -358,6 +365,12 @@
       this.build(); this.refresh();
     }
     color(e) { return e.kind === 'reference' ? '#00828a' : COLORS[this.m.samples.map(s=>s.host).filter((h,i,a)=>a.indexOf(h)===i).indexOf(e.host)%COLORS.length]; }
+    hostLegend(ids) {
+      const hosts=new Map();
+      for(const id of ids){const e=this.m.entities.get(id);if(e?.kind==='sample'&&!hosts.has(e.host))hosts.set(e.host,e);}
+      if(!hosts.size)return '';
+      return `<div class="wbc-host-legend" aria-label="WINGS sample host colors"><strong>Host colors:</strong>${[...hosts.values()].map(e=>`<span class="wbc-host-key"><span class="wbc-dot" style="background:${this.color(e)}" aria-hidden="true"></span>${esc(e.host)}</span>`).join('')}</div>`;
+    }
     build() {
       this.root.classList.add('wbc');
       this.root.innerHTML=`
@@ -487,7 +500,7 @@
       }
       target.append(el);
       const outside=this.selected&&this.host!=='ALL'&&this.m.entities.get(this.selected)?.host!==this.host;
-      this.root.querySelector('.wbc-braid-caption').innerHTML=`<span class="wbc-dot"></span> Circles: WINGS samples &nbsp; <span class="wbc-square"></span> Squares: public groups as supplied. Gaps: no unambiguous tip.<br><small>${esc(outside?'Selected sample is outside the host filter and remains visible. ': '')}${totalLocal>60?`Showing up to 60 of ${totalLocal} local samples plus focus. `:''}${this.includeReferences?`Showing up to 36 public groups in source order, plus focus. `:''}Tip order is a layout choice, not evolutionary distance.</small>`;
+      this.root.querySelector('.wbc-braid-caption').innerHTML=`<span class="wbc-dot" style="background:currentColor" aria-hidden="true"></span> Circles: WINGS samples, colored by host &nbsp; <span class="wbc-square" aria-hidden="true"></span> Squares: public groups. Thicker line: selected record. Gaps: no unambiguous tip.${this.hostLegend(ids)}<small>${esc(outside?'Selected sample is outside the host filter and remains visible. ': '')}${totalLocal>60?`Showing up to 60 of ${totalLocal} local samples plus focus. `:''}${this.includeReferences?`Showing up to 36 public groups in source order, plus focus. `:''}Tip order is a layout choice, not evolutionary distance.</small>`;
     }
     renderEvidence() {
       const id=this.selectedReference||this.selected,e=this.m.entities.get(id),target=this.root.querySelector('.wbc-evidence');
@@ -495,7 +508,7 @@
       const c=e.kind==='sample'?clockRecord(e.raw,this.phenology):{status:'PUBLIC_CLOCK_NOT_COMPUTED'}, p=e.kind==='sample'?this.profile(id):null;
       const count=SEGMENTS.filter(s=>presence(this.m,id,s).status==='PRESENT').length;
       const matrix=SEGMENTS.map(a=>`<tr><th>${a}</th>${SEGMENTS.map(b=>{if(a===b)return '<td class="wbc-diagonal">-</td>';const pair=p?.pairs.find(v=>v.segments.includes(a)&&v.segments.includes(b));return `<td title="${esc(pair?`${pair.status}; ${pair.shared} shared comparison samples`:'Not computed')}">${pair?.overlap!==null&&pair?.overlap!==undefined?Math.round(pair.overlap*100):'&middot;'}</td>`;}).join('')}</tr>`).join('');
-      target.innerHTML=`<h3 class="wbc-focus-name">${esc(e.label)}</h3><p>${esc(e.host)}<br>${esc(e.raw.collection_date||'Date not recorded')} &middot; ${esc(e.raw.state||e.raw.country||'Place not recorded')}</p><div class="wbc-chips">${e.kind==='sample'?'':'<span>Public group</span>'}<span>${count} / 8 trees</span></div><div class="wbc-presence">${SEGMENTS.map(s=>`<span class="${presence(this.m,id,s).status==='PRESENT'?'wbc-present':''}" title="${esc(presence(this.m,id,s).status)}">${s}</span>`).join('')}</div>${genotypeEvidenceMarkup(e)}${collectionContextMarkup(e.kind==='sample'?e:null,c,false)}${p?`<details class="wbc-technical-comparisons"><summary>Technical tree comparisons</summary><h4>Average neighbor overlap</h4><strong class="wbc-score">${pct(p.mean)}</strong><p class="wbc-muted">${p.available ? `Average similarity of the three-neighbor sets across ${p.available} usable tree-pair ${p.available===1?'comparison':'comparisons'}.` : 'No usable tree-pair comparisons are available for this sample.'}</p>${neighborExplanation(this.m,id,p,matrix)}</details>`:`<p class="wbc-muted">Linkage basis: ${esc(e.raw.linkage_basis||'Not recorded')}. Public groups are not included in the sample-neighborhood score.</p>`}`;
+      target.innerHTML=`<h3 class="wbc-focus-name">${esc(e.label)}</h3><p>${esc(e.host)}<br>${esc(e.raw.collection_date||'Date not recorded')} &middot; ${esc(e.raw.state||e.raw.country||'Place not recorded')}</p><div class="wbc-chips">${e.kind==='sample'?'':'<span>Public group</span>'}<span>${count} / 8 trees</span></div><div class="wbc-presence">${SEGMENTS.map(s=>`<span class="${presence(this.m,id,s).status==='PRESENT'?'wbc-present':''}" title="${esc(presence(this.m,id,s).status)}">${s}</span>`).join('')}</div>${genotypeEvidenceMarkup(e)}${collectionContextMarkup(e.kind==='sample'?e:null,c,false)}${p?`<details class="wbc-technical-comparisons"><summary>Technical tree comparisons</summary><h4>Average neighbor overlap</h4><strong class="wbc-score">${pct(p.mean)}</strong><p class="wbc-muted">${p.available ? `Average similarity of the three-neighbor sets across ${p.available} usable tree-pair ${p.available===1?'comparison':'comparisons'}.` : 'No usable tree-pair comparisons are available for this sample.'}</p>${neighborExplanation(this.m,id,p,matrix)}</details>`:`${linkageEvidenceMarkup(e.raw.linkage_basis)}`}`;
     }
     renderClock() {
       this.root.querySelectorAll('[data-wbc-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.wbcMode===this.mode)));
