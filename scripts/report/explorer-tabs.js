@@ -280,9 +280,9 @@
     sampleLabel.append(sampleSelect);
 
     const hostLabel = make("label", "wse-app-control");
-    hostLabel.append(make("span", "wse-app-control-label", "Host"));
+    hostLabel.append(make("span", "wse-app-control-label", "Browse samples by host"));
     const hostSelect = make("select", "wse-app-host");
-    hostSelect.setAttribute("aria-label", "Host filter");
+    hostSelect.setAttribute("aria-label", "Browse samples by host");
     hostSelect.append(new Option("All hosts", "ALL"));
     for (const host of explorer.hosts || []) hostSelect.append(new Option(host, host));
     hostLabel.append(hostSelect);

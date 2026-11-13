@@ -22,7 +22,7 @@ test('module contains accessible tab semantics and shared-state controls', () =>
   assert.match(source, /role", "tablist/);
   assert.match(source, /aria-selected/);
   assert.match(source, /Selected WINGS sample/);
-  assert.match(source, /Host filter/);
+  assert.match(source, /Browse samples by host/);
   assert.match(source, /previousUpdateSelection/);
 });
 

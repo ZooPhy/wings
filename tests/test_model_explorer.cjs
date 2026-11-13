@@ -11,9 +11,9 @@ test('OLS agrees with NumPy across every stage and both terminal models',()=>{
   }
   const fit=api.fit(fixture.pairs,['temporal_days','geographic_km','same_host','seasonal_profile_distance','migration_context_distance']);assert.ok(Math.abs(fit.r2-fixture.expected_r2.migration)<1e-12);
 });
-test('complete-case paths do not mix cohorts and never require weather for migration',async()=>{
+test('optional per-comparison complete-case paths do not mix cohorts and never require weather for migration',async()=>{
   const input=copy();input.pairs[0].environmental_distance=null;
-  const before=JSON.stringify(input),result=await api.analyze(input,{factors:['host','seasonal','weather','migration'],permutations:0});
+  const before=JSON.stringify(input),result=await api.analyze(input,{cohort_mode:'per-comparison',factors:['host','seasonal','weather','migration'],permutations:0});
   const weather=result.results.filter(r=>r.segment==='HA'&&r.path==='weather'),migration=result.results.filter(r=>r.segment==='HA'&&r.path==='migration');
   assert.ok(weather.every(r=>r.n_pairs===65));assert.ok(migration.every(r=>r.n_pairs===66));assert.equal(JSON.stringify(input),before);
   assert.ok(result.results.every(r=>r.permutation_p===null&&r.fdr_q===null));
@@ -36,14 +36,14 @@ test('host and seasonal fits and statistical support do not depend on weather or
     if([row.sample_a,row.sample_b].includes('S01'))row.migration_context_distance=null;
   }
   input.pairs.push(...input.pairs.map(r=>({...r,segment:'NP'})));
-  const alone=await api.analyze(input,{factors:['host','seasonal'],permutations:19,seed:17});
-  const all=await api.analyze(input,{factors:['host','seasonal','weather','migration'],permutations:19,seed:17});
+  const alone=await api.analyze(input,{cohort_mode:'per-comparison',factors:['host','seasonal'],permutations:19,seed:17});
+  const all=await api.analyze(input,{cohort_mode:'per-comparison',factors:['host','seasonal','weather','migration'],permutations:19,seed:17});
   assert.deepEqual(all.results.filter(r=>['host','seasonal'].includes(r.path)),alone.results);
   for(const path of ['host','seasonal'])assert.ok(all.results.filter(r=>r.segment==='HA'&&r.path===path).every(r=>r.n_samples===12&&r.n_pairs===66));
   for(const path of ['weather','migration'])assert.ok(all.results.filter(r=>r.segment==='HA'&&r.path===path).every(r=>r.n_samples===11&&r.n_pairs===55));
   const missing=copy();missing.pairs.forEach(r=>r.seasonal_profile_distance=null);
-  const withoutSeasonal=await api.analyze(missing,{factors:['host'],permutations:0});
-  const withSeasonal=await api.analyze(missing,{factors:['host','seasonal'],permutations:0});
+  const withoutSeasonal=await api.analyze(missing,{cohort_mode:'per-comparison',factors:['host'],permutations:0});
+  const withSeasonal=await api.analyze(missing,{cohort_mode:'per-comparison',factors:['host','seasonal'],permutations:0});
   assert.deepEqual(withSeasonal.results.filter(r=>r.path==='host'),withoutSeasonal.results);
 });
 test('unchecked starting factors are excluded and no factors gives one baseline model',async()=>{
@@ -119,4 +119,41 @@ test('legacy summaries show separate saved comparisons and disable unsupported c
     const root=new Element(),explorer={payload:{samples:fixture.sample_features,genomic_ecological_concordance:{models:[{segment:'HA',comparison:'host_vs_baseline',status:'READY',reduced_r2:.1,full_r2:.3,delta_r2:.2,n_samples:12,n_pairs:66,permutation_p:.01,fdr_q:.01}],readiness:{minimum_unique_samples:8}}}};
     const controller=api.mount(explorer,root);assert.equal(controller.getResult().scope,'saved-results');assert.equal(cls(root,'wme-primary').disabled,true);assert.match(cls(root,'wme-status').textContent,/Saved comparisons shown/);
   }finally{if(prior===undefined)delete global.document;else global.document=prior;}
+});
+
+test('shared eligibility defaults to identical pairs and samples across all selected models',async()=>{
+  const input=copy();
+  for(const r of input.pairs){
+    if([r.sample_a,r.sample_b].includes('S00'))r.environmental_distance=null;
+    if([r.sample_a,r.sample_b].includes('S01'))r.migration_context_distance=null;
+  }
+  // A missing pair, as well as missing samples, must restrict every model.
+  input.pairs.find(r=>r.sample_a==='S02'&&r.sample_b==='S03').environmental_distance=null;
+  input.pairs.push(...copy().pairs.map(r=>({...r,segment:'NP'})));
+  const original=JSON.stringify(input),factors=['host','seasonal','weather','migration'];
+  const result=await api.analyze(input,{factors,permutations:0});
+  assert.equal(result.options.cohort_mode,'shared');
+  const keys=['temporal_days','geographic_km','same_host','seasonal_profile_distance','environmental_distance','migration_context_distance','patristic_distance'];
+  for(const segment of ['HA','NP']){
+    const expected=input.pairs.filter(r=>r.segment===segment&&keys.every(k=>Number.isFinite(r[k])));
+    const ids=[...new Set(expected.flatMap(r=>[r.sample_a,r.sample_b]))].sort();
+    const rows=result.results.filter(r=>r.segment===segment);assert.equal(rows.length,8);
+    for(const r of rows){
+      assert.equal(r.n_pairs,expected.length);assert.deepEqual([...r.eligible_sample_ids].sort(),ids);
+      const fitted=api.fit(expected,r.predictors);assert.equal(r.status,fitted.status);
+      assert.ok(Math.abs(r.r2-fitted.r2)<1e-12);
+    }
+    // Weather and Migration start from exactly the same model on the same data.
+    assert.equal(rows.find(r=>r.path==='weather').r2,rows.find(r=>r.path==='migration').r2);
+  }
+  assert.equal(result.results.find(r=>r.segment==='HA').n_pairs,44);
+  assert.equal(result.results.find(r=>r.segment==='NP').n_pairs,66);
+  assert.equal(JSON.stringify(input),original);
+  const fewer=await api.analyze(input,{factors:['host','seasonal'],permutations:0});
+  assert.equal(fewer.results.find(r=>r.segment==='HA').n_samples,12);
+  assert.equal(fewer.results.find(r=>r.segment==='HA').n_pairs,66);
+  const empty=copy();empty.pairs.forEach(r=>r.environmental_distance=null);
+  const none=await api.analyze(empty,{factors:['host','weather'],permutations:0});
+  assert.ok(none.results.every(r=>r.n_samples===0&&r.n_pairs===0&&r.r2===null));
+  await assert.rejects(api.analyze(copy(),{cohort_mode:'invalid'}),/eligibility mode/);
 });

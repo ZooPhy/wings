@@ -17,6 +17,8 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
       window.controller=WINGS_MODEL_EXPLORER.mount(input,document.getElementById('app'));
     },fixture);
     await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Fit preview ready'));
+    assert.equal(await page.getByLabel('Sample eligibility',{exact:true}).inputValue(),'shared');
+    assert.match(await page.locator('.wme-eligibility-summary').innerText(),/Every model below uses these same samples and pairs/);
     assert.equal(await page.locator('.wme-model-row').count(),4);
     // Quarto places semantic <aside> elements into a margin grid column.
     // Reproduce that host rule, then verify every marker remains in the plot.
@@ -37,6 +39,8 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
 
     await page.locator('.wme-model-row').last().focus();
     assert.match(await page.locator('.wme-evidence').innerText(),/Time & Location & Host & Seasonal Bird Abundance/);
+    assert.equal(await page.getByLabel('Include samples from host',{exact:true}).inputValue(),'');
+    assert.equal(await page.getByLabel('Host identity',{exact:true}).isChecked(),true);
     const selects=page.locator('.wme-controls select');
     await selects.nth(3).selectOption('0');
     assert.match(await page.locator('.wme-status').innerText(),/Selection changed/);
@@ -54,7 +58,10 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     assert.match(await page.locator('[data-comparison="weather"] .wme-starting-model').innerText(),/Time & Location & Host & Seasonal Bird Abundance/);
     assert.ok(await page.locator('.wme-added-factor').evaluateAll(els=>els.length>0&&els.every(el=>getComputedStyle(el).color==='rgb(0, 0, 0)'&&getComputedStyle(el).backgroundColor==='rgb(255, 198, 39)')));
 
-    const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download comparison',exact:true}).click();assert.equal((await download).suggestedFilename(),'wings-model-comparison.json');
+    const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download comparison',exact:true}).click();const downloaded=await download;assert.equal(downloaded.suggestedFilename(),'wings-model-comparison.json');
+    const chunks=[];for await(const chunk of await downloaded.createReadStream())chunks.push(chunk);
+    const exported=JSON.parse(Buffer.concat(chunks).toString());assert.equal(exported.options.cohort_mode,'shared');
+    assert.match(exported.notes,/all models use the same samples/);
     await page.setViewportSize({width:390,height:844});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1));
     await page.locator('.wme-sample-picker summary').click();await page.getByRole('button',{name:'Clear all',exact:true}).click();
@@ -84,6 +91,17 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
     assert.equal(await page.locator('.wme-comparison').count(),4);
     assert.equal(await page.locator('.wme-migration .wme-bar').count(),0);
+    assert.deepEqual(await page.locator('.wme-cohort').allTextContents(),Array(4).fill('10 samples · 45 pairs'));
+    assert.match(await page.locator('.wme-eligibility-summary').innerText(),/Using 10 of 12 selected samples/);
+    assert.equal(await page.locator('.wme-cohort-note').count(),0);
+    await page.getByLabel('Sample eligibility',{exact:true}).selectOption('per-comparison');
+    assert.match(await page.locator('.wme-status').innerText(),/Selection changed/);
+    assert.equal(await page.locator('.wme-model-row').count(),0);
+    await page.getByRole('button',{name:'Update comparison',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
+    assert.equal(await page.evaluate(()=>controller.getResult().options.cohort_mode),'per-comparison');
+    assert.equal(await page.evaluate(()=>input.modelExplorerSettings.cohort_mode),'per-comparison');
+    assert.match(await page.locator('.wme-eligibility-summary').innerText(),/Maximum available samples/);
     assert.equal(await page.locator('.wme-comparison').first().locator('.wme-cohort').innerText(),'12 samples · 66 pairs');
     assert.equal(await page.locator('.wme-migration .wme-cohort').innerText(),'10 samples · 45 pairs');
     assert.equal(await page.locator('.wme-migration .wme-model-unavailable').count(),2);
@@ -97,6 +115,8 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
       await page.setViewportSize({width,height:1000});
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1));
     }
+    await page.getByRole('button',{name:'Reset filters',exact:true}).click();
+    assert.equal(await page.getByLabel('Sample eligibility',{exact:true}).inputValue(),'shared');
     // Exercise the real enclosing Concordance renderer: sample selection calls
     // its refresh method, not the model controller's refreshView method.
     await page.addScriptTag({path:path.join(__dirname,'../scripts/report/genomic-ecological-concordance.js')});
@@ -122,6 +142,7 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     assert.ok(await page.evaluate(()=>input.modelExplorer.getResult().results.some(r=>r.segment==='NP'&&r.permutation_p!==null&&r.fdr_q!==null)));
     // Dirty controls must stay dirty; unrelated selection must not trigger a fit.
     await page.locator('.wme-controls select').nth(1).selectOption('Host A');
+    assert.equal(await page.locator('.wme-host-scope').isVisible(),true);
     await page.evaluate(()=>input.selectSample(input.payload.samples[1].sample_id));
     assert.equal(await page.locator('.wme-controls select').nth(1).inputValue(),'Host A');
     assert.match(await page.locator('.wme-status').innerText(),/Selection changed/);

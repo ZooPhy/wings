@@ -78,6 +78,8 @@
   async function analyze(input,options={},hooks={}){
     validateInputs(input);
     const minimum=options.minimum??8,count=options.permutations??999;
+    const cohortMode=options.cohort_mode??'shared';
+    if(!['shared','per-comparison'].includes(cohortMode))throw new Error('Unknown sample eligibility mode.');
     if(!Number.isInteger(minimum)||minimum<3||!Number.isInteger(count)||count<0||count>9999)throw new Error('Invalid analysis settings.');
     const chosen=new Set(options.samples??input.sample_features.map(s=>s.sample_id));
     const selected=options.factors??['host','seasonal'];
@@ -96,7 +98,8 @@
       const seed=[...segment+':'+path].reduce((value,char)=>Math.imul(value^char.charCodeAt(0),16777619),options.seed??20261001);
       const random=rng(seed);
       const candidates=input.pairs.filter(r=>r.segment===segment&&chosen.has(r.sample_a)&&chosen.has(r.sample_b));
-      const rows=candidates.filter(r=>finite(r.patristic_distance)&&allPredictors.every(p=>finite(r[p])));
+      const requiredPredictors=cohortMode==='shared'?[...BASE,...selected.map(f=>FACTORS[f])]:allPredictors;
+      const rows=candidates.filter(r=>finite(r.patristic_distance)&&requiredPredictors.every(p=>finite(r[p])));
       const ids=[...new Set(rows.flatMap(r=>[r.sample_a,r.sample_b]))];let predictors=[...startingPredictors];
       let previous=null;
       for(const [index,code] of codes.entries()){
@@ -118,7 +121,7 @@
       await pause();
     }
     adjust(results);
-    return {scope:'browser-refit',synthetic:input.synthetic===true,results,options:{...options,samples:[...chosen],factors:[...selected],minimum,permutations:count,seed:options.seed??20261001},notes:'Each comparison uses identical complete-data pairs for its starting and added-factor models; other comparisons can use different samples. Randomization seeds are derived separately for each segment and comparison. Weather distances retain the original run standardization. FDR is adjusted across segments separately for each added factor.'};
+    return {scope:'browser-refit',synthetic:input.synthetic===true,results,options:{...options,samples:[...chosen],factors:[...selected],cohort_mode:cohortMode,minimum,permutations:count,seed:options.seed??20261001},notes:(cohortMode==='shared'?'Within each segment, all models use the same samples and complete-data pairs for every selected factor.':'Each comparison uses identical complete-data pairs for its starting and added-factor models; other comparisons can use different samples.')+' Randomization seeds are derived separately for each segment and comparison. Weather distances retain the original run standardization. FDR is adjusted across segments separately for each added factor.'};
   }
 
   const make=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
@@ -128,31 +131,36 @@
     let input=data.interactive_inputs||null,result=null,serial=0,dirty=false,active=null,plotPoints=[],inputError='';
     if(input&&(explorer.payload.synthetic===true||explorer.payload.ecological_clock?.synthetic===true))input={...input,synthetic:true};
     const panel=make('section','wme'),head=make('div','wme-heading');head.append(make('span','wme-kicker','MODEL EXPLORER'),make('h4','','What helps explain genetic differences?'),make('p','','Each card tests one factor against its stated starting model. Select a row for statistical support and sample exclusions.'));
+    head.append(make('p','wme-filter-note','The analysis filters below determine which samples enter the models. Browsing a sample or host above does not change this analysis selection.'));
     const controls=make('div','wme-controls'),status=make('p','wme-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     const view=make('div','wme-view'),chart=make('div','wme-chart'),evidence=make('div','wme-evidence');evidence.setAttribute('role','complementary');evidence.setAttribute('aria-label','Model details');evidence.setAttribute('aria-live','polite');view.append(chart,evidence);
-    const control=(label,el)=>{const wrap=make('label');wrap.append(make('span','',label),el);controls.append(wrap);return el;};
+    const control=(label,el)=>{const wrap=make('label',label==='Sample eligibility'?'wme-eligibility-control':'');wrap.append(make('span','',label),el);controls.append(wrap);return el;};
     const select=(values)=>{const el=make('select');for(const [value,label] of values){const o=make('option','',label);o.value=value;el.append(o);}return el;};
     const segment=control('Influenza segment',select(SEGMENTS.map(s=>[s,s])));
-    const host=control('Host',select([['','All hosts'],...[...new Set(samples.map(s=>s.host||'Not recorded'))].sort().map(s=>[s,s])]));
+    const host=control('Include samples from host',select([['','All hosts'],...[...new Set(samples.map(s=>s.host||'Not recorded'))].sort().map(s=>[s,s])]));
+    host.setAttribute('aria-label','Include samples from host');
     const region=control('Location',select([['','All locations'],...[...new Set(samples.map(s=>[s.country,s.state].filter(Boolean).join(' / ')||'Not recorded'))].sort().map(s=>[s,s])]));
     const start=control('Collected from',make('input'));start.type='date';const end=control('Collected through',make('input'));end.type='date';
     const support=control('Statistical checks',select([['999','999 randomized comparisons'],['199','199 — quicker exploration'],['0','Fit only']]));
+    const eligibility=control('Sample eligibility',select([['shared','Same samples across models'],['per-comparison','Maximum available samples per comparison']]));
+    eligibility.setAttribute('aria-label','Sample eligibility');
     const factors=make('fieldset','wme-factors');factors.append(make('legend','','Factors included'));const checks={};
-    for(const [key,label] of [['host','Host'],['seasonal','Seasonal bird abundance'],['weather','Weather'],['migration','Migration']]){const l=make('label'),c=make('input');c.type='checkbox';c.checked=key==='host'||key==='seasonal';checks[key]=c;l.append(c,make('span','',label));factors.append(l);}
-    factors.append(make('small','','Time and location are always included. Each selected factor gets its own comparison and eligible samples. Weather and migration availability do not restrict the Host or Seasonal bird abundance comparisons.'));
+    for(const [key,label] of [['host','Host identity'],['seasonal','Seasonal bird abundance'],['weather','Weather'],['migration','Migration']]){const l=make('label'),c=make('input');c.type='checkbox';c.checked=key==='host'||key==='seasonal';checks[key]=c;l.append(c,make('span','',label));factors.append(l);}
+    factors.append(make('small','','Time and location are always included. By default, every model uses samples with complete inputs for all selected factors. Changing factors recalculates eligibility for all models.'));
+    const hostScope=make('small','wme-host-scope','Only one host is selected. Host identity cannot vary within this selection; choose All hosts to compare hosts.');factors.append(hostScope);
     const chooser=make('details','wme-sample-picker'),sampleSummary=make('summary'),sampleSearch=make('input');sampleSearch.type='search';sampleSearch.placeholder='Find a sample';sampleSearch.setAttribute('aria-label','Find a comparison sample');
     const sampleList=make('div','wme-sample-list'),sampleChecks=new Map(),sampleLabels=[];
     for(const s of samples){const label=make('label'),c=make('input');c.type='checkbox';c.checked=true;sampleChecks.set(s.sample_id,c);label.append(c,make('span','',s.sample_id));sampleList.append(label);sampleLabels.push([s.sample_id,label]);}
     const pickActions=make('div','wme-actions');for(const [label,value] of [['Select all',true],['Clear all',false]]){const b=make('button','',label);b.type='button';b.addEventListener('click',()=>{for(const c of sampleChecks.values())c.checked=value;markDirty();});pickActions.append(b);}
     chooser.append(sampleSummary,sampleSearch,pickActions,sampleList);
     const actions=make('div','wme-actions'),update=make('button','wme-primary','Update comparison'),reset=make('button','','Reset filters'),download=make('button','','Download comparison');for(const b of [update,reset,download])b.type='button';download.disabled=true;actions.append(update,reset,download);
-    const note=make('p','wme-note','Both models in a card use the same samples and complete-data pairs. Cards may use different samples: compare the added explanatory value within each card, rather than ranking factors by their total percentages. Changing filters recalculates these comparisons; saved run results stay unchanged.');
-    const methods=make('details','wme-methods');methods.append(make('summary','','How these comparisons are calculated'),make('p','','Host is compared with time and location. Seasonal bird abundance also adjusts for Host when selected. Weather and Migration each adjust for the selected Host and Seasonal bird abundance factors. Each nested model pair uses its own complete-data samples. Seasonal bird abundance is 1 minus the Pearson correlation between annual eBird weekly relative-abundance profiles. Statistical checks shuffle sample labels in the reduced-model residual matrix, retaining reduced-model fitted values. Adjusted q values use Benjamini–Hochberg correction across segments separately for each added factor. Weather distances keep the original run standardization. Migration uses the fixed collection night; repeated contexts have no migration p or q value. All associations are exploratory and do not establish transmission or cause and effect.'));
+    const note=make('p','wme-note');
+    const methods=make('details','wme-methods');methods.append(make('summary','','How these comparisons are calculated'),make('p','','Host is compared with time and location. Seasonal bird abundance also adjusts for Host when selected. Weather and Migration each adjust for the selected Host and Seasonal bird abundance factors. Same samples across models uses the intersection of complete-data pairs for all selected factors, separately for each segment. Maximum available samples uses a separate eligible set for each comparison. Both models within a comparison always use identical pairs. Contributions depend on the stated starting model and do not isolate causal effects. Seasonal bird abundance is 1 minus the Pearson correlation between annual eBird weekly relative-abundance profiles. Statistical checks shuffle sample labels in the reduced-model residual matrix, retaining reduced-model fitted values. Adjusted q values use Benjamini–Hochberg correction across segments separately for each added factor. Weather distances keep the original run standardization. Migration uses the fixed collection night; repeated contexts have no migration p or q value. All associations are exploratory and do not establish transmission or cause and effect.'));
     const legacy=make('div','wme-legacy'),file=make('input');file.type='file';file.accept='.json,application/json';const fileLabel=make('label','','Load analysis data (concordance.json)');fileLabel.append(file);legacy.append(make('p','','Older reports may contain saved summaries only. Load this run’s concordance.json to enable recalculation.'),fileLabel);
     panel.append(head,controls,factors,chooser,actions,status,view,note,methods,legacy);container.append(panel);
     function selectedIds(){return samples.filter(s=>sampleChecks.get(s.sample_id).checked&&(!host.value||(s.host||'Not recorded')===host.value)&&(!region.value||([s.country,s.state].filter(Boolean).join(' / ')||'Not recorded')===region.value)&&(!start.value||/^\d{4}-\d{2}-\d{2}$/.test(s.collection_date||'')&&s.collection_date>=start.value)&&(!end.value||/^\d{4}-\d{2}-\d{2}$/.test(s.collection_date||'')&&s.collection_date<=end.value)).map(s=>s.sample_id);}
-    function sampleCount(){sampleSummary.textContent=`Samples included: ${selectedIds().length} of ${samples.length}`;}
-    function remember(){explorer.modelExplorerSettings={host:host.value,region:region.value,start:start.value,end:end.value,support:support.value,samples:[...sampleChecks].filter(([,c])=>c.checked).map(([id])=>id),factors:Object.keys(checks).filter(k=>checks[k].checked)};}
+    function sampleCount(){hostScope.hidden=!host.value||!checks.host.checked;sampleSummary.textContent=`Samples included: ${selectedIds().length} of ${samples.length}`;}
+    function remember(){explorer.modelExplorerSettings={host:host.value,region:region.value,start:start.value,end:end.value,support:support.value,cohort_mode:eligibility.value,samples:[...sampleChecks].filter(([,c])=>c.checked).map(([id])=>id),factors:Object.keys(checks).filter(k=>checks[k].checked)};}
     function markDirty(){serial++;dirty=true;remember();sampleCount();status.textContent='Selection changed. Select Update comparison to calculate these settings.';chart.replaceChildren();evidence.replaceChildren();download.disabled=true;update.disabled=!input;}
     function readable(code){return ({INSUFFICIENT_UNIQUE_SAMPLES:'Too few distinct samples',INSUFFICIENT_COMPLETE_PAIRS:'Too few complete sample pairs',INSUFFICIENT_PREDICTOR_VARIATION:'This factor does not vary enough',INSUFFICIENT_INDEPENDENT_VARIATION:'This factor cannot be separated from those already included',CONSTANT_GENETIC_DISTANCE:'No genetic-distance variation',INSUFFICIENT_MIGRATION_CONTEXTS:'Too few distinct migration settings'})[code]||'Unavailable';}
     function isStarting(row){return row.comparison_role==='starting'||(result?.results||[]).find(r=>r.segment===row.segment&&r.path===row.path)===row;}
@@ -208,6 +216,11 @@
       chart.replaceChildren();evidence.replaceChildren();plotPoints=[];
       const rows=(result?.results||[]).filter(r=>r.segment===segment.value);
       if(!rows.length){chart.append(make('p','','No model results are available for this segment.'));return;}
+      const shared=result?.options?.cohort_mode==='shared';
+      const cohort=rows[0];
+      if(shared)chart.append(make('p','wme-eligibility-summary',`Using ${cohort.n_samples} of ${cohort.n_selected} selected samples with complete inputs for all selected factors in ${segment.value} (${cohort.n_pairs} pairs). Every model below uses these same samples and pairs.`));
+      else chart.append(make('p','wme-eligibility-summary','Maximum available samples per comparison. Eligible samples and pairs may differ between cards; both models within each card use identical samples and pairs.'));
+      note.textContent='Added explanatory value depends on the stated starting model. Changing filters recalculates these comparisons; saved run results stay unchanged.';
       const cards=make('div','wme-comparisons');
       const paths=[...new Set(rows.map(r=>r.path))];
       for(const path of paths){
@@ -221,7 +234,6 @@
         const description=descriptions[path]||descriptions[({host_vs_baseline:'host',ecology_vs_host:'seasonal',environment_vs_ecology:'weather',migration_vs_ecology:'migration'})[path]];
         if(description)heading.append(make('p','wme-comparison-description',description));
         if(Number.isInteger(first.n_selected))heading.append(make('small','',`${first.n_selected-first.n_samples} of ${first.n_selected} selected samples excluded for missing inputs.`));
-        heading.append(make('p','wme-cohort-note',`Both rows are refitted using these ${first.n_samples} eligible samples. The same starting model may give a different result in another card because its eligible samples differ.`));
         card.append(heading,make('p','wme-measure','Genetic variation explained (%)'));
         const scale=make('div','wme-scale');scale.setAttribute('aria-hidden','true');
         for(const tick of ['0%','50%','100%'])scale.append(make('span','',tick));
@@ -265,7 +277,7 @@
       if(start.value&&end.value&&start.value>end.value){status.textContent='The start date must be on or before the end date.';update.disabled=false;return;}
       try{
         status.textContent='Calculating model fits…';
-        const next=await analyze(input,{samples:selectedIds(),factors:Object.keys(checks).filter(k=>checks[k].checked),minimum:data.readiness?.minimum_unique_samples??8,permutations:preview?0:Number(support.value)},{alive:()=>token===serial,progress:text=>{if(token===serial)status.textContent=text;}});
+        const next=await analyze(input,{samples:selectedIds(),factors:Object.keys(checks).filter(k=>checks[k].checked),cohort_mode:eligibility.value,minimum:data.readiness?.minimum_unique_samples??8,permutations:preview?0:Number(support.value)},{alive:()=>token===serial,progress:text=>{if(token===serial)status.textContent=text;}});
         if(token!==serial)return;result=next;draw();download.disabled=false;status.textContent=preview?'Fit preview ready. Select Update comparison to run the selected statistical checks.':`Comparison updated for ${selectedIds().length} selected samples. ${Number(support.value)===0?'Fit only; statistical support was not calculated.':'Statistical checks recalculated where estimable; select a row for support and exclusions.'}`;
       }catch(error){if(token===serial&&error.message!=='CANCELLED')status.textContent='Comparison unavailable: '+error.message;}
       finally{if(token===serial)update.disabled=false;}
@@ -279,22 +291,22 @@
         results.push({...row,path,comparison_role:'starting',code:reducedCode,label:'Before adding '+LABELS[code].replace('Add ',''),r2:row.reduced_r2,status:finite(row.reduced_r2)?'READY':row.display_status||row.status,delta_r2:null,permutation_p:null,fdr_q:null});
         results.push({...row,path,comparison_role:'added',code,label:LABELS[code],r2:row.delta_r2!==null?row.full_r2:null,status:row.delta_r2!==null&&finite(row.full_r2)?'READY':row.display_status||row.status,descriptive_reason:row.display_status==='DESCRIPTIVE'?row.diagnostic:null});
       }
-      result={scope:'saved-results',synthetic:explorer.payload.synthetic===true,results};draw();download.disabled=false;status.textContent='Saved comparisons shown. Each card has its own sample set. Load analysis data to change included samples or factors.';
+      eligibility.value='per-comparison';result={scope:'saved-results',synthetic:explorer.payload.synthetic===true,results};draw();download.disabled=false;status.textContent='Saved comparisons shown. Each card has its own sample set. Load analysis data to change included samples or factors.';
     }
-    for(const el of [host,region,start,end,support,...Object.values(checks),...sampleChecks.values()])el.addEventListener('change',markDirty);
+    for(const el of [host,region,start,end,support,eligibility,...Object.values(checks),...sampleChecks.values()])el.addEventListener('change',markDirty);
     segment.addEventListener('change',()=>{if(!dirty)draw();});
     sampleSearch.addEventListener('input',()=>{for(const [id,label] of sampleLabels)label.hidden=!id.toLowerCase().includes(sampleSearch.value.toLowerCase());});
-    update.addEventListener('click',()=>run());reset.addEventListener('click',()=>{host.value='';region.value='';start.value='';end.value='';for(const c of sampleChecks.values())c.checked=true;for(const [k,c] of Object.entries(checks))c.checked=k==='host'||k==='seasonal';markDirty();});
+    update.addEventListener('click',()=>run());reset.addEventListener('click',()=>{host.value='';region.value='';start.value='';end.value='';eligibility.value='shared';for(const c of sampleChecks.values())c.checked=true;for(const [k,c] of Object.entries(checks))c.checked=k==='host'||k==='seasonal';markDirty();});
     download.addEventListener('click',()=>{if(!result||dirty)return;const blob=new Blob([JSON.stringify({...result,notes:result.notes||'Saved run comparisons.'},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=make('a');a.href=url;a.download='wings-model-comparison.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
     file.addEventListener('change',async()=>{const selected=file.files?.[0];if(!selected)return;try{
       if(selected.size>100*1024*1024)throw new Error('Analysis file exceeds the 100 MB browser limit.');
       const raw=JSON.parse(await selected.text());
       if(!Array.isArray(raw.models)||data.models.some(old=>!raw.models.some(r=>r.segment===old.segment&&r.comparison===old.comparison&&r.n_samples===old.n_samples&&r.reduced_r2===old.reduced_r2&&r.full_r2===old.full_r2)))throw new Error('The analysis file does not match the saved comparisons in this report.');
-      input=validateInputs({pairs:raw.pairs,sample_features:raw.sample_features},samples.map(s=>s.sample_id));enable();await run(true);
+      input=validateInputs({pairs:raw.pairs,sample_features:raw.sample_features},samples.map(s=>s.sample_id));eligibility.value='shared';enable();await run(true);
     }catch(error){status.textContent='Analysis data not loaded: '+error.message;}finally{file.value='';}});
-    function enable(){for(const el of [host,region,start,end,support,...Object.values(checks),...sampleChecks.values(),reset,...pickActions.children])el.disabled=!input;update.disabled=!input;legacy.hidden=Boolean(input);}
+    function enable(){for(const el of [host,region,start,end,support,eligibility,...Object.values(checks),...sampleChecks.values(),reset,...pickActions.children])el.disabled=!input;update.disabled=!input;legacy.hidden=Boolean(input);}
     try{if(input)validateInputs(input,samples.map(s=>s.sample_id));}catch(error){input=null;inputError=error.message;}
-    if(savedSettings){host.value=savedSettings.host;region.value=savedSettings.region;start.value=savedSettings.start;end.value=savedSettings.end;support.value=savedSettings.support;for(const [id,c] of sampleChecks)c.checked=savedSettings.samples.includes(id);for(const [k,c] of Object.entries(checks))c.checked=savedSettings.factors.includes(k);}
+    if(savedSettings){host.value=savedSettings.host;region.value=savedSettings.region;start.value=savedSettings.start;end.value=savedSettings.end;support.value=savedSettings.support;eligibility.value=savedSettings.cohort_mode==='per-comparison'?'per-comparison':'shared';for(const [id,c] of sampleChecks)c.checked=savedSettings.samples.includes(id);for(const [k,c] of Object.entries(checks))c.checked=savedSettings.factors.includes(k);}
     sampleCount();enable();if(input)run(true);else{saved();if(inputError)status.textContent+=' Embedded refit inputs unavailable: '+inputError;}
     return {
       refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;},getResult:()=>result,
