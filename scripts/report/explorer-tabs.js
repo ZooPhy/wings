@@ -347,6 +347,13 @@
     if (genomeFooter) panels.genome.append(genomeFooter);
 
     panels.ecology.append(ecology);
+    const migrationContext = make("div", "wse-ecology-migration-context");
+    panels.ecology.append(migrationContext);
+    const migrationModule = globalThis.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE;
+    if (migrationModule?.mountMigrationContext) {
+      explorer.migrationContextController = migrationModule.mountMigrationContext(explorer, migrationContext);
+    } else migrationContext.hidden = true;
+
     const aminoDashboard = mountAminoDashboard(explorer, panels.amino);
     const genotypeDashboard = mountGenotypeDashboard(explorer, panels.genotypes);
 

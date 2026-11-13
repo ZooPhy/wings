@@ -124,7 +124,7 @@
     if(input&&(explorer.payload.synthetic===true||explorer.payload.ecological_clock?.synthetic===true))input={...input,synthetic:true};
     const panel=make('section','wme'),head=make('div','wme-heading');head.append(make('span','wme-kicker','MODEL EXPLORER'),make('h4','','What helps explain genetic differences?'),make('p','','Follow each model from time and location to the factors you choose. Click a point for its results.'));
     const controls=make('div','wme-controls'),status=make('p','wme-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
-    const view=make('div','wme-view'),chart=make('div','wme-chart'),evidence=make('aside','wme-evidence');evidence.setAttribute('aria-live','polite');view.append(chart,evidence);
+    const view=make('div','wme-view'),chart=make('div','wme-chart'),evidence=make('div','wme-evidence');evidence.setAttribute('role','complementary');evidence.setAttribute('aria-label','Model details');evidence.setAttribute('aria-live','polite');view.append(chart,evidence);
     const control=(label,el)=>{const wrap=make('label');wrap.append(make('span','',label),el);controls.append(wrap);return el;};
     const select=(values)=>{const el=make('select');for(const [value,label] of values){const o=make('option','',label);o.value=value;el.append(o);}return el;};
     const segment=control('Influenza segment',select(SEGMENTS.map(s=>[s,s])));
@@ -164,12 +164,18 @@
       chart.replaceChildren();evidence.replaceChildren();plotPoints=[];const rows=(result?.results||[]).filter(r=>r.segment===segment.value);
       if(!rows.length){chart.append(make('p','','No model results are available for this segment.'));return;}
       const paths=[...new Set(rows.map(r=>r.path))],codes=['baseline','host','seasonal'];if(rows.some(r=>r.code==='weather'||r.code==='migration'))codes.push('context');
-      const used=codes.filter(c=>c==='context'||rows.some(r=>r.code===c));const W=850,H=390,left=70,right=75,top=40,bottom=85;
+      const used=codes.filter(c=>c==='context'||rows.some(r=>r.code===c));const W=Math.max(300,chart.clientWidth||850),H=360,left=60,right=35,top=45,bottom=85;
+      drawnWidth=chart.clientWidth||0;
       const x=code=>left+used.indexOf(['weather','migration'].includes(code)?'context':code)*(W-left-right)/Math.max(1,used.length-1),y=v=>H-bottom-v*(H-top-bottom);
       const picture=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'group','aria-label':'Model progression. Vertical axis: percent of genetic variation explained.'});
       picture.append(svg('text',{x:left,y:18},'Genetic variation explained'));
       for(let i=0;i<=4;i++){const v=i/4;picture.append(svg('line',{x1:left,x2:W-right,y1:y(v),y2:y(v),stroke:'#e0e6e8'}),svg('text',{x:left-12,y:y(v)+4,'text-anchor':'end'},`${100*v}%`));}
-      for(const code of used)picture.append(svg('text',{x:x(code),y:H-bottom+30,'text-anchor':'middle'},code==='context'?'Weather / migration':LABELS[code]));
+      for(const [i,code] of used.entries()){
+        const words=({baseline:['Time &','location'],host:['Add host'],seasonal:['Add seasonal','patterns'],context:['Weather /','migration']})[code];
+        const label=svg('text',{x:x(code),y:H-bottom+27,'text-anchor':i===0?'start':i===used.length-1?'end':'middle'});
+        words.forEach((word,line)=>label.append(svg('tspan',{x:x(code),dy:line?17:0},word)));
+        picture.append(label);
+      }
       const legend=make('div','wme-path-legend');
       paths.forEach((path,index)=>{const color=['#8c1d40','#007f84','#80601d','#496ea0'][index%4],line=rows.filter(r=>r.path===path);let prev=null;
         const label=make('span','',`${PATH_LABELS[path]||path}${path==='migration'?' (dashed)':''} · ${line[0].n_samples} samples · ${line[0].n_pairs} pairs`);label.style.color=color;legend.append(label);
@@ -183,7 +189,7 @@
       });
       chart.append(picture,legend);
       const unavailable=rows.filter(r=>r.status!=='READY');if(unavailable.length){const list=make('ul','wme-unavailable');for(const r of unavailable){const li=make('li'),b=make('button','',`${r.label} (${PATH_LABELS[r.path]||r.path}): ${readable(r.status)}`);b.type='button';b.addEventListener('click',()=>inspect(r));li.append(b);list.append(li);}chart.append(list);}
-      inspect(rows.find(r=>finite(r.delta_r2))||rows[0]);
+      inspect(rows.includes(active)?active:rows.find(r=>finite(r.delta_r2))||rows[0]);
     }
     async function run(preview=false){
       if(!input)return;remember();const token=++serial;dirty=false;update.disabled=true;download.disabled=true;chart.replaceChildren();evidence.replaceChildren();
@@ -220,9 +226,14 @@
     function enable(){for(const el of [host,region,start,end,support,...Object.values(checks),...sampleChecks.values(),reset,...pickActions.children])el.disabled=!input;update.disabled=!input;legacy.hidden=Boolean(input);}
     try{if(input)validateInputs(input,samples.map(s=>s.sample_id));}catch(error){input=null;inputError=error.message;}
     if(savedSettings){host.value=savedSettings.host;region.value=savedSettings.region;start.value=savedSettings.start;end.value=savedSettings.end;support.value=savedSettings.support;for(const [id,c] of sampleChecks)c.checked=savedSettings.samples.includes(id);for(const [k,c] of Object.entries(checks))c.checked=savedSettings.factors.includes(k);}
+    let drawnWidth=0;
+    const resizeObserver=typeof ResizeObserver==='function'?new ResizeObserver(()=>{
+      if(chart.clientWidth>0&&Math.abs(chart.clientWidth-drawnWidth)>1&&result&&!dirty)draw();
+    }):null;
+    resizeObserver?.observe(chart);
     sampleCount();enable();if(input)run(true);else{saved();if(inputError)status.textContent+=' Embedded refit inputs unavailable: '+inputError;}
     return {
-      refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;},getResult:()=>result,
+      refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;resizeObserver?.disconnect();},getResult:()=>result,
       attach:(container,payload)=>{
         if(payload.genomic_ecological_concordance!==data||payload.samples!==samples)return false;
         container.append(panel);

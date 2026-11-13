@@ -5,6 +5,9 @@ on:
       - 'scripts/report/concordance-model-explorer.*'
       - 'scripts/report/genomic-ecological-concordance.*'
       - 'scripts/report/templates/surveillance-explorer.*'
+      - 'scripts/report/explorer-tabs.js'
+      - 'tests/test_concordance_migration_ui.cjs'
+      - 'tests/test_explorer_module_runtime.cjs'
       - 'scripts/attach_genomic_ecological_concordance.py'
       - 'scripts/refresh_concordance_inputs.py'
       - 'scripts/refresh_report_model_explorer.py'
@@ -27,7 +30,7 @@ jobs:
       - run: python -m pip install numpy
       - run: python scripts/build_explorer_assets.py --check
       - run: python scripts/refresh_demo_navigation.py --repo . --check
-      - run: node --test tests/test_model_explorer.cjs tests/test_genomic_ecological_concordance_ui.cjs
+      - run: node --test tests/test_model_explorer.cjs tests/test_genomic_ecological_concordance_ui.cjs tests/test_concordance_migration_ui.cjs tests/test_explorer_module_runtime.cjs
       - run: python -m unittest discover -s tests -p 'test_model_explorer*.py'
       - run: npm install --no-save playwright
       - run: npx playwright install --with-deps chromium

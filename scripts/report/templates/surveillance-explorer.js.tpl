@@ -653,6 +653,7 @@
     }
 
     renderEcology() {
+      this.migrationContextController?.refresh();
       if (!this.ecologyNode) return;
       const weaveShown = globalThis.WINGS_MIGRATION_WEAVE.render(this);
       const node = selector => this.ecologyNode.querySelector(selector);

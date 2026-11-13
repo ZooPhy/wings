@@ -18,6 +18,27 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     },fixture);
     await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Fit preview ready'));
     assert.equal(await page.locator('.wme-chart [role=button]').count(),3);
+    // Quarto places semantic <aside> elements into a margin grid column.
+    // Reproduce that host rule, then verify every marker remains in the plot.
+    await page.addStyleTag({content:'.quarto-layout aside { grid-column:4; width:640px; } #app { max-width:100%; }'});
+    await page.locator('#app').evaluate(el=>el.classList.add('quarto-layout'));
+    for(const width of [1600,1024,768,390]){
+      await page.setViewportSize({width,height:1000});
+      await page.waitForFunction(()=>{
+        const chart=document.querySelector('.wme-chart'),picture=chart.querySelector('svg');
+        return Math.abs(picture.viewBox.baseVal.width-Math.max(300,chart.clientWidth))<2;
+      });
+      assert.ok(await page.evaluate(()=>{
+        const chart=document.querySelector('.wme-chart'),bounds=chart.getBoundingClientRect();
+        const circles=[...chart.querySelectorAll('[role=button] circle')];
+        return chart.scrollWidth<=chart.clientWidth+1&&circles.every(c=>{
+          const r=c.getBoundingClientRect();return r.left>=bounds.left-1&&r.right<=bounds.right+1;
+        });
+      }),'All model markers must be visible without horizontal scrolling at '+width);
+      if(width<=1024)assert.ok(await page.evaluate(()=>document.querySelector('.wme-evidence').getBoundingClientRect().top>=document.querySelector('.wme-chart').getBoundingClientRect().bottom));
+    }
+    await page.setViewportSize({width:1280,height:1000});
+
     await page.locator('.wme-chart [role=button]').last().focus();
     assert.match(await page.locator('.wme-evidence').innerText(),/Add seasonal patterns/);
     const selects=page.locator('.wme-controls select');

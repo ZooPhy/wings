@@ -62,7 +62,7 @@ function mount(text=source) {
     Option:function(text,value){const node=new Element('option');node.textContent=text;node.value=value;return node;},
     requestAnimationFrame:fn=>callbacks.push(fn),setTimeout:fn=>callbacks.push(fn),
     WINGS_EVIDENCE_SYNTHESIS:{mount(_explorer,app){app.append(new Element('section','wse-evidence-synthesis'));}},
-    WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE:{mount(){return concordance;}},
+    WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE:{mount(){return concordance;},mountMigrationContext(_explorer,panel){panel.append(new Element("div","nightly-context-fixture"));return {refresh(){}};}},
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../scripts/report/vendor/d3-hierarchy.v3.min.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../scripts/report/explorer-view-navigator.js'),'utf8'),context);
@@ -391,4 +391,14 @@ test('compact profile preserves a lone coordinate and explicitly marks an empty 
   assert.equal(one.querySelector('.wsp-coordinates').querySelectorAll('dd').length,1);
   const empty=profileHarness('2025-10-20',[['Latitude','']]).profileApi.profile;
   assert.equal(empty.querySelector('.wsp-coordinates').querySelector('dd').textContent,'Not recorded');
+});
+
+
+test('nightly migration context mounts only inside the Ecology view',()=>{
+  const h=mount();
+  assert.ok(h.tabs.panels.ecology.querySelector('.nightly-context-fixture'));
+  assert.equal(h.tabs.panels.concordance.querySelector('.nightly-context-fixture'),null);
+  assert.ok(h.explorer.migrationContextController);
+  h.tabs.activate('concordance');h.tabs.activate('ecology');
+  assert.equal(h.root.querySelectorAll('.nightly-context-fixture').length,1);
 });
