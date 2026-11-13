@@ -130,7 +130,7 @@
     const data=explorer.payload.genomic_ecological_concordance,samples=explorer.payload.samples||[],savedSettings=explorer.modelExplorerSettings;
     let input=data.interactive_inputs||null,result=null,serial=0,dirty=false,active=null,plotPoints=[],inputError='';
     if(input&&(explorer.payload.synthetic===true||explorer.payload.ecological_clock?.synthetic===true))input={...input,synthetic:true};
-    const panel=make('section','wme'),head=make('div','wme-heading');head.append(make('span','wme-kicker','MODEL EXPLORER'),make('h4','','What helps explain genetic differences?'),make('p','','Each card tests one factor against its stated starting model. Select a row for statistical support and sample exclusions.'));
+    const panel=make('section','wme'),head=make('div','wme-heading');head.append(make('span','wme-kicker','MODEL EXPLORER'),make('h4','','What helps explain genetic differences?'),make('p','','Compare the starting model with models that include additional factors. Select a row for statistical support and sample exclusions.'));
     head.append(make('p','wme-filter-note','The analysis filters below determine which samples enter the models. Browsing a sample or host above does not change this analysis selection.'));
     const controls=make('div','wme-controls'),status=make('p','wme-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     const view=make('div','wme-view'),chart=make('div','wme-chart'),evidence=make('div','wme-evidence');evidence.setAttribute('role','complementary');evidence.setAttribute('aria-label','Model details');evidence.setAttribute('aria-live','polite');view.append(chart,evidence);
@@ -190,6 +190,8 @@
       summary.append(make('span','wme-kicker','SELECTED MODEL'),modelLabel(row,'h4',''),make('p','',`${row.segment} · ${PATH_LABELS[row.path]||row.path}`),make('strong','wme-value',row.status==='READY'?percent(row.r2):'Not estimable'));
       summary.append(make('p','',row.status==='READY'?'Genetic variation explained by this model.':reason(row,null)));
       details.append(make('p','',`${row.n_samples} distinct samples · ${row.n_pairs} pairs`));
+      const reduced=(result?.results||[]).find(r=>r.segment===row.segment&&r.path===row.path&&isStarting(r));
+      if(!isStarting(row)&&reduced)details.append(make('p','',`Compared with: ${modelText(reduced)}`));
       if(Number.isInteger(row.n_candidate_pairs))details.append(make('p','',`${row.n_candidate_pairs-row.n_pairs} pairs excluded for missing inputs. ${row.n_selected-row.n_samples} selected samples are not represented in this comparison.`));
       if(finite(row.delta_r2))details.append(make('p','',`Added explanatory value: ${gain(row.delta_r2)}`));
       if(finite(row.fdr_q)&&finite(row.permutation_p))details.append(make('p','',row.fdr_q<.05?'Statistical support after adjustment across segments.':'No statistical support at the 0.05 adjusted threshold.'),make('p','',`Adjusted q: ${row.fdr_q.toPrecision(3)} · p: ${row.permutation_p.toPrecision(3)}`));
@@ -223,23 +225,31 @@
       note.textContent='Added explanatory value depends on the stated starting model. Changing filters recalculates these comparisons; saved run results stay unchanged.';
       const cards=make('div','wme-comparisons');
       const paths=[...new Set(rows.map(r=>r.path))];
-      for(const path of paths){
-        const line=rows.filter(r=>r.path===path),first=line[0];
+      const groups=shared?[{path:'shared',line:[rows[0],...rows.filter(r=>!isStarting(r))]}]:paths.map(path=>({path,line:rows.filter(r=>r.path===path)}));
+      for(const {path,line} of groups){
+        const first=line[0];
+        const title=shared?'Models on the same samples':PATH_LABELS[path]||path;
         const card=make('section','wme-comparison'+(path==='migration'?' wme-migration':''));
-        card.setAttribute('aria-label',PATH_LABELS[path]||path);card.setAttribute('data-comparison',path);
+        card.setAttribute('aria-label',title);card.setAttribute('data-comparison',path);
         const heading=make('div','wme-comparison-heading');
-        heading.append(make('span','wme-kicker',segment.value+' · MODEL COMPARISON'),make('h4','',PATH_LABELS[path]||path),make('p','wme-cohort',`${first.n_samples} samples · ${first.n_pairs} pairs`));
-        heading.append(make('p','wme-starting-model','Starting model: '+modelText(first)));
+        heading.append(make('span','wme-kicker',segment.value+' · MODEL COMPARISON'),make('h4','',title));
+        if(!shared){
+          heading.append(make('p','wme-cohort',`${first.n_samples} samples · ${first.n_pairs} pairs`));
+          heading.append(make('p','wme-starting-model','Starting model: '+modelText(first)));
+        }
         const descriptions={host:'Host identity: whether two samples share the same recorded host.',seasonal:'Similarity of annual eBird weekly relative-abundance profiles.',weather:'Differences in temperature, precipitation and wind near collection.',migration:'Differences in BirdCast nightly activity and seasonal migration progress.'};
         const description=descriptions[path]||descriptions[({host_vs_baseline:'host',ecology_vs_host:'seasonal',environment_vs_ecology:'weather',migration_vs_ecology:'migration'})[path]];
         if(description)heading.append(make('p','wme-comparison-description',description));
-        if(Number.isInteger(first.n_selected))heading.append(make('small','',`${first.n_selected-first.n_samples} of ${first.n_selected} selected samples excluded for missing inputs.`));
+        if(!shared&&Number.isInteger(first.n_selected))heading.append(make('small','',`${first.n_selected-first.n_samples} of ${first.n_selected} selected samples excluded for missing inputs.`));
         card.append(heading,make('p','wme-measure','Genetic variation explained (%)'));
         const scale=make('div','wme-scale');scale.setAttribute('aria-hidden','true');
         for(const tick of ['0%','50%','100%'])scale.append(make('span','',tick));
         card.append(scale);
         for(const [index,row] of line.entries()){
-          const ready=row.status==='READY'&&finite(row.r2),previous=line[index-1];
+          const ready=row.status==='READY'&&finite(row.r2);
+          // Terminal factors share a reduced model: Migration never extends Weather.
+          const previous=shared?(isStarting(row)?null:rows.find(r=>r.path===row.path&&isStarting(r))):line[index-1];
+          if(shared&&row.path==='weather'&&!isStarting(row)&&paths.includes('migration'))card.append(make('p','wme-branch-note',`Weather and Migration each extend ${modelText(previous)} separately.`));
           const button=make('button','wme-model-row'+(ready?'':' wme-model-unavailable'));button.type='button';
           button.setAttribute('aria-pressed','false');button.setAttribute('data-model-code',row.code);
           const heading=make('span','wme-row-heading');
@@ -250,7 +260,7 @@
             const total=Math.max(0,Math.min(1,row.r2))*1000;
             picture.append(svg('rect',{x:0,y:0,width:1000,height:24,rx:8,class:'wme-bar-track'}));
             picture.append(svg('rect',{x:0,y:0,width:total,height:24,rx:Math.min(8,total/2),class:'wme-bar-total'}));
-            // Gold shows the increment only when the immediately preceding fit is estimable.
+            // Gold starts at this factor's reduced-model fit, including parallel terminal factors.
             if(previous?.status==='READY'&&finite(previous.r2)&&finite(row.delta_r2)&&row.delta_r2>0)
               picture.append(svg('rect',{x:Math.max(0,previous.r2)*1000,y:0,width:Math.min(total,row.delta_r2*1000),height:24,class:'wme-bar-gain'}));
             button.append(picture);
@@ -270,7 +280,8 @@
         cards.append(card);
       }
       chart.append(cards);
-      inspect(rows.includes(active)?active:rows.find(r=>finite(r.delta_r2))||rows[0]);
+      const visible=plotPoints.map(([,row])=>row);
+      inspect(visible.includes(active)?active:visible.find(r=>finite(r.delta_r2))||visible[0]);
     }
     async function run(preview=false){
       if(!input)return;remember();const token=++serial;dirty=false;update.disabled=true;download.disabled=true;chart.replaceChildren();evidence.replaceChildren();
