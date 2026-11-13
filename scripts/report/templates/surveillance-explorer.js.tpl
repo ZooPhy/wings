@@ -1819,6 +1819,9 @@
         this.treeGridNode.appendChild(card);
         this.renderTree(segment, card.querySelector(".wse-tree"), card.querySelector(".wse-panel-note"));
       });
+      // Details may redraw asynchronously after a sample has been selected.
+      // Rebuilt cards must retain that sample's per-segment status labels.
+      this.renderGenomeEvidence();
     }
 
     renderTree(segment, target, note) {

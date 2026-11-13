@@ -116,7 +116,16 @@ const payload = JSON.parse(fixture.stdout);
     await load(missing);
     await page.selectOption(".wse-app-sample", "complete");
     assert.equal(await page.locator(".wse-segment-tree").count(), 8);
+    // Opening the details schedules a tree redraw. Force it to run AFTER
+    // sample selection so status labels cannot be lost in a timing race.
+    await page.evaluate(() => new Promise(resolve => {
+      const details = document.querySelector('.wse-genome-details-summary').closest('details');
+      details.dispatchEvent(new Event('toggle'));
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
     assert.match(await presence("NS"), /Tree unavailable/);
+    assert.match(await presence("HA"), /Sample present/);
+    assert.equal(await selected(), 7);
     assert.equal(await page.locator('.wse-segment-tab[data-segment="NS"]').isDisabled(), true);
 
     const legacy = structuredClone(payload);
