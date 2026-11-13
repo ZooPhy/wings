@@ -28,6 +28,8 @@
 @@WINGS:scripts/report/tree-studio.js@@
 /* WINGS_TREE_STUDIO_JS_END */
 /* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_UI_BEGIN */
+@@WINGS:scripts/report/concordance-model-explorer.js@@
+
 @@WINGS:scripts/report/genomic-ecological-concordance.js@@
 /* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_UI_END */
 /* WINGS_BRAID_CLOCK_JS_BEGIN */

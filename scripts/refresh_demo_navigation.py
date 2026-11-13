@@ -16,6 +16,7 @@ import refresh_demo_ui as ui
 from refresh_saved_explorer_ui import refresh_sample_html, remove_refresh_notice
 import wings_bundle_format as codec
 from refresh_demo_qc_copy import refresh_html as refresh_qc_html
+from refresh_concordance_inputs import enrich_report
 
 
 def build_refresh(bundle, assets, sample_css, sample_js):
@@ -32,6 +33,7 @@ def build_refresh(bundle, assets, sample_css, sample_js):
     summary['html'], labels = ui.refresh_html(summary['html'], assets)
     summary['html'] = remove_refresh_notice(summary['html'])
     summary['html'] = refresh_qc_html(summary['html'])
+    summary['html'] = enrich_report(summary['html'])
     for sample in samples.values():
         sample['html'] = refresh_sample_html(remove_refresh_notice(sample['html']), sample_css, sample_js, ui)
     # Only report HTML may change. Metadata, calls and provenance stay exact.

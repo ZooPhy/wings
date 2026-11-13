@@ -17,7 +17,9 @@
     "scripts/report/genome-braid-clock.js",
     "scripts/report/genomic-ecological-concordance.css",
     "scripts/report/genome-braid-clock.css",
-    "scripts/report/tree-studio.css"
+    "scripts/report/tree-studio.css",
+    "scripts/report/concordance-model-explorer.js",
+    "scripts/report/concordance-model-explorer.css"
   ],
   "outputs": {
     "scripts/report/sample-navigation.js": "scripts/report/templates/sample-navigation.js.tpl",

@@ -9,7 +9,7 @@ const context = vm.createContext({});
 vm.runInContext(source, context);
 
 test('exports concordance report module', () => {
-  assert.equal(context.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE.VERSION, '0.3.1');
+  assert.equal(context.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE.VERSION, '0.4.0');
   assert.equal(typeof context.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE.mount, 'function');
 });
 

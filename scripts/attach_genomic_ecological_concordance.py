@@ -47,6 +47,12 @@ def compact_concordance(data: dict[str, Any]) -> dict[str, Any]:
             "results/run_summary/concordance/concordance.json",
         ],
     }
+    if isinstance(data.get("pairs"), list) and len(data["pairs"]) <= 200000 and isinstance(data.get("sample_features"), list):
+        keep["interactive_inputs"] = {
+            "schema_version": "wings.concordance-interactive.v1",
+            "pairs": [dict(row) for row in data["pairs"]],
+            "sample_features": [dict(row) for row in data["sample_features"]],
+        }
     return keep
 
 

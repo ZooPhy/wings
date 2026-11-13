@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.3.1";
+  const VERSION = "0.4.0";
   const SEGMENTS = ["HA", "NA", "PB2", "PB1", "PA", "NP", "MP", "NS"];
   const FAMILIES = [
     ["host_vs_baseline", "Host effect"],
@@ -399,6 +399,7 @@
   }
 
   function render(explorer, panel) {
+    explorer.modelExplorer?.cancel();
     panel.innerHTML = "";
     panel.classList.add("wgec-panel");
     const data = explorer?.payload?.genomic_ecological_concordance;
@@ -408,7 +409,7 @@
     titleWrap.append(
       make("div", "wgec-kicker", "Research module"),
       make("h3", "wgec-title", "Genomic–Ecological Concordance"),
-      make("p", "wgec-intro", "Tests whether host, seasonal ecology, migration context, and local weather explain genomic distance beyond time and geography.")
+      make("p", "wgec-intro", "Explore whether genetic differences are associated with collection timing, location, host species, seasonal bird patterns, weather, or migration.")
     );
     head.append(titleWrap, make("span", "wgec-badge", "Exploratory"));
     panel.append(head);
@@ -424,7 +425,10 @@
     }
 
     const models = data.models;
-    panel.append(summaryBox(data, models));
+    if (globalThis.WINGS_MODEL_EXPLORER) explorer.modelExplorer = globalThis.WINGS_MODEL_EXPLORER.mount(explorer, panel);
+    const savedOverview = make("details", "wgec-saved-overview");
+    savedOverview.append(make("summary", "", "Saved run overview"), summaryBox(data, models));
+    panel.append(savedOverview);
 
     const readiness = data.readiness || {};
     const metrics = make("div", "wgec-metrics");
@@ -445,7 +449,7 @@
       metric("Samples with migration data", readiness.samples_with_migration_context ?? "—", "matched night and complete spring/fall season for the state and year"),
       metric("Distinct migration settings", readiness.distinct_migration_contexts ?? "—", "unique state + night combinations; samples sharing a night count once")
     );
-    panel.append(metrics);
+    panel.append(make("p", "wgec-data-scope", "Data available in the saved run — comparison filters apply to the model explorer above."), metrics);
 
     if(data.migration_context) panel.append(migrationMap(explorer,data));
 
@@ -469,7 +473,7 @@
     table.append(thead, tbody);
     wrap.append(table);
     const method = make("details", "wgec-method");
-    const summary = make("summary", "", "Methods and interpretation guardrails");
+    const summary = make("summary", "", "Technical methods");
     const body = make("div", "wgec-method-body");
 
     const modelList = make("ul");
@@ -495,7 +499,18 @@
       make("p", "wgec-guardrail", "Pair rows share biological samples and are not independent observations. Unique-sample counts are therefore shown for every comparison. Concordance is not evidence of direct transmission, infection source, reassortment, or causality.")
     );
     const outputs = make("p", "wgec-outputs", `Detailed outputs: ${(data.detailed_outputs || []).join(" · ")}`);
-    body.append(outputs);
+    const locations = make("details", "wgec-output-locations");
+    locations.append(make("summary", "", "Output file locations"), outputs);
+    const download = make("button", "wgec-download", "Download detailed results");
+    download.type = "button";
+    download.addEventListener("click", () => {
+      const inputs = data.interactive_inputs || {};
+      const blob = new Blob([JSON.stringify({...data, pairs: inputs.pairs, sample_features: inputs.sample_features}, null, 2)], {type: "application/json"});
+      const url = URL.createObjectURL(blob), a = make("a");
+      a.href = url; a.download = "concordance.json"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    body.append(download, locations);
     method.append(summary, body);
     const link = make("a", "wgec-statistics-link", "View detailed statistical comparisons ↗");
     link.href = "about:blank";
@@ -527,6 +542,7 @@
       definitions.append(list);
       for (const node of [header, definitions, wrap, method]) main.append(doc.importNode(node, true));
       main.querySelector(".wgec-method").open = true;
+      main.querySelector(".wgec-download")?.addEventListener("click", () => download.click());
       doc.body.replaceChildren(main);
       notice.textContent = "Detailed comparisons opened in a new tab.";
     });

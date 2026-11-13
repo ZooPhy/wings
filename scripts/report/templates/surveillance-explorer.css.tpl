@@ -587,6 +587,8 @@
 /* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_END */
 
 /* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_BEGIN */
+@@WINGS:scripts/report/concordance-model-explorer.css@@
+
 @@WINGS:scripts/report/genomic-ecological-concordance.css#base@@
 /* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_CSS_END */
 
