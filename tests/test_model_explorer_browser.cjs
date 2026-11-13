@@ -88,7 +88,7 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     assert.equal(await page.locator('.wme-migration .wme-cohort').innerText(),'10 samples · 45 pairs');
     assert.equal(await page.locator('.wme-migration .wme-model-unavailable').count(),2);
     assert.match(await page.locator('.wme-migration').innerText(),/Only 1 distinct migration setting; at least 8/);
-    assert.match(await page.locator('.wme-migration .wme-model-row').first().innerText(),/The starting model includes factors/);
+    assert.match(await page.locator('.wme-migration .wme-model-row').first().innerText(),/Among these 10 eligible samples, the starting-model predictors contain redundant information/);
     await page.locator('.wme-migration .wme-model-row').last().focus();
     await page.keyboard.press('Enter');
     assert.match(await page.locator('.wme-evidence').innerText(),/Only 1 distinct migration setting; at least 8/);
