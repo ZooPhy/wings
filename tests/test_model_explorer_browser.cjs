@@ -36,7 +36,7 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     await page.setViewportSize({width:1280,height:1000});
 
     await page.locator('.wme-model-row').last().focus();
-    assert.match(await page.locator('.wme-evidence').innerText(),/Add seasonal patterns/);
+    assert.match(await page.locator('.wme-evidence').innerText(),/Time & Location & Host & Seasonal Patterns/);
     const selects=page.locator('.wme-controls select');
     await selects.nth(3).selectOption('0');
     assert.match(await page.locator('.wme-status').innerText(),/Selection changed/);

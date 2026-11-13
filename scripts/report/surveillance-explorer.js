@@ -2437,11 +2437,30 @@ THIS SOFTWARE.
     function remember(){explorer.modelExplorerSettings={host:host.value,region:region.value,start:start.value,end:end.value,support:support.value,samples:[...sampleChecks].filter(([,c])=>c.checked).map(([id])=>id),factors:Object.keys(checks).filter(k=>checks[k].checked)};}
     function markDirty(){serial++;dirty=true;remember();sampleCount();status.textContent='Selection changed. Select Update comparison to calculate these settings.';chart.replaceChildren();evidence.replaceChildren();download.disabled=true;update.disabled=!input;}
     function readable(code){return ({INSUFFICIENT_UNIQUE_SAMPLES:'Too few distinct samples',INSUFFICIENT_COMPLETE_PAIRS:'Too few complete sample pairs',INSUFFICIENT_PREDICTOR_VARIATION:'This factor does not vary enough',INSUFFICIENT_INDEPENDENT_VARIATION:'This factor cannot be separated from those already included',CONSTANT_GENETIC_DISTANCE:'No genetic-distance variation',INSUFFICIENT_MIGRATION_CONTEXTS:'Too few distinct migration settings'})[code]||'Unavailable';}
+    function modelTerms(row){
+      const first=(result?.results||[]).find(r=>r.segment===row.segment&&r.path===row.path)===row;
+      const recorded=row.predictors??(first?row.reduced_predictors:row.full_predictors);
+      const predictors=Array.isArray(recorded)?recorded:typeof recorded==='string'?recorded.split(',').map(p=>p.trim()):null;
+      const names={host:'Host',seasonal:'Seasonal Patterns',weather:'Weather',migration:'Migration'};
+      // Legacy summaries without predictor names use their recorded comparison stage.
+      const fallback={baseline:[],host:['host'],seasonal:['host','seasonal'],weather:['host','seasonal','weather'],migration:['host','seasonal','migration']};
+      const factors=predictors?Object.keys(FACTORS).filter(key=>predictors.includes(FACTORS[key])):fallback[row.code]||[];
+      return {prefix:'Time & Location',factors:factors.map(key=>({text:names[key],added:!first&&key===row.code}))};
+    }
+    function modelText(row){const terms=modelTerms(row);return [terms.prefix,...terms.factors.map(f=>f.text)].join(' & ');}
+    function modelLabel(row,tag,cls){
+      const terms=modelTerms(row),label=make(tag,cls);label.append(make('span','',terms.prefix));
+      for(const factor of terms.factors){
+        // Keep the separating space outside the accent so copied labels read naturally.
+        label.append(make('span','',' '),make('span',factor.added?'wme-added-factor':'','& '+factor.text));
+      }
+      return label;
+    }
     function inspect(row){
       active=row;for(const [point,value] of plotPoints)point.setAttribute('aria-pressed',String(value===row));
       evidence.replaceChildren();
       const summary=make('div','wme-detail-summary'),details=make('div','wme-detail-body');
-      summary.append(make('span','wme-kicker','SELECTED MODEL'),make('h4','',row.label),make('p','',`${row.segment} · ${PATH_LABELS[row.path]||row.path}`),make('strong','wme-value',row.status==='READY'?percent(row.r2):'Not estimable'));
+      summary.append(make('span','wme-kicker','SELECTED MODEL'),modelLabel(row,'h4',''),make('p','',`${row.segment} · ${PATH_LABELS[row.path]||row.path}`),make('strong','wme-value',row.status==='READY'?percent(row.r2):'Not estimable'));
       summary.append(make('p','',row.status==='READY'?'Genetic variation explained by this model.':readable(row.status)+'.'));
       details.append(make('p','',`${row.n_samples} distinct samples · ${row.n_pairs} pairs`));
       if(Number.isInteger(row.n_candidate_pairs))details.append(make('p','',`${row.n_candidate_pairs-row.n_pairs} pairs excluded for missing inputs. ${row.n_selected-row.n_samples} selected samples are not represented in this comparison.`));
@@ -2487,7 +2506,7 @@ THIS SOFTWARE.
           const button=make('button','wme-model-row'+(ready?'':' wme-model-unavailable'));button.type='button';
           button.setAttribute('aria-pressed','false');button.setAttribute('data-model-code',row.code);
           const heading=make('span','wme-row-heading');
-          heading.append(make('span','wme-row-label',row.label),make('strong','wme-row-value',ready?percent(row.r2):'Not estimable'));
+          heading.append(modelLabel(row,'span','wme-row-label'),make('strong','wme-row-value',ready?percent(row.r2):'Not estimable'));
           button.append(heading);
           if(ready){
             const picture=svg('svg',{viewBox:'0 0 1000 24',preserveAspectRatio:'none','aria-hidden':'true',class:'wme-bar'});
@@ -2500,17 +2519,17 @@ THIS SOFTWARE.
             button.append(picture);
             const detail=finite(row.delta_r2)?'Added explanatory value: '+gain(row.delta_r2):row.code==='baseline'?'Starting model: time and location':index===0?'Starting fit for this saved comparison':'Added explanatory value unavailable';
             button.append(make('span','wme-row-detail',detail));
-            button.setAttribute('aria-label',`${row.label}: ${percent(row.r2)} genetic variation explained. ${detail}. ${first.n_samples} samples. Select for details.`);
+            button.setAttribute('aria-label',`${modelText(row)}: ${percent(row.r2)} genetic variation explained. ${detail}. ${first.n_samples} samples. Select for details.`);
           }else{
             const explanation=reason(row,previous);
             button.append(make('span','wme-row-detail',explanation));
-            button.setAttribute('aria-label',`${row.label}: not estimable. ${explanation} Select for details.`);
+            button.setAttribute('aria-label',`${modelText(row)}: not estimable. ${explanation} Select for details.`);
           }
           plotPoints.push([button,row]);
           button.addEventListener('click',()=>inspect(row));button.addEventListener('focus',()=>inspect(row));
           card.append(button);
         }
-        card.append(make('p','wme-card-note','Each step includes the factors above it. Gold shows added explanatory value.'));
+        card.append(make('p','wme-card-note','Gold labels identify the factor added at each step. Gold bar sections show its added explanatory value.'));
         cards.append(card);
       }
       chart.append(cards);

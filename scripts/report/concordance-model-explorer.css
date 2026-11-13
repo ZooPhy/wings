@@ -20,3 +20,5 @@
 
 @container(max-width:760px){.wme-evidence{grid-template-columns:minmax(0,1fr);gap:10px}}
 @media(max-width:650px){.wme-evidence{grid-template-columns:minmax(0,1fr);gap:10px}}
+
+.wme-added-factor{display:inline-block;max-width:100%;vertical-align:baseline;color:#FFC627;background:#263b43;padding:2px 5px;border-radius:4px;box-decoration-break:clone;-webkit-box-decoration-break:clone}.wme-row-label{line-height:1.7;min-width:0}.wme-detail-summary h4{line-height:1.6}.wme-row-heading{align-items:flex-start}
