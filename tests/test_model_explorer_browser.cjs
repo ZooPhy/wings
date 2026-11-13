@@ -17,29 +17,25 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
       window.controller=WINGS_MODEL_EXPLORER.mount(input,document.getElementById('app'));
     },fixture);
     await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Fit preview ready'));
-    assert.equal(await page.locator('.wme-chart [role=button]').count(),3);
+    assert.equal(await page.locator('.wme-model-row').count(),3);
     // Quarto places semantic <aside> elements into a margin grid column.
     // Reproduce that host rule, then verify every marker remains in the plot.
     await page.addStyleTag({content:'.quarto-layout aside { grid-column:4; width:640px; } #app { max-width:100%; }'});
     await page.locator('#app').evaluate(el=>el.classList.add('quarto-layout'));
     for(const width of [1600,1024,768,390]){
       await page.setViewportSize({width,height:1000});
-      await page.waitForFunction(()=>{
-        const chart=document.querySelector('.wme-chart'),picture=chart.querySelector('svg');
-        return Math.abs(picture.viewBox.baseVal.width-Math.max(300,chart.clientWidth))<2;
-      });
       assert.ok(await page.evaluate(()=>{
         const chart=document.querySelector('.wme-chart'),bounds=chart.getBoundingClientRect();
-        const circles=[...chart.querySelectorAll('[role=button] circle')];
-        return chart.scrollWidth<=chart.clientWidth+1&&circles.every(c=>{
-          const r=c.getBoundingClientRect();return r.left>=bounds.left-1&&r.right<=bounds.right+1;
+        const bars=[...chart.querySelectorAll('.wme-bar')];
+        return bars.length===3&&chart.scrollWidth<=chart.clientWidth+1&&bars.every(bar=>{
+          const r=bar.getBoundingClientRect();return r.left>=bounds.left-1&&r.right<=bounds.right+1;
         });
-      }),'All model markers must be visible without horizontal scrolling at '+width);
+      }),'All model bars must be visible without horizontal scrolling at '+width);
       if(width<=1024)assert.ok(await page.evaluate(()=>document.querySelector('.wme-evidence').getBoundingClientRect().top>=document.querySelector('.wme-chart').getBoundingClientRect().bottom));
     }
     await page.setViewportSize({width:1280,height:1000});
 
-    await page.locator('.wme-chart [role=button]').last().focus();
+    await page.locator('.wme-model-row').last().focus();
     assert.match(await page.locator('.wme-evidence').innerText(),/Add seasonal patterns/);
     const selects=page.locator('.wme-controls select');
     await selects.nth(3).selectOption('0');
@@ -49,8 +45,10 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     await page.locator('.wme-factors label').nth(3).locator('input').check();
     await page.getByRole('button',{name:'Update comparison',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
-    assert.match(await page.locator('.wme-path-legend').innerText(),/Weather path/);
-    assert.match(await page.locator('.wme-path-legend').innerText(),/Migration path/);
+    assert.equal(await page.locator('.wme-comparison').count(),2);
+    assert.deepEqual(await page.locator('.wme-comparison h4').allTextContents(),['Weather comparison','Migration comparison']);
+    assert.equal(await page.getByText('Weather / migration',{exact:true}).count(),0);
+    assert.equal(await page.locator('.wme-chart path').count(),0);
     const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download comparison',exact:true}).click();assert.equal((await download).suggestedFilename(),'wings-model-comparison.json');
     await page.setViewportSize({width:390,height:844});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1));
@@ -58,7 +56,42 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     await page.getByRole('button',{name:'Update comparison',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
     assert.match(await page.locator('.wme-evidence').innerText(),/Too few distinct samples/);
-    assert.equal(await page.locator('.wme-chart [role=button]').count(),0);
+    assert.equal(await page.locator('.wme-bar').count(),0);
+    assert.equal(await page.locator('.wme-model-unavailable').count(),8);
+    // Different cohorts and only a migration baseline must remain explicit.
+    await page.evaluate(f=>{
+      controller.cancel();document.getElementById('app').replaceChildren();delete input.modelExplorerSettings;
+      f.pairs.forEach(r=>{
+        r.environmental_distance=r.same_host;
+        r.migration_context_distance=(['S01','S02'].includes(r.sample_a)||['S01','S02'].includes(r.sample_b))?null:r.temporal_days;
+        r.same_host=r.temporal_days;
+        r.seasonal_profile_distance=r.geographic_km;
+      });
+      f.sample_features.forEach(s=>s.migration_context_key='one setting');
+      input.payload.genomic_ecological_concordance.interactive_inputs=f;
+      controller=WINGS_MODEL_EXPLORER.mount(input,document.getElementById('app'));
+    },fixture);
+    await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Fit preview ready'));
+    await page.locator('.wme-controls select').nth(3).selectOption('0');
+    await page.locator('.wme-factors label').nth(2).locator('input').check();
+    await page.locator('.wme-factors label').nth(3).locator('input').check();
+    await page.getByRole('button',{name:'Update comparison',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
+    assert.equal(await page.locator('.wme-comparison').count(),2);
+    assert.equal(await page.locator('.wme-migration .wme-bar').count(),1);
+    assert.equal(await page.locator('.wme-comparison').first().locator('.wme-cohort').innerText(),'12 samples · 66 pairs');
+    assert.equal(await page.locator('.wme-migration .wme-cohort').innerText(),'10 samples · 45 pairs');
+    assert.equal(await page.locator('.wme-migration .wme-model-unavailable').count(),3);
+    assert.match(await page.locator('.wme-migration').innerText(),/Only 1 distinct migration setting; at least 8/);
+    assert.match(await page.locator('.wme-migration .wme-model-row').first().innerText(),/Starting model: time and location/);
+    await page.locator('.wme-migration .wme-model-row').last().focus();
+    await page.keyboard.press('Enter');
+    assert.match(await page.locator('.wme-evidence').innerText(),/Too few distinct migration settings/);
+    assert.equal(await page.locator('.wme-migration .wme-model-row').last().getAttribute('aria-pressed'),'true');
+    for(const width of [1600,1024,390]){
+      await page.setViewportSize({width,height:1000});
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1));
+    }
     // Exercise the real enclosing Concordance renderer: sample selection calls
     // its refresh method, not the model controller's refreshView method.
     await page.addScriptTag({path:path.join(__dirname,'../scripts/report/genomic-ecological-concordance.js')});
@@ -110,6 +143,6 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     assert.equal(await page.evaluate(()=>input.modelExplorer===loaded&&input.modelExplorer.getResult().scope==='browser-refit'),true);
     assert.equal(await page.locator('.wme-legacy').isVisible(),false);
     assert.deepEqual(errors,[]);
-    console.log('PASS: model exploration, mobile layout, completed and in-flight checks, dirty filters, imported inputs, and replacement datasets');
+    console.log('PASS: comparison cards, unavailable rows, keyboard selection, mobile layout, completed and in-flight checks, dirty filters, imported inputs, and replacement datasets');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

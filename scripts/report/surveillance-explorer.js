@@ -2292,7 +2292,7 @@ THIS SOFTWARE.
   const finite=x=>typeof x==='number'&&Number.isFinite(x);
   const BASE=['temporal_days','geographic_km'];
   const FACTORS={host:'same_host',seasonal:'seasonal_profile_distance',weather:'environmental_distance',migration:'migration_context_distance'};
-  const PATH_LABELS={seasonal:'Core model',weather:'Weather path',migration:'Migration path',host_vs_baseline:'Saved host comparison',ecology_vs_host:'Saved seasonal comparison',environment_vs_ecology:'Saved weather comparison',migration_vs_ecology:'Saved migration comparison'};
+  const PATH_LABELS={seasonal:'Core comparison',weather:'Weather comparison',migration:'Migration comparison',host_vs_baseline:'Saved host comparison',ecology_vs_host:'Saved seasonal comparison',environment_vs_ecology:'Saved weather comparison',migration_vs_ecology:'Saved migration comparison'};
   const LABELS={baseline:'Time & location',host:'Add host',seasonal:'Add seasonal patterns',weather:'Add weather',migration:'Add migration'};
   const pairKey=(a,b)=>JSON.stringify(a<b?[a,b]:[b,a]);
   const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);
@@ -2409,7 +2409,7 @@ THIS SOFTWARE.
     const data=explorer.payload.genomic_ecological_concordance,samples=explorer.payload.samples||[],savedSettings=explorer.modelExplorerSettings;
     let input=data.interactive_inputs||null,result=null,serial=0,dirty=false,active=null,plotPoints=[],inputError='';
     if(input&&(explorer.payload.synthetic===true||explorer.payload.ecological_clock?.synthetic===true))input={...input,synthetic:true};
-    const panel=make('section','wme'),head=make('div','wme-heading');head.append(make('span','wme-kicker','MODEL EXPLORER'),make('h4','','What helps explain genetic differences?'),make('p','','Follow each model from time and location to the factors you choose. Click a point for its results.'));
+    const panel=make('section','wme'),head=make('div','wme-heading');head.append(make('span','wme-kicker','MODEL EXPLORER'),make('h4','','What helps explain genetic differences?'),make('p','','Compare model fits as factors are added. Select a row for statistical support and sample exclusions.'));
     const controls=make('div','wme-controls'),status=make('p','wme-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     const view=make('div','wme-view'),chart=make('div','wme-chart'),evidence=make('div','wme-evidence');evidence.setAttribute('role','complementary');evidence.setAttribute('aria-label','Model details');evidence.setAttribute('aria-live','polite');view.append(chart,evidence);
     const control=(label,el)=>{const wrap=make('label');wrap.append(make('span','',label),el);controls.append(wrap);return el;};
@@ -2421,14 +2421,14 @@ THIS SOFTWARE.
     const support=control('Statistical checks',select([['999','999 randomized comparisons'],['199','199 — quicker exploration'],['0','Fit only']]));
     const factors=make('fieldset','wme-factors');factors.append(make('legend','','Factors included'));const checks={};
     for(const [key,label] of [['host','Host'],['seasonal','Seasonal bird patterns'],['weather','Weather'],['migration','Migration']]){const l=make('label'),c=make('input');c.type='checkbox';c.checked=key==='host'||key==='seasonal';checks[key]=c;l.append(c,make('span','',label));factors.append(l);}
-    factors.append(make('small','','Time and location are always included. Weather and migration form separate paths.'));
+    factors.append(make('small','','Time and location are always included. Weather and migration are evaluated separately, using the samples with complete inputs for each comparison.'));
     const chooser=make('details','wme-sample-picker'),sampleSummary=make('summary'),sampleSearch=make('input');sampleSearch.type='search';sampleSearch.placeholder='Find a sample';sampleSearch.setAttribute('aria-label','Find a comparison sample');
     const sampleList=make('div','wme-sample-list'),sampleChecks=new Map(),sampleLabels=[];
     for(const s of samples){const label=make('label'),c=make('input');c.type='checkbox';c.checked=true;sampleChecks.set(s.sample_id,c);label.append(c,make('span','',s.sample_id));sampleList.append(label);sampleLabels.push([s.sample_id,label]);}
     const pickActions=make('div','wme-actions');for(const [label,value] of [['Select all',true],['Clear all',false]]){const b=make('button','',label);b.type='button';b.addEventListener('click',()=>{for(const c of sampleChecks.values())c.checked=value;markDirty();});pickActions.append(b);}
     chooser.append(sampleSummary,sampleSearch,pickActions,sampleList);
     const actions=make('div','wme-actions'),update=make('button','wme-primary','Update comparison'),reset=make('button','','Reset filters'),download=make('button','','Download comparison');for(const b of [update,reset,download])b.type='button';download.disabled=true;actions.append(update,reset,download);
-    const note=make('p','wme-note','Each colored path uses the same complete-data pairs at every step. Paths can include different samples. Changing filters recalculates the models; it does not change the saved run results.');
+    const note=make('p','wme-note','Each card uses the same samples and complete-data pairs at every step. Cards may use different samples, so their percentages are not a direct comparison of weather and migration. Changing filters recalculates the models; saved run results stay unchanged.');
     const methods=make('details','wme-methods');methods.append(make('summary','','How these comparisons are calculated'),make('p','','Nested linear models use the same complete-data pairs within each path. Statistical checks shuffle sample labels in the reduced-model residual matrix, retaining reduced-model fitted values. Adjusted q values use Benjamini–Hochberg correction across segments separately for each path and added factor. Weather distances keep the original run standardization. Migration uses the fixed collection night; repeated contexts have no migration p or q value. All associations are exploratory and do not establish transmission or cause and effect.'));
     const legacy=make('div','wme-legacy'),file=make('input');file.type='file';file.accept='.json,application/json';const fileLabel=make('label','','Load analysis data (concordance.json)');fileLabel.append(file);legacy.append(make('p','','Older reports may contain saved summaries only. Load this run’s concordance.json to enable recalculation.'),fileLabel);
     panel.append(head,controls,factors,chooser,actions,status,view,note,methods,legacy);container.append(panel);
@@ -2437,45 +2437,83 @@ THIS SOFTWARE.
     function remember(){explorer.modelExplorerSettings={host:host.value,region:region.value,start:start.value,end:end.value,support:support.value,samples:[...sampleChecks].filter(([,c])=>c.checked).map(([id])=>id),factors:Object.keys(checks).filter(k=>checks[k].checked)};}
     function markDirty(){serial++;dirty=true;remember();sampleCount();status.textContent='Selection changed. Select Update comparison to calculate these settings.';chart.replaceChildren();evidence.replaceChildren();download.disabled=true;update.disabled=!input;}
     function readable(code){return ({INSUFFICIENT_UNIQUE_SAMPLES:'Too few distinct samples',INSUFFICIENT_COMPLETE_PAIRS:'Too few complete sample pairs',INSUFFICIENT_PREDICTOR_VARIATION:'This factor does not vary enough',INSUFFICIENT_INDEPENDENT_VARIATION:'This factor cannot be separated from those already included',CONSTANT_GENETIC_DISTANCE:'No genetic-distance variation',INSUFFICIENT_MIGRATION_CONTEXTS:'Too few distinct migration settings'})[code]||'Unavailable';}
-    function inspect(row){active=row;for(const [point,value] of plotPoints)point.setAttribute('aria-pressed',String(value===row));evidence.replaceChildren();evidence.append(make('h4','',row.label),make('p','',`${row.segment} · ${PATH_LABELS[row.path]||row.path}`),make('strong','wme-value',row.status==='READY'?percent(row.r2):readable(row.status)));
-      if(row.status==='READY')evidence.append(make('p','','Genetic variation explained by this model.'));
-      evidence.append(make('p','',`${row.n_samples} distinct samples · ${row.n_pairs} pairs`));
-      if(Number.isInteger(row.n_candidate_pairs))evidence.append(make('p','',`${row.n_candidate_pairs-row.n_pairs} pairs excluded for missing inputs. ${row.n_selected-row.n_samples} selected samples are not represented in this path.`));
-      if(finite(row.delta_r2))evidence.append(make('p','',`Added explanatory value: ${(100*row.delta_r2).toFixed(1)} percentage points`));
-      if(finite(row.fdr_q)&&finite(row.permutation_p))evidence.append(make('p','',row.fdr_q<.05?'Statistical support after adjustment across segments.':'No statistical support at the 0.05 adjusted threshold.'),make('p','',`Adjusted q: ${row.fdr_q.toPrecision(3)} · p: ${row.permutation_p.toPrecision(3)}`));
-      else if(row.code!=='baseline')evidence.append(make('p','',row.descriptive_reason||'Statistical support is unavailable.'));
-      if(finite(row.permutation_p))evidence.append(make('p','',`Valid randomized comparisons: ${row.permutations_valid} of ${row.permutations_requested??result?.options?.permutations??'not recorded'}`));
-      if(Number.isInteger(row.n_migration_contexts))evidence.append(make('p','',`${row.n_migration_contexts} distinct migration settings`));
+    function inspect(row){
+      active=row;for(const [point,value] of plotPoints)point.setAttribute('aria-pressed',String(value===row));
+      evidence.replaceChildren();
+      const summary=make('div','wme-detail-summary'),details=make('div','wme-detail-body');
+      summary.append(make('span','wme-kicker','SELECTED MODEL'),make('h4','',row.label),make('p','',`${row.segment} · ${PATH_LABELS[row.path]||row.path}`),make('strong','wme-value',row.status==='READY'?percent(row.r2):'Not estimable'));
+      summary.append(make('p','',row.status==='READY'?'Genetic variation explained by this model.':readable(row.status)+'.'));
+      details.append(make('p','',`${row.n_samples} distinct samples · ${row.n_pairs} pairs`));
+      if(Number.isInteger(row.n_candidate_pairs))details.append(make('p','',`${row.n_candidate_pairs-row.n_pairs} pairs excluded for missing inputs. ${row.n_selected-row.n_samples} selected samples are not represented in this comparison.`));
+      if(finite(row.delta_r2))details.append(make('p','',`Added explanatory value: ${gain(row.delta_r2)}`));
+      if(finite(row.fdr_q)&&finite(row.permutation_p))details.append(make('p','',row.fdr_q<.05?'Statistical support after adjustment across segments.':'No statistical support at the 0.05 adjusted threshold.'),make('p','',`Adjusted q: ${row.fdr_q.toPrecision(3)} · p: ${row.permutation_p.toPrecision(3)}`));
+      else if(row.code!=='baseline')details.append(make('p','',row.descriptive_reason||'Statistical support is unavailable.'));
+      if(finite(row.permutation_p))details.append(make('p','',`Valid randomized comparisons: ${row.permutations_valid} of ${row.permutations_requested??result?.options?.permutations??'not recorded'}`));
+      if(Number.isInteger(row.n_migration_contexts))details.append(make('p','',`${row.n_migration_contexts} distinct migration ${row.n_migration_contexts===1?'setting':'settings'}`));
+      evidence.append(summary,details);
+    }
+    function gain(value){
+      const points=100*value;
+      if(Math.abs(points)<1e-9)return '0.0 percentage points';
+      if(Math.abs(points)<.1)return `${points<0?'Decrease':'Increase'} of less than 0.1 percentage points`;
+      return `${points>0?'+':''}${points.toFixed(1)} percentage points`;
+    }
+    function reason(row,previous){
+      if(row.status==='INSUFFICIENT_MIGRATION_CONTEXTS'&&Number.isInteger(row.n_migration_contexts))
+        return `Only ${row.n_migration_contexts} distinct migration ${row.n_migration_contexts===1?'setting':'settings'}; at least ${result?.options?.minimum??data.readiness?.minimum_unique_samples??8} are required.`;
+      if(row.status==='INSUFFICIENT_INDEPENDENT_VARIATION'&&previous&&previous.status!=='READY')
+        return 'This model includes factors that cannot be separated with these samples.';
+      return readable(row.status)+'.';
     }
     function draw(){
-      chart.replaceChildren();evidence.replaceChildren();plotPoints=[];const rows=(result?.results||[]).filter(r=>r.segment===segment.value);
+      chart.replaceChildren();evidence.replaceChildren();plotPoints=[];
+      const rows=(result?.results||[]).filter(r=>r.segment===segment.value);
       if(!rows.length){chart.append(make('p','','No model results are available for this segment.'));return;}
-      const paths=[...new Set(rows.map(r=>r.path))],codes=['baseline','host','seasonal'];if(rows.some(r=>r.code==='weather'||r.code==='migration'))codes.push('context');
-      const used=codes.filter(c=>c==='context'||rows.some(r=>r.code===c));const W=Math.max(300,chart.clientWidth||850),H=360,left=60,right=35,top=45,bottom=85;
-      drawnWidth=chart.clientWidth||0;
-      const x=code=>left+used.indexOf(['weather','migration'].includes(code)?'context':code)*(W-left-right)/Math.max(1,used.length-1),y=v=>H-bottom-v*(H-top-bottom);
-      const picture=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'group','aria-label':'Model progression. Vertical axis: percent of genetic variation explained.'});
-      picture.append(svg('text',{x:left,y:18},'Genetic variation explained'));
-      for(let i=0;i<=4;i++){const v=i/4;picture.append(svg('line',{x1:left,x2:W-right,y1:y(v),y2:y(v),stroke:'#e0e6e8'}),svg('text',{x:left-12,y:y(v)+4,'text-anchor':'end'},`${100*v}%`));}
-      for(const [i,code] of used.entries()){
-        const words=({baseline:['Time &','location'],host:['Add host'],seasonal:['Add seasonal','patterns'],context:['Weather /','migration']})[code];
-        const label=svg('text',{x:x(code),y:H-bottom+27,'text-anchor':i===0?'start':i===used.length-1?'end':'middle'});
-        words.forEach((word,line)=>label.append(svg('tspan',{x:x(code),dy:line?17:0},word)));
-        picture.append(label);
-      }
-      const legend=make('div','wme-path-legend');
-      paths.forEach((path,index)=>{const color=['#8c1d40','#007f84','#80601d','#496ea0'][index%4],line=rows.filter(r=>r.path===path);let prev=null;
-        const label=make('span','',`${PATH_LABELS[path]||path}${path==='migration'?' (dashed)':''} · ${line[0].n_samples} samples · ${line[0].n_pairs} pairs`);label.style.color=color;legend.append(label);
-        for(const row of line){
-          if(row.status!=='READY'||!finite(row.r2)){prev=null;continue;}
-          if(prev)picture.append(svg('path',{d:`M${x(prev.code)},${y(prev.r2)} L${x(row.code)},${y(row.r2)}`,stroke:color,'stroke-width':3,'stroke-dasharray':path==='migration'?'7 5':'none',fill:'none'}));
-          const point=svg('g',{role:'button',tabindex:0,'aria-pressed':'false','aria-label':`${row.label}: ${percent(row.r2)}; ${row.n_samples} samples`});
-          plotPoints.push([point,row]);point.append(svg('circle',{cx:x(row.code),cy:y(row.r2),r:8,fill:color,stroke:'white','stroke-width':2}),svg('title',{},`${row.label}: ${percent(row.r2)}`));
-          point.addEventListener('click',()=>inspect(row));point.addEventListener('focus',()=>inspect(row));point.addEventListener('pointerenter',()=>inspect(row));point.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(row);}});picture.append(point);prev=row;
+      const cards=make('div','wme-comparisons');
+      const paths=[...new Set(rows.map(r=>r.path))];
+      for(const path of paths){
+        const line=rows.filter(r=>r.path===path),first=line[0];
+        const card=make('section','wme-comparison'+(path==='migration'?' wme-migration':''));
+        card.setAttribute('aria-label',PATH_LABELS[path]||path);
+        const heading=make('div','wme-comparison-heading');
+        heading.append(make('span','wme-kicker',segment.value+' · MODEL COMPARISON'),make('h4','',PATH_LABELS[path]||path),make('p','wme-cohort',`${first.n_samples} samples · ${first.n_pairs} pairs`));
+        if(Number.isInteger(first.n_selected))heading.append(make('small','',`${first.n_selected-first.n_samples} of ${first.n_selected} selected samples excluded for missing inputs.`));
+        card.append(heading,make('p','wme-measure','Genetic variation explained (%)'));
+        const scale=make('div','wme-scale');scale.setAttribute('aria-hidden','true');
+        for(const tick of ['0%','50%','100%'])scale.append(make('span','',tick));
+        card.append(scale);
+        for(const [index,row] of line.entries()){
+          const ready=row.status==='READY'&&finite(row.r2),previous=line[index-1];
+          const button=make('button','wme-model-row'+(ready?'':' wme-model-unavailable'));button.type='button';
+          button.setAttribute('aria-pressed','false');button.setAttribute('data-model-code',row.code);
+          const heading=make('span','wme-row-heading');
+          heading.append(make('span','wme-row-label',row.label),make('strong','wme-row-value',ready?percent(row.r2):'Not estimable'));
+          button.append(heading);
+          if(ready){
+            const picture=svg('svg',{viewBox:'0 0 1000 24',preserveAspectRatio:'none','aria-hidden':'true',class:'wme-bar'});
+            const total=Math.max(0,Math.min(1,row.r2))*1000;
+            picture.append(svg('rect',{x:0,y:0,width:1000,height:24,rx:8,class:'wme-bar-track'}));
+            picture.append(svg('rect',{x:0,y:0,width:total,height:24,rx:Math.min(8,total/2),class:'wme-bar-total'}));
+            // Gold shows the increment only when the immediately preceding fit is estimable.
+            if(previous?.status==='READY'&&finite(previous.r2)&&finite(row.delta_r2)&&row.delta_r2>0)
+              picture.append(svg('rect',{x:Math.max(0,previous.r2)*1000,y:0,width:Math.min(total,row.delta_r2*1000),height:24,class:'wme-bar-gain'}));
+            button.append(picture);
+            const detail=finite(row.delta_r2)?'Added explanatory value: '+gain(row.delta_r2):row.code==='baseline'?'Starting model: time and location':index===0?'Starting fit for this saved comparison':'Added explanatory value unavailable';
+            button.append(make('span','wme-row-detail',detail));
+            button.setAttribute('aria-label',`${row.label}: ${percent(row.r2)} genetic variation explained. ${detail}. ${first.n_samples} samples. Select for details.`);
+          }else{
+            const explanation=reason(row,previous);
+            button.append(make('span','wme-row-detail',explanation));
+            button.setAttribute('aria-label',`${row.label}: not estimable. ${explanation} Select for details.`);
+          }
+          plotPoints.push([button,row]);
+          button.addEventListener('click',()=>inspect(row));button.addEventListener('focus',()=>inspect(row));
+          card.append(button);
         }
-      });
-      chart.append(picture,legend);
-      const unavailable=rows.filter(r=>r.status!=='READY');if(unavailable.length){const list=make('ul','wme-unavailable');for(const r of unavailable){const li=make('li'),b=make('button','',`${r.label} (${PATH_LABELS[r.path]||r.path}): ${readable(r.status)}`);b.type='button';b.addEventListener('click',()=>inspect(r));li.append(b);list.append(li);}chart.append(list);}
+        card.append(make('p','wme-card-note','Each step includes the factors above it. Gold shows added explanatory value.'));
+        cards.append(card);
+      }
+      chart.append(cards);
       inspect(rows.includes(active)?active:rows.find(r=>finite(r.delta_r2))||rows[0]);
     }
     async function run(preview=false){
@@ -2484,7 +2522,7 @@ THIS SOFTWARE.
       try{
         status.textContent='Calculating model fits…';
         const next=await analyze(input,{samples:selectedIds(),factors:Object.keys(checks).filter(k=>checks[k].checked),minimum:data.readiness?.minimum_unique_samples??8,permutations:preview?0:Number(support.value)},{alive:()=>token===serial,progress:text=>{if(token===serial)status.textContent=text;}});
-        if(token!==serial)return;result=next;draw();download.disabled=false;status.textContent=preview?'Fit preview ready. Select Update comparison to run the selected statistical checks.':`Comparison updated for ${selectedIds().length} selected samples. ${Number(support.value)===0?'Fit only; statistical support was not calculated.':'Statistical checks recalculated where estimable; select a point for support and exclusions.'}`;
+        if(token!==serial)return;result=next;draw();download.disabled=false;status.textContent=preview?'Fit preview ready. Select Update comparison to run the selected statistical checks.':`Comparison updated for ${selectedIds().length} selected samples. ${Number(support.value)===0?'Fit only; statistical support was not calculated.':'Statistical checks recalculated where estimable; select a row for support and exclusions.'}`;
       }catch(error){if(token===serial&&error.message!=='CANCELLED')status.textContent='Comparison unavailable: '+error.message;}
       finally{if(token===serial)update.disabled=false;}
     }
@@ -2497,7 +2535,7 @@ THIS SOFTWARE.
         results.push({...row,path,code:reducedCode,label:'Before adding '+LABELS[code].replace('Add ',''),r2:row.reduced_r2,status:finite(row.reduced_r2)?'READY':row.display_status||row.status,delta_r2:null,permutation_p:null,fdr_q:null});
         results.push({...row,path,code,label:LABELS[code],r2:row.delta_r2!==null?row.full_r2:null,status:row.delta_r2!==null&&finite(row.full_r2)?'READY':row.display_status||row.status,descriptive_reason:row.display_status==='DESCRIPTIVE'?row.diagnostic:null});
       }
-      result={scope:'saved-results',synthetic:explorer.payload.synthetic===true,results};draw();download.disabled=false;status.textContent='Saved comparisons shown. Each line has its own sample set. Load analysis data to change included samples or factors.';
+      result={scope:'saved-results',synthetic:explorer.payload.synthetic===true,results};draw();download.disabled=false;status.textContent='Saved comparisons shown. Each card has its own sample set. Load analysis data to change included samples or factors.';
     }
     for(const el of [host,region,start,end,support,...Object.values(checks),...sampleChecks.values()])el.addEventListener('change',markDirty);
     segment.addEventListener('change',()=>{if(!dirty)draw();});
@@ -2513,14 +2551,9 @@ THIS SOFTWARE.
     function enable(){for(const el of [host,region,start,end,support,...Object.values(checks),...sampleChecks.values(),reset,...pickActions.children])el.disabled=!input;update.disabled=!input;legacy.hidden=Boolean(input);}
     try{if(input)validateInputs(input,samples.map(s=>s.sample_id));}catch(error){input=null;inputError=error.message;}
     if(savedSettings){host.value=savedSettings.host;region.value=savedSettings.region;start.value=savedSettings.start;end.value=savedSettings.end;support.value=savedSettings.support;for(const [id,c] of sampleChecks)c.checked=savedSettings.samples.includes(id);for(const [k,c] of Object.entries(checks))c.checked=savedSettings.factors.includes(k);}
-    let drawnWidth=0;
-    const resizeObserver=typeof ResizeObserver==='function'?new ResizeObserver(()=>{
-      if(chart.clientWidth>0&&Math.abs(chart.clientWidth-drawnWidth)>1&&result&&!dirty)draw();
-    }):null;
-    resizeObserver?.observe(chart);
     sampleCount();enable();if(input)run(true);else{saved();if(inputError)status.textContent+=' Embedded refit inputs unavailable: '+inputError;}
     return {
-      refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;resizeObserver?.disconnect();},getResult:()=>result,
+      refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;},getResult:()=>result,
       attach:(container,payload)=>{
         if(payload.genomic_ecological_concordance!==data||payload.samples!==samples)return false;
         container.append(panel);
