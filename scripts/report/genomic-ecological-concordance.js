@@ -399,7 +399,7 @@
   }
 
   function render(explorer, panel) {
-    explorer.modelExplorer?.cancel();
+    const previousModel = explorer.modelExplorer;
     panel.innerHTML = "";
     panel.classList.add("wgec-panel");
     const data = explorer?.payload?.genomic_ecological_concordance;
@@ -415,6 +415,8 @@
     panel.append(head);
 
     if (!data || !Array.isArray(data.models)) {
+      previousModel?.cancel();
+      explorer.modelExplorer = null;
       const empty = make("div", "wgec-empty");
       empty.append(
         make("strong", "", "Concordance analysis is not available for this run."),
@@ -425,7 +427,12 @@
     }
 
     const models = data.models;
-    if (globalThis.WINGS_MODEL_EXPLORER) explorer.modelExplorer = globalThis.WINGS_MODEL_EXPLORER.mount(explorer, panel);
+    // Sample highlighting refreshes this panel without changing model inputs.
+    // Keep its live controller, including imported inputs and in-flight checks.
+    if (!previousModel?.attach?.(panel, explorer.payload)) {
+      previousModel?.cancel();
+      explorer.modelExplorer = globalThis.WINGS_MODEL_EXPLORER?.mount(explorer, panel) || null;
+    }
     const savedOverview = make("details", "wgec-saved-overview");
     savedOverview.append(make("summary", "", "Saved run overview"), summaryBox(data, models));
     panel.append(savedOverview);

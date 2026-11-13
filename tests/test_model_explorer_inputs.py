@@ -11,7 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from attach_genomic_ecological_concordance import compact_concordance
 from refresh_concordance_inputs import enrich_report
-from build_genomic_ecological_concordance import _fit, BASELINE, HOST
+from build_genomic_ecological_concordance import _fit, BASELINE, HOST, build
 import refresh_demo_ui as ui
 import refresh_demo_navigation as demo
 import wings_bundle_format as codec
@@ -78,6 +78,8 @@ api.analyze(f,{factors:['host'],permutations:19,seed:17}).then(r=>console.log(JS
                    'trees': {'HA': {'root': {'children': [{'sample_id': 'A', 'name': 'A', 'length': .1},
                                                           {'sample_id': 'B', 'name': 'B', 'length': .2}]}}},
                    'genomic_ecological_concordance': data}
+        payload['genomic_ecological_concordance'] = compact_concordance(build(payload, permutations=0))
+        payload['genomic_ecological_concordance'].pop('interactive_inputs')
         source = '<script type="application/json" id="wings-surveillance-data-0">' + json.dumps(payload) + '</script>'
         updated = enrich_report(source)
         parsed = ui.ReportHTML(updated)
@@ -93,6 +95,8 @@ api.analyze(f,{factors:['host'],permutations:19,seed:17}).then(r=>console.log(JS
         payload = {'samples': [{'sample_id': 'A'}, {'sample_id': 'B'}], 'trees': {},
                    'genomic_ecological_concordance': {'schema_version': 'wings.genomic_ecological_concordance.v3',
                                                       'models': [], 'readiness': {'total_samples': 2}}}
+        payload['genomic_ecological_concordance'] = compact_concordance(build(payload, permutations=0))
+        payload['genomic_ecological_concordance'].pop('interactive_inputs')
         summary = ('<html><head><script>class Explorer {} /* WINGS_MIGRATION_WEAVE_JS_BEGIN */</script>'
                    '<style>.wings-surveillance-explorer {} .wse-genome-controls {}</style>'
                    '<style>:root {--escape-maroon: red} .report-header {}</style></head><body>'

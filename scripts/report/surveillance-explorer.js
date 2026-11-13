@@ -2501,7 +2501,14 @@ THIS SOFTWARE.
     try{if(input)validateInputs(input,samples.map(s=>s.sample_id));}catch(error){input=null;inputError=error.message;}
     if(savedSettings){host.value=savedSettings.host;region.value=savedSettings.region;start.value=savedSettings.start;end.value=savedSettings.end;support.value=savedSettings.support;for(const [id,c] of sampleChecks)c.checked=savedSettings.samples.includes(id);for(const [k,c] of Object.entries(checks))c.checked=savedSettings.factors.includes(k);}
     sampleCount();enable();if(input)run(true);else{saved();if(inputError)status.textContent+=' Embedded refit inputs unavailable: '+inputError;}
-    return {refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;},getResult:()=>result};
+    return {
+      refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;},getResult:()=>result,
+      attach:(container,payload)=>{
+        if(payload.genomic_ecological_concordance!==data||payload.samples!==samples)return false;
+        container.append(panel);
+        return true;
+      }
+    };
   }
   return {SEGMENTS,fit,analyze,validateInputs,adjust,mount};
 });
@@ -2907,7 +2914,7 @@ THIS SOFTWARE.
   }
 
   function render(explorer, panel) {
-    explorer.modelExplorer?.cancel();
+    const previousModel = explorer.modelExplorer;
     panel.innerHTML = "";
     panel.classList.add("wgec-panel");
     const data = explorer?.payload?.genomic_ecological_concordance;
@@ -2923,6 +2930,8 @@ THIS SOFTWARE.
     panel.append(head);
 
     if (!data || !Array.isArray(data.models)) {
+      previousModel?.cancel();
+      explorer.modelExplorer = null;
       const empty = make("div", "wgec-empty");
       empty.append(
         make("strong", "", "Concordance analysis is not available for this run."),
@@ -2933,7 +2942,12 @@ THIS SOFTWARE.
     }
 
     const models = data.models;
-    if (globalThis.WINGS_MODEL_EXPLORER) explorer.modelExplorer = globalThis.WINGS_MODEL_EXPLORER.mount(explorer, panel);
+    // Sample highlighting refreshes this panel without changing model inputs.
+    // Keep its live controller, including imported inputs and in-flight checks.
+    if (!previousModel?.attach?.(panel, explorer.payload)) {
+      previousModel?.cancel();
+      explorer.modelExplorer = globalThis.WINGS_MODEL_EXPLORER?.mount(explorer, panel) || null;
+    }
     const savedOverview = make("details", "wgec-saved-overview");
     savedOverview.append(make("summary", "", "Saved run overview"), summaryBox(data, models));
     panel.append(savedOverview);

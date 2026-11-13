@@ -12,7 +12,7 @@ from refresh_concordance_inputs import enrich_report
 import wings_bundle_format as codec
 
 
-def refresh(repo, source, output=None):
+def refresh(repo, source, output=None, concordance=None):
     repo, source = Path(repo).expanduser().resolve(), Path(source).expanduser().resolve()
     output = Path(output).expanduser().resolve() if output else source.with_name(source.name.removesuffix('.gz').removesuffix('.wings') + '-model-explorer.wings')
     if output.exists() or output == source:
@@ -20,7 +20,8 @@ def refresh(repo, source, output=None):
     original = codec.read_bundle(source)
     updated = copy.deepcopy(original)
     refreshed, _labels = ui.refresh_html(updated['run_summary']['html'], ui.asset_bytes(repo))
-    updated['run_summary']['html'] = enrich_report(refreshed)
+    analysis = json.loads(Path(concordance).expanduser().read_text()) if concordance else None
+    updated['run_summary']['html'] = enrich_report(refreshed, concordance_data=analysis)
     before, after = copy.deepcopy(original), copy.deepcopy(updated)
     before['run_summary'].pop('html')
     after['run_summary'].pop('html')
@@ -44,9 +45,10 @@ def main():
     parser.add_argument('--repo', type=Path, default=Path.cwd())
     parser.add_argument('--input', type=Path, required=True)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--concordance', type=Path, help='Original concordance.json for this run, including pairwise inputs')
     args = parser.parse_args()
     try:
-        refresh(args.repo, args.input, args.output)
+        refresh(args.repo, args.input, args.output, concordance=args.concordance)
     except (OSError, ValueError, KeyError, TypeError) as error:
         print('ERROR: ' + str(error), file=sys.stderr)
         return 1

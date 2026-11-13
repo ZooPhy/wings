@@ -6,6 +6,7 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
   const browser=await chromium.launch({headless:true});
   try{
     const page=await browser.newPage({viewport:{width:1280,height:1000}});
+    page.setDefaultTimeout(15000);
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.setContent('<main id="app"></main>');
     await page.addStyleTag({path:path.join(__dirname,'../scripts/report/concordance-model-explorer.css')});
@@ -37,7 +38,57 @@ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/concordan
     await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
     assert.match(await page.locator('.wme-evidence').innerText(),/Too few distinct samples/);
     assert.equal(await page.locator('.wme-chart [role=button]').count(),0);
+    // Exercise the real enclosing Concordance renderer: sample selection calls
+    // its refresh method, not the model controller's refreshView method.
+    await page.addScriptTag({path:path.join(__dirname,'../scripts/report/genomic-ecological-concordance.js')});
+    await page.evaluate(f=>{
+      controller.cancel();document.getElementById('app').replaceChildren();
+      delete input.modelExplorerSettings;
+      f.pairs.push(...f.pairs.map(r=>({...r,segment:'NP'})));
+      input.payload.genomic_ecological_concordance.interactive_inputs=f;
+      input.selectSample=function(id){this.selectedSampleId=id;this.concordanceController.refresh();};
+      input.concordanceController=WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE.mount(input,document.getElementById('app'));
+    },fixture);
+    await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Fit preview ready'));
+    await page.locator('.wme-controls select').nth(0).selectOption('NP');
+    await page.locator('.wme-controls select').nth(3).selectOption('199');
+    await page.getByRole('button',{name:'Update comparison',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
+    assert.equal(await page.evaluate(()=>{
+      window.finished=input.modelExplorer.getResult();window.live=input.modelExplorer;
+      input.selectSample(input.payload.samples[0].sample_id);
+      return input.modelExplorer===live&&input.modelExplorer.getResult()===finished&&finished.options.permutations===199;
+    }),true);
+    assert.equal(await page.locator('.wme-controls select').first().inputValue(),'NP');
+    assert.ok(await page.evaluate(()=>input.modelExplorer.getResult().results.some(r=>r.segment==='NP'&&r.permutation_p!==null&&r.fdr_q!==null)));
+    // Dirty controls must stay dirty; unrelated selection must not trigger a fit.
+    await page.locator('.wme-controls select').nth(1).selectOption('Host A');
+    await page.evaluate(()=>input.selectSample(input.payload.samples[1].sample_id));
+    assert.equal(await page.locator('.wme-controls select').nth(1).inputValue(),'Host A');
+    assert.match(await page.locator('.wme-status').innerText(),/Selection changed/);
+    assert.equal(await page.locator('.wme-chart svg').count(),0);
+    await page.locator('.wme-controls select').nth(1).selectOption('');
+    // Refresh while a permutation calculation is yielding; it must finish.
+    await page.evaluate(()=>{
+      document.querySelector('.wme-primary').click();
+      input.selectSample(input.payload.samples[2].sample_id);
+    });
+    await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Comparison updated'));
+    assert.equal(await page.evaluate(()=>input.modelExplorer===live&&input.modelExplorer.getResult().options.permutations===199),true);
+    // A replacement dataset must mount a new controller, not reuse stale results.
+    await page.evaluate(()=>{
+      input.payload={...input.payload,genomic_ecological_concordance:{...input.payload.genomic_ecological_concordance,interactive_inputs:null}};
+      input.concordanceController.refresh();
+    });
+    assert.equal(await page.evaluate(()=>input.modelExplorer===live),false);
+    assert.match(await page.locator('.wme-status').innerText(),/Saved comparisons shown/);
+    // Original inputs loaded into a legacy report must survive the same refresh.
+    await page.locator('.wme-legacy input').setInputFiles({name:'concordance.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...fixture,models:[]}))});
+    await page.waitForFunction(()=>document.querySelector('.wme-status').textContent.startsWith('Fit preview ready'));
+    await page.evaluate(()=>{window.loaded=input.modelExplorer;input.selectSample(input.payload.samples[3].sample_id);});
+    assert.equal(await page.evaluate(()=>input.modelExplorer===loaded&&input.modelExplorer.getResult().scope==='browser-refit'),true);
+    assert.equal(await page.locator('.wme-legacy').isVisible(),false);
     assert.deepEqual(errors,[]);
-    console.log('PASS: interactive selection, real refitting, separate branches, keyboard inspection, downloads, unavailable states, and mobile containment');
+    console.log('PASS: model exploration, mobile layout, completed and in-flight checks, dirty filters, imported inputs, and replacement datasets');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

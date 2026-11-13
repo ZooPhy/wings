@@ -221,7 +221,14 @@
     try{if(input)validateInputs(input,samples.map(s=>s.sample_id));}catch(error){input=null;inputError=error.message;}
     if(savedSettings){host.value=savedSettings.host;region.value=savedSettings.region;start.value=savedSettings.start;end.value=savedSettings.end;support.value=savedSettings.support;for(const [id,c] of sampleChecks)c.checked=savedSettings.samples.includes(id);for(const [k,c] of Object.entries(checks))c.checked=savedSettings.factors.includes(k);}
     sampleCount();enable();if(input)run(true);else{saved();if(inputError)status.textContent+=' Embedded refit inputs unavailable: '+inputError;}
-    return {refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;},getResult:()=>result};
+    return {
+      refreshView:()=>{if(!dirty)draw();},cancel:()=>{serial++;},getResult:()=>result,
+      attach:(container,payload)=>{
+        if(payload.genomic_ecological_concordance!==data||payload.samples!==samples)return false;
+        container.append(panel);
+        return true;
+      }
+    };
   }
   return {SEGMENTS,fit,analyze,validateInputs,adjust,mount};
 });
