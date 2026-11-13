@@ -160,8 +160,8 @@
     return {status:values.length ? 'DESCRIPTIVE' : 'NOT_ESTIMABLE', mean:mean(values), available:values.length, pairs, k};
   }
   function validatePhenology(raw) {
-    if (!raw || raw.schema_version !== 'wings.phenology.v1' || !Array.isArray(raw.profiles)) throw new Error('Seasonal abundance data requires schema_version "wings.phenology.v1" and profiles[].');
-    if (typeof raw.synthetic !== 'boolean') throw new Error('Seasonal abundance data must explicitly declare synthetic: true or false.');
+    if (!raw || raw.schema_version !== 'wings.phenology.v1' || !Array.isArray(raw.profiles)) throw new Error('Bird abundance data requires schema_version "wings.phenology.v1" and profiles[].');
+    if (typeof raw.synthetic !== 'boolean') throw new Error('Bird abundance data must explicitly declare synthetic: true or false.');
     const seen = new Set();
     const profiles = raw.profiles.map(p => {
       if (!text(p.profile_id) || seen.has(p.profile_id)) throw new Error('Seasonal bird profile IDs must be unique.');
@@ -173,7 +173,7 @@
       if (!text(p.measure) || !text(p.unit)) throw new Error('A seasonal bird measure and unit are required.');
       const start = strictDate(p.season_start), end = strictDate(p.season_end);
       if (start === null || end === null || end < start) throw new Error('Invalid seasonal abundance interval.');
-      if (!Array.isArray(p.bins)) throw new Error('Seasonal abundance data bins must be an array.');
+      if (!Array.isArray(p.bins)) throw new Error('Bird abundance data bins must be an array.');
       let previous = start-1;
       const bins = p.bins.map(bin => {
         const s = strictDate(bin.start), e = strictDate(bin.end);
@@ -401,7 +401,7 @@
         </style>
         <header class="wbc-masthead"><div><span class="wbc-overline">WINGS / OBSERVATORY</span><h2>Eight segments. One ecological story.</h2><p>Explore each sample across available segment trees and compare its collection date with the expected seasonal abundance of its host bird species in the collection area.</p></div><span class="wbc-release">RESEARCH PREVIEW <b>v${VERSION}</b></span></header>
         <div class="wbc-banner" role="status"></div>
-        <div class="wbc-tools"><label>Focus sample<select class="wbc-sample" aria-label="Braid focus sample"></select></label><label>Host<select class="wbc-host" aria-label="Braid host filter"></select></label><button type="button" class="wbc-clear">Clear focus</button><div class="wbc-file-tools"><label class="wbc-file-button" tabindex="0">Load or replace seasonal abundance data<input class="wbc-import-phenology" type="file" accept=".json,application/json"></label><button type="button" class="wbc-export">Export evidence</button></div></div>
+        <div class="wbc-tools"><label>Focus sample<select class="wbc-sample" aria-label="Braid focus sample"></select></label><label>Host<select class="wbc-host" aria-label="Braid host filter"></select></label><button type="button" class="wbc-clear">Clear focus</button><div class="wbc-file-tools"><label class="wbc-file-button" tabindex="0">Load or replace bird abundance data<input class="wbc-import-phenology" type="file" accept=".json,application/json"></label><button type="button" class="wbc-export">Export evidence</button></div></div>
 
         <div class="wbc-workbench"><div class="wbc-card wbc-braid-card"><div class="wbc-card-title"><div><span class="wbc-kicker">01 / GENOME BRAID</span><h3>One identity, eight views</h3></div><label class="wbc-checkbox"><input type="checkbox" class="wbc-references"> Show public links</label></div><div class="wbc-braid-scroll"><div class="wbc-braid"></div></div><div class="wbc-braid-caption"></div><details class="wbc-method"><summary>What the braid does and does not mean</summary><p>Vertical position follows tip order in each supplied tree, restricted to displayed identities. Rotating a tree can change crossings without changing its relationships. Crossings are not a reassortment statistic or a route of transmission. Lines only join adjacent lanes with one unambiguous tip; gaps remain gaps.</p><p>Public records are joined only by supplied reference_id. A metadata-derived linkage remains a candidate, not verified common-specimen identity. Public groups do not enter the sample-neighborhood metric.</p></details></div>
         <div class="wbc-card wbc-focus"><span class="wbc-kicker">EVIDENCE / SELECT A RECORD</span><div class="wbc-evidence" aria-live="polite"></div></div></div>
@@ -419,8 +419,8 @@
       this.root.querySelectorAll('[data-wbc-clock-view]').forEach(b=>b.addEventListener('click',()=>{this.clockView=b.dataset.wbcClockView;this.renderClock();}));
       q('.wbc-import-phenology').addEventListener('change',async e=>{
         const f=e.target.files[0]; if (!f) return;
-        try {if(f.size>20000000) throw new Error('Seasonal abundance data file exceeds the 20 MB preview limit.');this.phenology=validatePhenology(JSON.parse(await f.text()));this.notice=`Loaded ${f.name} locally. This import is session-only in an embedded Explorer.`;this.refresh();}
-        catch(error){this.notice=`Seasonal abundance data not loaded: ${error.message}`;this.renderBanner();}
+        try {if(f.size>20000000) throw new Error('Bird abundance data file exceeds the 20 MB preview limit.');this.phenology=validatePhenology(JSON.parse(await f.text()));this.notice=`Loaded ${f.name} locally. This import is session-only in an embedded Explorer.`;this.refresh();}
+        catch(error){this.notice=`Bird abundance data not loaded: ${error.message}`;this.renderBanner();}
         e.target.value='';
       });
       q('.wbc-file-button').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();q('.wbc-import-phenology').click();}});
@@ -452,7 +452,7 @@
       this.root.querySelector('.wbc-host').value=this.host;
       const profiles=this.phenology?.profiles||[];
       const ebird=profiles.length>0&&profiles.every(p=>/\bebird\b/i.test(p.provenance.source))&&this.phenology?.synthetic!==true;
-      this.root.querySelector('.wbc-clock-help').textContent=ebird?'Expected seasonal bird abundance based on eBird observations.':profiles.length?'Seasonal bird abundance from the supplied profiles. See matching and data sources below.':'Load seasonal abundance data to compare collection dates with the seasonal peak.';
+      this.root.querySelector('.wbc-clock-help').textContent=ebird?'Expected seasonal bird abundance based on eBird observations.':profiles.length?'Seasonal bird abundance from the supplied profiles. See matching and data sources below.':'Load bird abundance data to compare collection dates with the seasonal peak.';
       const timing=seasonalTimingSummary(this.m.samples,this.phenology);
       const runTimingValue=timing.available ? `${timing.before} before · ${timing.overlap} overlap · ${timing.after} after` : 'Unavailable';
       this.root.querySelector('.wbc-run-seasonal-summary').innerHTML=`<h4>Whole-run seasonal summary</h4><p class="wbc-run-seasonal-counts">${esc(runTimingValue)}</p><p class="wbc-muted">Seasonal context available for ${timing.available} of ${timing.total} samples; ${timing.unavailable} unavailable. Before/overlap/after are measured against each profile’s peak interval on the graph’s calendar dates. This summary covers the whole run, regardless of the selected sample or host filter. Repeated host/location profiles are not independent ecological observations.</p>`;
@@ -604,7 +604,7 @@
       target.append(el);
     }
     renderProvenance(profiles) {
-      this.root.querySelector('.wbc-provenance').innerHTML=profiles.length?profiles.map(p=>`<p><b>${esc(p.profile_id)}</b> &middot; ${esc(p.provenance.source)}<br>${esc(p.provenance.citation)}<br>Retrieved ${esc(p.provenance.retrieved_on)}. ${esc(p.provenance.method)}<br>Anchor: ${esc(p.anchor.label)} (${isoDay(p.anchor.start)} to ${isoDay(p.anchor.end)}). ${esc(p.anchor.basis)}</p>`).join(''):'<p>No matching seasonal abundance data have been loaded. No seasonal timing has been inferred.</p>';
+      this.root.querySelector('.wbc-provenance').innerHTML=profiles.length?profiles.map(p=>`<p><b>${esc(p.profile_id)}</b> &middot; ${esc(p.provenance.source)}<br>${esc(p.provenance.citation)}<br>Retrieved ${esc(p.provenance.retrieved_on)}. ${esc(p.provenance.method)}<br>Anchor: ${esc(p.anchor.label)} (${isoDay(p.anchor.start)} to ${isoDay(p.anchor.end)}). ${esc(p.anchor.basis)}</p>`).join(''):'<p>No matching bird abundance data have been loaded. No seasonal timing has been inferred.</p>';
     }
     evidenceRows() {
       return this.m.samples.map(e=>{const c=clockRecord(e.raw,this.phenology);return {sample_id:e.id,host:e.host,collection_date:text(e.raw.collection_date),genotype:genotype(e.raw),tree_presence:Object.fromEntries(SEGMENTS.map(s=>[s,presence(this.m,e.key,s).status])),clock_status:c.status,profile_id:c.profile?.profile_id||null,baseline_kind:c.profile?.baseline_kind||null,offset_min_days:c.lower??null,offset_max_days:c.upper??null,peak_start:c.status==='AVAILABLE'?isoDay(c.anchor.start):null,peak_end:c.status==='AVAILABLE'?isoDay(c.anchor.end):null,clock_reference_basis:c.status==='AVAILABLE'?'displayed_profile_dates':null};});

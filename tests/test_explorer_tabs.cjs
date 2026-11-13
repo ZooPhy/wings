@@ -45,7 +45,7 @@ test('Genome Braid and Ecological Clock use separate application lenses without 
 });
 
 test('Ecology lens proxies phenology and evidence actions to the live braid-clock component', () => {
-  assert.match(source, /Load seasonal abundance data/);
+  assert.match(source, /Load bird abundance data/);
   assert.match(source, /\.wbc-import-phenology/);
   assert.match(source, /Export evidence/);
   assert.match(source, /\.wbc-export/);

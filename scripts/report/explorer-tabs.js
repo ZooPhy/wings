@@ -333,7 +333,7 @@
     if (braid) shared.append(braid);
 
     const ecologyActions = make("div", "wse-ecology-clock-actions");
-    const loadPhenology = make("button", "wse-ecology-clock-action", explorer.payload?.ecological_clock ? "Replace seasonal abundance data" : "Load seasonal abundance data");
+    const loadPhenology = make("button", "wse-ecology-clock-action", explorer.payload?.ecological_clock ? "Replace bird abundance data" : "Load bird abundance data");
     loadPhenology.type = "button";
     const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
     exportEvidence.type = "button";
