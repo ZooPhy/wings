@@ -199,7 +199,7 @@
     function reason(row,previous){
       if(row.status==='INSUFFICIENT_MIGRATION_CONTEXTS'&&Number.isInteger(row.n_migration_contexts))
         return `Only ${row.n_migration_contexts} distinct migration ${row.n_migration_contexts===1?'setting':'settings'}; at least ${result?.options?.minimum??data.readiness?.minimum_unique_samples??8} are required.`;
-      if(row.status==='INSUFFICIENT_INDEPENDENT_VARIATION'&&isStarting(row))return 'The starting model includes factors that cannot be separated with these samples.';
+      if(row.status==='INSUFFICIENT_INDEPENDENT_VARIATION'&&isStarting(row))return `Among these ${row.n_samples} eligible samples, the starting-model predictors contain redundant information, so their separate contributions cannot be estimated. WINGS does not report a fit for this model.`;
       if(row.status==='INSUFFICIENT_INDEPENDENT_VARIATION'&&previous&&previous.status!=='READY')
         return 'This model includes factors that cannot be separated with these samples.';
       return readable(row.status)+'.';
@@ -221,6 +221,7 @@
         const description=descriptions[path]||descriptions[({host_vs_baseline:'host',ecology_vs_host:'seasonal',environment_vs_ecology:'weather',migration_vs_ecology:'migration'})[path]];
         if(description)heading.append(make('p','wme-comparison-description',description));
         if(Number.isInteger(first.n_selected))heading.append(make('small','',`${first.n_selected-first.n_samples} of ${first.n_selected} selected samples excluded for missing inputs.`));
+        heading.append(make('p','wme-cohort-note',`Both rows are refitted using these ${first.n_samples} eligible samples. The same starting model may give a different result in another card because its eligible samples differ.`));
         card.append(heading,make('p','wme-measure','Genetic variation explained (%)'));
         const scale=make('div','wme-scale');scale.setAttribute('aria-hidden','true');
         for(const tick of ['0%','50%','100%'])scale.append(make('span','',tick));
@@ -241,7 +242,7 @@
             if(previous?.status==='READY'&&finite(previous.r2)&&finite(row.delta_r2)&&row.delta_r2>0)
               picture.append(svg('rect',{x:Math.max(0,previous.r2)*1000,y:0,width:Math.min(total,row.delta_r2*1000),height:24,class:'wme-bar-gain'}));
             button.append(picture);
-            const detail=finite(row.delta_r2)?'Added explanatory value: '+gain(row.delta_r2):index===0?'Starting model for this comparison':'Added explanatory value unavailable';
+            const detail=finite(row.delta_r2)?'Added explanatory value: '+gain(row.delta_r2):index===0?`Starting model fitted to these ${row.n_samples} eligible samples`:'Added explanatory value unavailable';
             button.append(make('span','wme-row-detail',detail));
             button.setAttribute('aria-label',`${modelText(row)}: ${percent(row.r2)} genetic variation explained. ${detail}. ${first.n_samples} samples. Select for details.`);
           }else{
