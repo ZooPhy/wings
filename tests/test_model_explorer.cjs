@@ -18,6 +18,44 @@ test('complete-case paths do not mix cohorts and never require weather for migra
   assert.ok(weather.every(r=>r.n_pairs===65));assert.ok(migration.every(r=>r.n_pairs===66));assert.equal(JSON.stringify(input),before);
   assert.ok(result.results.every(r=>r.permutation_p===null&&r.fdr_q===null));
 });
+test('each factor compares its own reduced and full models on matching eligible pairs',async()=>{
+  const result=await api.analyze(copy(),{factors:['host','seasonal','weather','migration'],permutations:0});
+  const expected={host:['baseline','host'],seasonal:['host','seasonal'],weather:['seasonal','weather'],migration:['seasonal','migration']};
+  for(const [path,stages] of Object.entries(expected)){
+    const rows=result.results.filter(r=>r.segment==='HA'&&r.path===path);
+    assert.equal(rows.length,2);assert.deepEqual(rows.map(r=>r.comparison_role),['starting','added']);
+    assert.deepEqual(rows.map(r=>r.n_pairs),[66,66]);assert.deepEqual(rows[0].eligible_sample_ids,rows[1].eligible_sample_ids);
+    for(let i=0;i<2;i++)assert.ok(Math.abs(rows[i].r2-fixture.expected_r2[stages[i]])<1e-12);
+    assert.ok(Math.abs(rows[1].delta_r2-(fixture.expected_r2[stages[1]]-fixture.expected_r2[stages[0]]))<1e-12);
+  }
+});
+test('host and seasonal fits and statistical support do not depend on weather or migration availability',async()=>{
+  const input=copy();
+  for(const row of input.pairs){
+    if([row.sample_a,row.sample_b].includes('S00'))row.environmental_distance=null;
+    if([row.sample_a,row.sample_b].includes('S01'))row.migration_context_distance=null;
+  }
+  input.pairs.push(...input.pairs.map(r=>({...r,segment:'NP'})));
+  const alone=await api.analyze(input,{factors:['host','seasonal'],permutations:19,seed:17});
+  const all=await api.analyze(input,{factors:['host','seasonal','weather','migration'],permutations:19,seed:17});
+  assert.deepEqual(all.results.filter(r=>['host','seasonal'].includes(r.path)),alone.results);
+  for(const path of ['host','seasonal'])assert.ok(all.results.filter(r=>r.segment==='HA'&&r.path===path).every(r=>r.n_samples===12&&r.n_pairs===66));
+  for(const path of ['weather','migration'])assert.ok(all.results.filter(r=>r.segment==='HA'&&r.path===path).every(r=>r.n_samples===11&&r.n_pairs===55));
+  const missing=copy();missing.pairs.forEach(r=>r.seasonal_profile_distance=null);
+  const withoutSeasonal=await api.analyze(missing,{factors:['host'],permutations:0});
+  const withSeasonal=await api.analyze(missing,{factors:['host','seasonal'],permutations:0});
+  assert.deepEqual(withSeasonal.results.filter(r=>r.path==='host'),withoutSeasonal.results);
+});
+test('unchecked starting factors are excluded and no factors gives one baseline model',async()=>{
+  const result=await api.analyze(copy(),{factors:['seasonal','weather'],permutations:0});
+  const rows=result.results.filter(r=>r.segment==='HA');
+  assert.deepEqual(rows.map(r=>r.predictors),[
+    ['temporal_days','geographic_km'],['temporal_days','geographic_km','seasonal_profile_distance'],
+    ['temporal_days','geographic_km','seasonal_profile_distance'],['temporal_days','geographic_km','seasonal_profile_distance','environmental_distance']]);
+  const baseline=await api.analyze(copy(),{factors:[],permutations:0});
+  assert.equal(baseline.results.filter(r=>r.segment==='HA').length,1);
+  assert.equal(baseline.results[0].path,'baseline');
+});
 test('sample inclusion is applied before fitting and too few samples have no fitted value',async()=>{
   const result=await api.analyze(copy(),{samples:['S00','S01','S02'],factors:['host'],permutations:0});
   const rows=result.results.filter(r=>r.segment==='HA');assert.ok(rows.every(r=>r.n_samples===3&&r.n_pairs===3));assert.ok(rows.every(r=>r.status==='INSUFFICIENT_UNIQUE_SAMPLES'&&r.r2===null));
