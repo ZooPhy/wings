@@ -333,12 +333,6 @@
     shared.hidden = true;
     if (braid) shared.append(braid);
 
-    const ecologyActions = make("div", "wse-ecology-clock-actions");
-    const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
-    exportEvidence.type = "button";
-    ecologyActions.append(exportEvidence);
-    shared.prepend(ecologyActions);
-
     const treeDetails = make("details", "wse-genome-details");
     const treeSummary = make("summary", "wse-genome-details-summary", "Individual segment trees and QC evidence");
     treeDetails.append(treeSummary, genome);
@@ -383,10 +377,6 @@
     app.append(shared, views);
     shell.append(app);
 
-    exportEvidence.addEventListener("click", () => {
-      braid?.querySelector(".wbc-export")?.click();
-    });
-
     const duplicateSample = genome.querySelector(".wse-sample-select")?.closest("label");
     if (duplicateSample) duplicateSample.classList.add("wse-duplicate-sample-control");
 
@@ -405,9 +395,9 @@
     // Keep the existing host control beside the timing table in Ecology.
     // Its permanent dock survives the table's innerHTML refreshes.
     const timingSummary = braid?.querySelector(".wbc-run-seasonal-summary");
-    let timingHostDock = null;
+    let timingHostDock = null, timingSection = null;
     if (timingSummary) {
-      const timingSection = make("div", "wse-timing-table-section");
+      timingSection = make("div", "wse-timing-table-section");
       timingHostDock = make("div", "wse-timing-host-controls");
       timingSummary.parentElement.insertBefore(timingSection, timingSummary);
       timingSection.append(timingHostDock, timingSummary);
@@ -421,6 +411,10 @@
       if (hostAtTable) timingHostDock.append(hostLabel);
       else toolbar.insertBefore(hostLabel, clearButton);
       if (timingHostDock) timingHostDock.hidden = !hostAtTable;
+      // Move the original sample controls below the table only in Ecology.
+      // The selected-sample banner stays in its shared position above the app.
+      if (hostAtTable) timingSection.append(toolbar);
+      else app.insertBefore(toolbar, subtitle || shared);
       toolbar.classList.toggle("wse-host-at-table", hostAtTable);
       sampleLabelText.textContent = hostAtTable ? "Sample for seasonal curve" : "Sample";
       toolbar.hidden = name === "genotypes" || name === "overview";

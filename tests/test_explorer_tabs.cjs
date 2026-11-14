@@ -44,9 +44,9 @@ test('Genome Braid and Ecological Clock use separate application lenses without 
   assert.match(source, /name === "genome" \|\| name === "ecology"/);
 });
 
-test('Ecology lens exposes evidence export without an abundance import action', () => {
+test('Ecology lens omits the evidence export and abundance import actions', () => {
   assert.doesNotMatch(source, /(?:Load|Replace) bird abundance data/);
   assert.doesNotMatch(source, /loadPhenology/);
-  assert.match(source, /Export evidence/);
-  assert.match(source, /\.wbc-export/);
+  assert.doesNotMatch(source, /Export evidence/);
+  assert.doesNotMatch(source, /\.wbc-export/);
 });

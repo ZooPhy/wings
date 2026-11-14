@@ -411,11 +411,15 @@ test('Ecology moves the same host control to the timing table and restores it in
   assert.ok(toolbar.contains(host));
   h.tabs.activate('ecology');
   const dock=h.root.querySelector('.wse-timing-host-controls');
+  const section=h.root.querySelector('.wse-timing-table-section');
+  const summary=h.root.querySelector('.wbc-run-seasonal-summary');
+  assert.equal(toolbar.parentElement,section);
+  assert.ok(section.children.indexOf(toolbar)>section.children.indexOf(summary));
   assert.equal(host.parentElement,label);assert.ok(dock.contains(host));assert.ok(!toolbar.contains(host));
   assert.ok(dock.parentElement.contains(h.root.querySelector('.wbc-run-seasonal-summary')));
   assert.equal(sample.parentElement.children[0].textContent,'Sample for seasonal curve');
   host.value='Duck';host.listeners.change();assert.equal(h.explorer.hostFilter,'Duck');
   sample.value='a';sample.listeners.change();assert.equal(h.explorer.selectedSampleId,'a');assert.equal(h.explorer.hostFilter,'Duck');assert.ok(dock.contains(host));
-  h.tabs.activate('genome');assert.ok(toolbar.contains(host));assert.equal(host.value,'Duck');assert.equal(sample.parentElement.children[0].textContent,'Sample');
-  h.tabs.activate('ecology');assert.ok(dock.contains(host));assert.equal(h.root.querySelectorAll('.wse-app-host').length,1);assert.equal(h.root.querySelectorAll('.wse-timing-host-controls').length,1);
+  h.tabs.activate('genome');assert.equal(toolbar.parentElement,h.root.querySelector('.wse-app-shell'));assert.ok(toolbar.contains(host));assert.equal(host.value,'Duck');assert.equal(sample.parentElement.children[0].textContent,'Sample');
+  h.tabs.activate('ecology');assert.equal(toolbar.parentElement,section);assert.ok(dock.contains(host));assert.equal(h.root.querySelectorAll('.wse-app-host').length,1);assert.equal(h.root.querySelectorAll('.wse-timing-host-controls').length,1);
 });

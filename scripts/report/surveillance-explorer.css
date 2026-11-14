@@ -588,7 +588,7 @@
 .wbc-linkage code{white-space:normal;overflow-wrap:anywhere;font-size:inherit}
 
 /* Collection timing: match the maroon/gold report tables. */
-.wbc .wbc-run-seasonal-summary{background:#fff;border:1px solid #d8e2e5;border-top:5px solid #FFC627;border-radius:12px;padding:18px}
+.wbc .wbc-run-seasonal-summary{background:transparent;border:0;border-radius:0;padding:0}
 .wbc .wbc-run-seasonal-summary h4{color:#8C1D40;font-weight:800;letter-spacing:.1em}
 .wbc .wbc-timing-scope{color:#536872;font-size:13px}
 .wbc .wbc-timing-scroll{max-width:100%;overflow-x:auto;margin:16px 0;border:1px solid #e0e5e8;border-radius:10px;scrollbar-width:thin}
@@ -1014,7 +1014,7 @@
   background: white;
   color: #263b43;
 }
-.wse-app-clear {
+.wse-app-toolbar .wse-app-clear {
   min-height: 39px;
   padding: .48rem .75rem;
   border: 1px solid #8c1d40;
@@ -1024,6 +1024,7 @@
   font-weight: 750;
   cursor: pointer;
 }
+.wse-app-toolbar .wse-app-clear:hover { border-color:#8c1d40; background:#fff9e8; }
 .wse-app-clear:disabled { opacity: .4; cursor: default; }
 .wse-app-context {
   align-self: center;
@@ -1165,28 +1166,8 @@
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-footer { display: none !important; }
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-clock-card { margin-top: 0; }
 
-.wse-ecology-clock-actions {
-  display: none;
-  justify-content: flex-end;
-  gap: .55rem;
-  margin: 0 0 .7rem;
-}
-.wse-app-shared:has(.wbc-embedded[data-wse-lens="ecology"]) .wse-ecology-clock-actions { display: flex; }
-.wse-ecology-clock-action {
-  padding: .45rem .7rem;
-  border: 1px solid #b9c6ca;
-  border-radius: .42rem;
-  background: #fff;
-  color: #30464e;
-  font-weight: 700;
-  cursor: pointer;
-}
-.wse-ecology-clock-action:hover { background: #f5f9f8; border-color: #70878f; }
-
 @media (max-width: 680px) {
   .wse-app-shared { padding: .55rem .55rem 0; }
-  .wse-ecology-clock-actions { justify-content: stretch; }
-  .wse-ecology-clock-action { flex: 1 1 0; }
 }
 
 /* WINGS_SIGNAL_SAMPLING_COVERAGE_CSS_BEGIN */
@@ -1328,6 +1309,7 @@
 
 /* Place Ecology's host browsing control immediately above its timing table. */
 .wse-timing-table-section{min-width:0;margin-top:18px}
+.wse-timing-table-section>.wse-app-toolbar{margin-top:14px;border-radius:.7rem}
 .wse-timing-host-controls{display:flex;justify-content:flex-end;padding:0 0 12px}
 .wse-timing-host-controls[hidden]{display:none}
 .wse-timing-host-controls>.wse-app-control{width:min(100%,360px);margin:0}

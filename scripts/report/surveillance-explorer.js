@@ -216,7 +216,7 @@ globalThis.WINGS_STATE_ARTWORK = [{"name":"Alabama","code":"AL","country":"US","
     const exists=days.some(d=>["temperature_2m_mean","precipitation_sum","wind_speed_10m_max"].some(k=>finite(d.weather[k])));
     const hasRange=days.some(d=>finite(d.weather.temperature_2m_min) && finite(d.weather.temperature_2m_max));
     const hasCodes=days.some(d=>condition(d.weather.weather_code)[1]);
-    root.innerHTML=`<div class="wmw-weather-card"><div class="wmw-header"><div><div class="wmw-kicker">Weather along the same dates</div><strong>Daily weather at the selected collection location</strong></div><label><input type="checkbox" data-wmw="average7" ${state.weatherAverage?"checked":""}> Seven-day temperature mean</label></div><p class="wmw-note">${esc(sample.sample_id)} · ERA5 ~25 km grid at ${esc(context.grid_latitude)}, ${esc(context.grid_longitude)}. Daily estimates align by calendar label with BirdCast’s evening dates; they describe the full day. ${!hasRange?"Daily min/max values are not present in this window.":""} ${!hasCodes?"Condition codes are unavailable; no weather icons are inferred.":""}</p><div class="wmw-weather-chart wmw-chart"></div><div class="wmw-weather-legend"><span>Temperature: daily mean <i style="background:#c16e32"></i>${state.weatherAverage?" · dashed seven-day mean":""}${hasRange?" · shaded daily min–max":""}</span><span>Precipitation: daily total <i style="background:#2985ad"></i></span><span>Wind: daily maximum <i style="background:#8271a3"></i></span></div><div class="wmw-weather-inspect"><label>Inspect day <select data-wmw="weather-day" aria-label="Inspect weather and migration date">${days.map(d=>`<option value="${d.date}">${d.date}</option>`).join("")}</select></label><div class="wmw-weather-readout" aria-live="polite"></div></div><p class="wmw-weather-summary" aria-live="polite"></p><details><summary>Weather values and source</summary><p>Icons summarize the source’s most severe condition during that day. Seven-day means use the selected date and six preceding calendar days; all seven temperature values must be cached. The daily values and min–max range remain visible. Missing values are gaps. Switching axes never changes the weather averaging interval. Weather is tied to this sample’s grid cell and is not a statewide estimate.</p><p>Retrieved: ${esc(context.retrieved_at)} · Source timezone: ${esc(context.timezone)}<br>Source SHA-256: <code>${esc(context.raw_sha256)}</code><br>Open-Meteo / Copernicus Climate Change Service · ERA5 · CC BY 4.0. <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener noreferrer">Source documentation</a></p><div class="wmw-table"><table><thead><tr><th>Date</th><th>Mean °C</th><th>Min °C</th><th>Max °C</th><th>Precip. mm</th><th>Max wind km/h</th><th>Daily condition</th></tr></thead><tbody>${days.map(d=>`<tr><td>${d.date}</td>${["temperature_2m_mean","temperature_2m_min","temperature_2m_max","precipitation_sum","wind_speed_10m_max"].map(k=>`<td>${decimal(d.weather[k])}</td>`).join("")}<td>${condition(d.weather.weather_code)[0]}</td></tr>`).join("")}</tbody></table></div></details></div>`;
+    root.innerHTML=`<div class="wmw-weather-card"><div class="wmw-header"><div><div class="wmw-kicker">Weather along the same dates</div><strong>Daily weather at the selected collection location</strong></div><label><input type="checkbox" data-wmw="average7" ${state.weatherAverage?"checked":""}> Seven-day temperature mean</label></div><p class="wmw-note">${esc(sample.sample_id)} · ERA5 ~25 km grid at ${esc(context.grid_latitude)}, ${esc(context.grid_longitude)}. Daily estimates align by calendar label with BirdCast’s evening dates; they describe the full day. ${!hasRange?"Daily min/max values are not present in this window.":""} ${!hasCodes?"Condition codes are unavailable; no weather icons are inferred.":""}</p><div class="wmw-weather-chart wmw-chart"></div><div class="wmw-weather-legend"><span>Temperature: daily mean <i style="background:#c16e32"></i>${state.weatherAverage?" · dashed seven-day mean":""}${hasRange?" · shaded daily min–max":""}</span><span>Precipitation: daily total <i style="background:#2985ad"></i></span><span>Wind: daily maximum <i style="background:#8271a3"></i></span></div><div class="wmw-weather-inspect"><label>Inspect day <select data-wmw="weather-day" aria-label="Inspect weather and migration date">${days.map(d=>`<option value="${d.date}">${d.date}</option>`).join("")}</select></label><div class="wmw-weather-readout" aria-live="polite"></div></div><p class="wmw-weather-summary" aria-live="polite"></p><details><summary>Weather source</summary><p>Retrieved: ${esc(context.retrieved_at)} · Source timezone: ${esc(context.timezone)}<br>Open-Meteo / Copernicus Climate Change Service · ERA5 · CC BY 4.0. <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener noreferrer">Source documentation</a></p></details></div>`;
     const q=s=>root.querySelector(s);
     q('[data-wmw="average7"]').addEventListener("change",e=>{state.weatherAverage=e.target.checked;redraw();});
     q('[data-wmw="weather-day"]').addEventListener("change",e=>controls.showDate(e.target.value));
@@ -1352,12 +1352,6 @@ THIS SOFTWARE.
     shared.hidden = true;
     if (braid) shared.append(braid);
 
-    const ecologyActions = make("div", "wse-ecology-clock-actions");
-    const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
-    exportEvidence.type = "button";
-    ecologyActions.append(exportEvidence);
-    shared.prepend(ecologyActions);
-
     const treeDetails = make("details", "wse-genome-details");
     const treeSummary = make("summary", "wse-genome-details-summary", "Individual segment trees and QC evidence");
     treeDetails.append(treeSummary, genome);
@@ -1402,10 +1396,6 @@ THIS SOFTWARE.
     app.append(shared, views);
     shell.append(app);
 
-    exportEvidence.addEventListener("click", () => {
-      braid?.querySelector(".wbc-export")?.click();
-    });
-
     const duplicateSample = genome.querySelector(".wse-sample-select")?.closest("label");
     if (duplicateSample) duplicateSample.classList.add("wse-duplicate-sample-control");
 
@@ -1424,9 +1414,9 @@ THIS SOFTWARE.
     // Keep the existing host control beside the timing table in Ecology.
     // Its permanent dock survives the table's innerHTML refreshes.
     const timingSummary = braid?.querySelector(".wbc-run-seasonal-summary");
-    let timingHostDock = null;
+    let timingHostDock = null, timingSection = null;
     if (timingSummary) {
-      const timingSection = make("div", "wse-timing-table-section");
+      timingSection = make("div", "wse-timing-table-section");
       timingHostDock = make("div", "wse-timing-host-controls");
       timingSummary.parentElement.insertBefore(timingSection, timingSummary);
       timingSection.append(timingHostDock, timingSummary);
@@ -1440,6 +1430,10 @@ THIS SOFTWARE.
       if (hostAtTable) timingHostDock.append(hostLabel);
       else toolbar.insertBefore(hostLabel, clearButton);
       if (timingHostDock) timingHostDock.hidden = !hostAtTable;
+      // Move the original sample controls below the table only in Ecology.
+      // The selected-sample banner stays in its shared position above the app.
+      if (hostAtTable) timingSection.append(toolbar);
+      else app.insertBefore(toolbar, subtitle || shared);
       toolbar.classList.toggle("wse-host-at-table", hostAtTable);
       sampleLabelText.textContent = hostAtTable ? "Sample for seasonal curve" : "Sample";
       toolbar.hidden = name === "genotypes" || name === "overview";
@@ -3608,7 +3602,7 @@ THIS SOFTWARE.
           .wbc .wbc-stats>div>small{overflow-wrap:anywhere}
           .wbc .wbc-card-scope{margin:-12px 0 20px;color:var(--wbc-muted);font-size:12px;overflow-wrap:anywhere}
           .wbc .wbc-card-scope:empty{display:none}
-          .wbc .wbc-run-seasonal-summary{margin:0 0 20px;padding:14px 16px;border:1px solid var(--wbc-line);border-radius:8px;background:#f4f8f7}
+          .wbc .wbc-run-seasonal-summary{margin:0 0 20px;padding:0;border:0;border-radius:0;background:transparent}
           .wbc .wbc-run-seasonal-summary h4{margin:0 0 7px}
           .wbc .wbc-run-seasonal-counts{font-size:18px;font-weight:600;margin:0 0 7px}
           .wbc .wbc-run-seasonal-summary .wbc-muted{margin:0}

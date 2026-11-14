@@ -14,7 +14,7 @@
 .wbc-linkage code{white-space:normal;overflow-wrap:anywhere;font-size:inherit}
 
 /* Collection timing: match the maroon/gold report tables. */
-.wbc .wbc-run-seasonal-summary{background:#fff;border:1px solid #d8e2e5;border-top:5px solid #FFC627;border-radius:12px;padding:18px}
+.wbc .wbc-run-seasonal-summary{background:transparent;border:0;border-radius:0;padding:0}
 .wbc .wbc-run-seasonal-summary h4{color:#8C1D40;font-weight:800;letter-spacing:.1em}
 .wbc .wbc-timing-scope{color:#536872;font-size:13px}
 .wbc .wbc-timing-scroll{max-width:100%;overflow-x:auto;margin:16px 0;border:1px solid #e0e5e8;border-radius:10px;scrollbar-width:thin}

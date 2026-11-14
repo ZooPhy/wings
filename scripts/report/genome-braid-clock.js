@@ -426,7 +426,7 @@
           .wbc .wbc-stats>div>small{overflow-wrap:anywhere}
           .wbc .wbc-card-scope{margin:-12px 0 20px;color:var(--wbc-muted);font-size:12px;overflow-wrap:anywhere}
           .wbc .wbc-card-scope:empty{display:none}
-          .wbc .wbc-run-seasonal-summary{margin:0 0 20px;padding:14px 16px;border:1px solid var(--wbc-line);border-radius:8px;background:#f4f8f7}
+          .wbc .wbc-run-seasonal-summary{margin:0 0 20px;padding:0;border:0;border-radius:0;background:transparent}
           .wbc .wbc-run-seasonal-summary h4{margin:0 0 7px}
           .wbc .wbc-run-seasonal-counts{font-size:18px;font-weight:600;margin:0 0 7px}
           .wbc .wbc-run-seasonal-summary .wbc-muted{margin:0}
