@@ -58,3 +58,17 @@ test('host names are escaped in the color legend',()=>dashboard(({app})=>{
   const legend=app.hostLegend([e.key]);
   assert.ok(legend.includes('&lt;script&gt;'));assert.ok(!legend.includes('<script>'));
 }));
+
+test('collection timing follows host filter and does not pull in the selected sample outside it',()=>dashboard(({app,root})=>{
+  const markup=()=>root.querySelector('.wbc-run-seasonal-summary').innerHTML;
+  const host=app.m.samples[0].host,inside=app.m.samples.filter(e=>e.host===host),outside=app.m.samples.find(e=>e.host!==host);
+  assert.match(markup(),/Collection timing by host and location/);
+  assert.match(markup(),new RegExp(`Combined tally for the ${app.m.samples.length} samples`));
+  app.host=host;app.selected=outside.key;app.refresh();
+  assert.match(markup(),new RegExp(`Combined tally for the ${inside.length} samples`));
+  assert.ok(!markup().includes(`<th scope="row">${outside.host}</th>`));
+  const filtered=markup();app.selected=inside[0].key;app.refresh();assert.equal(markup(),filtered);
+  assert.match(markup(),/<details class="wbc-timing-total">/);
+  assert.ok(!markup().includes('Whole-run'));
+  app.host='No such host';app.refresh();assert.match(markup(),/No samples match the host filter/);assert.ok(!markup().includes('Combined tally'));
+}));

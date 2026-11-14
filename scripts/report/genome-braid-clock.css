@@ -12,3 +12,13 @@
 .wbc-host-key .wbc-dot{flex:0 0 8px;margin-right:0}
 .wbc-linkage{min-width:0;max-width:100%;overflow-wrap:anywhere}
 .wbc-linkage code{white-space:normal;overflow-wrap:anywhere;font-size:inherit}
+
+.wbc .wbc-timing-scroll{max-width:100%;overflow-x:auto;margin:12px 0}
+.wbc .wbc-host-timing{width:100%;min-width:780px;border-collapse:collapse;font-size:13px;background:#fff}
+.wbc .wbc-host-timing th,.wbc .wbc-host-timing td{padding:10px 12px;border-bottom:1px solid var(--wbc-line);text-align:left;vertical-align:top}
+.wbc .wbc-host-timing thead th{color:var(--wbc-ink);background:#edf4f3;font-weight:650}
+.wbc .wbc-host-timing tbody th{color:var(--wbc-maroon);font-weight:650}
+.wbc .wbc-timing-peaks{min-width:160px}
+.wbc .wbc-timing-total{margin-top:14px;padding-top:12px;border-top:1px solid var(--wbc-line)}
+.wbc .wbc-timing-total>summary{font-size:13px;color:var(--wbc-muted);cursor:pointer}
+.wbc .wbc-timing-total .wbc-run-seasonal-counts{margin:10px 0 6px;font-size:15px}

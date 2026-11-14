@@ -42,3 +42,39 @@ test('overlapping temporal bins fail validation',()=>{const p=copy(fixture.ecolo
 test('provenance and synthetic status must be explicit',()=>{const p=copy(fixture.ecological_clock);delete p.synthetic;assert.throws(()=>api.validatePhenology(p),/synthetic/);p.synthetic=false;delete p.profiles[0].provenance.citation;assert.throws(()=>api.validatePhenology(p),/citation/);});
 test('reviewed anchor is honored without inventing confidence',()=>{const p=copy(fixture.ecological_clock);p.profiles[0].anchor={earliest:'2025-10-10',latest:'2025-10-12',label:'Reviewed seasonal anchor',basis:'Supplied by fixture author'};const r=api.clockRecord(sample(),api.validatePhenology(p));assert.equal(r.lower,-4);assert.equal(r.upper,-2);assert.equal(r.anchor.method,'supplied');});
 test('legacy report without references or ecology is supported',()=>{const d=copy(fixture);delete d.ecological_clock;delete d.public_reference_context;assert.equal(api.model(d).references.length,0);});
+
+test('host/location timing counts collections against each matched peak, retaining unavailable dates',()=>{
+  const data=copy(fixture.ecological_clock);
+  const p=data.profiles[0];data.profiles=[p];
+  const other=copy(p);other.profile_id='other-host';other.scope.host='Other host';
+  other.anchor={earliest:'2025-09-20',latest:'2025-09-26',label:'Reviewed peak',basis:'Test fixture'};
+  data.profiles.push(other);
+  const raw=sample();raw.collection_date='2025-10-01';
+  const entries=[raw,{...raw,sample_id:'repeat'},
+    {...raw,sample_id:'other',host:'Other host'},
+    {...raw,sample_id:'partial',collection_date:'2025-10'},
+    {...raw,sample_id:'missing',collection_date:''},
+    {...raw,sample_id:'unmatched',country:'Other country'}].map(raw=>({raw}));
+  const before=JSON.stringify({entries,data}),validated=api.validatePhenology(data);
+  const groups=api.seasonalTimingGroups(entries,validated);
+  const first=groups.find(g=>g.host===raw.host&&g.country===raw.country);
+  assert.deepEqual([first.total,first.before,first.overlap,first.after,first.unavailable],[4,2,1,0,1]);
+  assert.deepEqual(first.peak_intervals,[{start:'2025-10-13',end:'2025-10-19'}]);
+  const second=groups.find(g=>g.host==='Other host');assert.equal(second.after,1);
+  const missing=groups.find(g=>g.country==='Other country');assert.equal(missing.unavailable,1);assert.deepEqual(missing.peak_intervals,[]);
+  const total=api.seasonalTimingSummary(entries,validated);
+  for(const key of ['total','available','before','overlap','after','unavailable'])assert.equal(groups.reduce((n,g)=>n+g[key],0),total[key]);
+  assert.equal(JSON.stringify({entries,data}),before);
+  assert.deepEqual(api.seasonalTimingGroups([],validated),[]);
+});
+
+test('timing groups keep distinct matched peak intervals within one host and location',()=>{
+  const data=copy(fixture.ecological_clock),p=data.profiles[0];data.profiles=[p];
+  p.sample_id='one';
+  const q=copy(p);q.profile_id='second-peak';q.sample_id='two';
+  q.anchor={earliest:'2025-09-20',latest:'2025-09-26',label:'Reviewed peak',basis:'Test fixture'};data.profiles.push(q);
+  const entries=['one','two'].map(sample_id=>({raw:{...sample(),sample_id,collection_date:'2025-10-01'}}));
+  const groups=api.seasonalTimingGroups(entries,api.validatePhenology(data));
+  assert.equal(groups.length,1);assert.equal(groups[0].before,1);assert.equal(groups[0].after,1);
+  assert.deepEqual(groups[0].peak_intervals,[{start:'2025-09-20',end:'2025-09-26'},{start:'2025-10-13',end:'2025-10-19'}]);
+});
