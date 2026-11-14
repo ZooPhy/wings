@@ -607,6 +607,20 @@
 .wbc .wbc-timing-peaks summary{color:#8C1D40}
 .wbc .wbc-host-timing .wbc-timing-number{text-align:center;font-size:17px;font-weight:750;font-variant-numeric:tabular-nums;color:#263b43}
 .wbc .wbc-timing-sample-count{display:inline-block;min-width:36px;padding:5px 9px;border-radius:8px;background:#8C1D40;color:#fff}
+
+.wbc .wbc-chart-controls{display:flex;justify-content:flex-end;align-items:flex-start;flex-wrap:wrap;gap:10px;margin:22px 0 12px;padding-top:18px;border-top:1px solid #d8e2e5}
+.wbc .wbc-chart-controls .wbc-switch{margin-top:0!important}
+@media(max-width:680px){.wbc .wbc-chart-controls{justify-content:flex-start}.wbc .wbc-chart-controls .wbc-switch{max-width:100%;flex-wrap:wrap}}
+
+.wbc .wbc-peak-range{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;border:1px solid #dce3e7;border-radius:9px;white-space:nowrap;box-shadow:0 2px 5px #182a3310}
+.wbc .wbc-peak-range time{display:grid;text-align:center;min-width:36px;line-height:1.15}
+.wbc .wbc-peak-range time>span{font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:800;color:#8C1D40}
+.wbc .wbc-peak-range strong{font-size:22px;color:#000;line-height:1.2;margin:2px 0;font-variant-numeric:tabular-nums}
+.wbc .wbc-peak-range small{font-size:10px;color:#657681}
+.wbc .wbc-peak-arrow{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#FFC627;color:#000;font-size:15px;font-weight:700}
+.wbc .wbc-peak-multiple summary{white-space:nowrap;font-size:12px;color:#8C1D40}
+.wbc .wbc-peak-count{display:inline-block;min-width:22px;padding:2px 5px;background:#FFC627;color:#000;text-align:center;border-radius:5px;font-weight:800}
+.wbc .wbc-peak-ranges{display:grid;gap:8px;margin-top:10px}
 /* WINGS_BRAID_CLOCK_CSS_END */
 
 
@@ -1309,6 +1323,16 @@
   font-weight:600;
   line-height:1.45 !important;
 }
+
+/* Place Ecology's host browsing control immediately above its timing table. */
+.wse-timing-table-section{min-width:0;margin-top:18px}
+.wse-timing-host-controls{display:flex;justify-content:flex-end;padding:0 0 12px}
+.wse-timing-host-controls[hidden]{display:none}
+.wse-timing-host-controls>.wse-app-control{width:min(100%,360px);margin:0}
+.wse-timing-host-controls .wse-app-control-label{color:#8C1D40}
+.wse-app-toolbar.wse-host-at-table{grid-template-columns:minmax(220px,1fr) auto}
+.wse-app-toolbar.wse-host-at-table .wse-app-context{grid-column:1/-1}
+@media(max-width:680px){.wse-app-toolbar.wse-host-at-table{grid-template-columns:minmax(0,1fr)}.wse-timing-host-controls>.wse-app-control{width:100%}}
 /* WINGS_EXPLORER_TABS_CSS_END */
 .wse-evidence-synthesis { min-width: 0; margin: 0 0 1rem; padding: 1.25rem; border: 1px solid #bdceca; border-radius: 12px; background: #f5faf8; color: #163c37; overflow-wrap: anywhere; }
 .wse-evidence-synthesis[hidden] { display: none !important; }

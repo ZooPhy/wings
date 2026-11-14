@@ -55,6 +55,7 @@ function mount(text=source) {
   const root=new Element('main'),shell=new Element('section','wse-shell');root.append(shell);
   const names=['wse-timeline-panel','wse-main-grid','wse-subtitle','wbc-embedded','wse-genome-panel','wse-footer-note','wse-ecology-panel','wse-outbreak-panel'];
   const nodes=Object.fromEntries(names.map(name=>[name,new Element('section',name)]));shell.append(...Object.values(nodes));
+  nodes['wbc-embedded'].append(new Element('div','wbc-run-seasonal-summary'));
   const callbacks=[];
   const concordance={refresh(){}};
   const context=vm.createContext({
@@ -401,4 +402,20 @@ test('nightly migration context mounts only inside the Ecology view',()=>{
   assert.ok(h.explorer.migrationContextController);
   h.tabs.activate('concordance');h.tabs.activate('ecology');
   assert.equal(h.root.querySelectorAll('.nightly-context-fixture').length,1);
+});
+
+
+test('Ecology moves the same host control to the timing table and restores it in other views',()=>{
+  const h=mount(),toolbar=h.root.querySelector('.wse-app-toolbar'),host=h.root.querySelector('.wse-app-host');
+  const label=host.parentElement,sample=h.root.querySelector('.wse-app-sample');
+  assert.ok(toolbar.contains(host));
+  h.tabs.activate('ecology');
+  const dock=h.root.querySelector('.wse-timing-host-controls');
+  assert.equal(host.parentElement,label);assert.ok(dock.contains(host));assert.ok(!toolbar.contains(host));
+  assert.ok(dock.parentElement.contains(h.root.querySelector('.wbc-run-seasonal-summary')));
+  assert.equal(sample.parentElement.children[0].textContent,'Sample for seasonal curve');
+  host.value='Duck';host.listeners.change();assert.equal(h.explorer.hostFilter,'Duck');
+  sample.value='a';sample.listeners.change();assert.equal(h.explorer.selectedSampleId,'a');assert.equal(h.explorer.hostFilter,'Duck');assert.ok(dock.contains(host));
+  h.tabs.activate('genome');assert.ok(toolbar.contains(host));assert.equal(host.value,'Duck');assert.equal(sample.parentElement.children[0].textContent,'Sample');
+  h.tabs.activate('ecology');assert.ok(dock.contains(host));assert.equal(h.root.querySelectorAll('.wse-app-host').length,1);assert.equal(h.root.querySelectorAll('.wse-timing-host-controls').length,1);
 });

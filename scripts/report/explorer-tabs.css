@@ -383,3 +383,13 @@
   font-weight:600;
   line-height:1.45 !important;
 }
+
+/* Place Ecology's host browsing control immediately above its timing table. */
+.wse-timing-table-section{min-width:0;margin-top:18px}
+.wse-timing-host-controls{display:flex;justify-content:flex-end;padding:0 0 12px}
+.wse-timing-host-controls[hidden]{display:none}
+.wse-timing-host-controls>.wse-app-control{width:min(100%,360px);margin:0}
+.wse-timing-host-controls .wse-app-control-label{color:#8C1D40}
+.wse-app-toolbar.wse-host-at-table{grid-template-columns:minmax(220px,1fr) auto}
+.wse-app-toolbar.wse-host-at-table .wse-app-context{grid-column:1/-1}
+@media(max-width:680px){.wse-app-toolbar.wse-host-at-table{grid-template-columns:minmax(0,1fr)}.wse-timing-host-controls>.wse-app-control{width:100%}}

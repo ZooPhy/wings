@@ -1270,7 +1270,8 @@ THIS SOFTWARE.
 
     const toolbar = make("div", "wse-app-toolbar");
     const sampleLabel = make("label", "wse-app-control");
-    sampleLabel.append(make("span", "wse-app-control-label", "Sample"));
+    const sampleLabelText = make("span", "wse-app-control-label", "Sample");
+    sampleLabel.append(sampleLabelText);
     const sampleSelect = make("select", "wse-app-sample");
     sampleSelect.setAttribute("aria-label", "Selected WINGS sample");
     sampleSelect.append(new Option("Select a sample…", ""));
@@ -1406,10 +1407,27 @@ THIS SOFTWARE.
       launch.hidden = active !== "genome";
     };
 
+    // Keep the existing host control beside the timing table in Ecology.
+    // Its permanent dock survives the table's innerHTML refreshes.
+    const timingSummary = braid?.querySelector(".wbc-run-seasonal-summary");
+    let timingHostDock = null;
+    if (timingSummary) {
+      const timingSection = make("div", "wse-timing-table-section");
+      timingHostDock = make("div", "wse-timing-host-controls");
+      timingSummary.parentElement.insertBefore(timingSection, timingSummary);
+      timingSection.append(timingHostDock, timingSummary);
+    }
+
     const activate = (name, focus = false) => {
       if (!TAB_ORDER.includes(name)) return;
       active = name;
       root.dataset.wseActiveTab = name;
+      const hostAtTable = name === "ecology" && Boolean(timingHostDock);
+      if (hostAtTable) timingHostDock.append(hostLabel);
+      else toolbar.insertBefore(hostLabel, clearButton);
+      if (timingHostDock) timingHostDock.hidden = !hostAtTable;
+      toolbar.classList.toggle("wse-host-at-table", hostAtTable);
+      sampleLabelText.textContent = hostAtTable ? "Sample for seasonal curve" : "Sample";
       toolbar.hidden = name === "genotypes" || name === "overview";
       if (name === "amino") toolbar.hidden = true;
       if (name === "amino") requestAnimationFrame(() => aminoDashboard?.refresh());
@@ -3590,7 +3608,7 @@ THIS SOFTWARE.
 
         <div class="wbc-workbench"><div class="wbc-card wbc-braid-card"><div class="wbc-card-title"><div><span class="wbc-kicker">01 / GENOME BRAID</span><h3>One identity, eight views</h3></div><label class="wbc-checkbox"><input type="checkbox" class="wbc-references"> Show public links</label></div><div class="wbc-braid-scroll"><div class="wbc-braid"></div></div><div class="wbc-braid-caption"></div><details class="wbc-method"><summary>What the braid does and does not mean</summary><p>Vertical position follows tip order in each supplied tree, restricted to displayed identities. Rotating a tree can change crossings without changing its relationships. Crossings are not a reassortment statistic or a route of transmission. Lines only join adjacent lanes with one unambiguous tip; gaps remain gaps.</p><p>Public records are joined only by supplied reference_id. A metadata-derived linkage remains a candidate, not verified common-specimen identity. Public groups do not enter the sample-neighborhood metric.</p></details></div>
         <div class="wbc-card wbc-focus"><span class="wbc-kicker">EVIDENCE / SELECT A RECORD</span><div class="wbc-evidence" aria-live="polite"></div></div></div>
-        <section class="wbc-card wbc-clock-card"><div class="wbc-card-title"><div><span class="wbc-kicker">02 / ECOLOGICAL CLOCK</span><h3>Seasonal bird abundance</h3></div><div><div class="wbc-switch" role="group" aria-label="Clock time axis"><button type="button" data-wbc-mode="calendar" aria-pressed="true">Calendar</button><button type="button" data-wbc-mode="ecological" aria-pressed="false">Ecological time</button></div><div class="wbc-switch" role="group" aria-label="Clock records" style="margin-top:.45rem"><button type="button" data-wbc-clock-view="selected" aria-pressed="true">Selected sample</button><button type="button" data-wbc-clock-view="compare" aria-pressed="false">Compare samples</button></div></div></div><p class="wbc-clock-help"></p><p class="wbc-clock-subtitle"></p><div class="wbc-run-seasonal-summary" aria-live="polite"></div><div class="wbc-clock-scroll"><div class="wbc-clock"></div></div><div class="wbc-clock-caption"></div><details class="wbc-method"><summary>Seasonal bird abundance: matching and data sources</summary><p>Collection timing summary: before means the collection interval ends before the peak interval; after means it starts after the peak interval; overlap means the two intervals intersect, including their boundaries. Counts cover samples matching the host filter, grouped by recorded host and the matched profile’s geographic scope (or recorded sample location when no profile is available). Selecting a single sample does not restrict the table. Unavailable timing is excluded from these three counts and reported separately. Overlap for a partial month/year date does not establish that the actual collection day fell in the peak interval. Repeated host/location profiles are not independent ecological observations. Collection date is not infection date; these counts do not establish migration or transmission.</p><p>The clock uses an exact supplied host, country, state, and season match. No species is inferred from a host code. Missing or ambiguous profiles remain unavailable. Collection date is not infection date. Expected seasonal profiles are labeled separately from year-specific estimates.</p><p>Offset interval = [collection start - anchor latest, collection end - anchor earliest]. An interval from a weekly peak bin describes temporal resolution, not a statistical confidence interval. Empty bins are not zero; curves are never extended through missing observations.</p><div class="wbc-provenance"></div></details></section>
+        <section class="wbc-card wbc-clock-card"><div class="wbc-card-title"><div><span class="wbc-kicker">02 / ECOLOGICAL CLOCK</span><h3>Seasonal bird abundance</h3></div></div><p class="wbc-clock-help"></p><div class="wbc-run-seasonal-summary" aria-live="polite"></div><div class="wbc-chart-controls"><div class="wbc-switch" role="group" aria-label="Clock time axis"><button type="button" data-wbc-mode="calendar" aria-pressed="true">Calendar</button><button type="button" data-wbc-mode="ecological" aria-pressed="false">Ecological time</button></div><div class="wbc-switch" role="group" aria-label="Clock records" style="margin-top:.45rem"><button type="button" data-wbc-clock-view="selected" aria-pressed="true">Selected sample</button><button type="button" data-wbc-clock-view="compare" aria-pressed="false">Compare samples</button></div></div><p class="wbc-clock-subtitle"></p><div class="wbc-clock-scroll"><div class="wbc-clock"></div></div><div class="wbc-clock-caption"></div><details class="wbc-method"><summary>Seasonal bird abundance: matching and data sources</summary><p>Collection timing summary: before means the collection interval ends before the peak interval; after means it starts after the peak interval; overlap means the two intervals intersect, including their boundaries. Counts cover samples matching the host filter, grouped by recorded host and the matched profile’s geographic scope (or recorded sample location when no profile is available). Selecting a single sample does not restrict the table. Unavailable timing is excluded from these three counts and reported separately. Overlap for a partial month/year date does not establish that the actual collection day fell in the peak interval. Repeated host/location profiles are not independent ecological observations. Collection date is not infection date; these counts do not establish migration or transmission.</p><p>The clock uses an exact supplied host, country, state, and season match. No species is inferred from a host code. Missing or ambiguous profiles remain unavailable. Collection date is not infection date. Expected seasonal profiles are labeled separately from year-specific estimates.</p><p>Offset interval = [collection start - anchor latest, collection end - anchor earliest]. An interval from a weekly peak bin describes temporal resolution, not a statistical confidence interval. Empty bins are not zero; curves are never extended through missing observations.</p><div class="wbc-provenance"></div></details></section>
         <details class="wbc-card wbc-audit"><summary>Inspect the evidence table</summary><div class="wbc-evidence-table"></div></details>
         <footer class="wbc-footer">Exploratory description, not a risk score. No transmission, reassortment, infection timing, or causal climate effect is inferred. Files stay in this browser; no data are uploaded.</footer>`;
       const q=s=>this.root.querySelector(s);
@@ -3639,10 +3657,15 @@ THIS SOFTWARE.
       const ebird=profiles.length>0&&profiles.every(p=>/\bebird\b/i.test(p.provenance.source))&&this.phenology?.synthetic!==true;
       this.root.querySelector('.wbc-clock-help').textContent=ebird?'Expected seasonal bird abundance based on eBird observations.':profiles.length?'Seasonal bird abundance from the supplied profiles. See matching and data sources below.':'Load bird abundance data to compare collection dates with the seasonal peak.';
       const included=this.visible(),groups=seasonalTimingGroups(included,this.phenology);
+      const peakDate=iso=>{
+        const [year,month,day]=iso.split('-');
+        const label=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(month)-1];
+        return `<time datetime="${esc(iso)}"><span>${label}</span><strong>${Number(day)}</strong><small>${esc(year)}</small></time>`;
+      };
       const peakText=g=>{
         if(!g.peak_intervals.length)return 'Unavailable';
-        const intervals=g.peak_intervals.map(p=>`${esc(p.start)} to ${esc(p.end)}`).join('<br>');
-        return g.peak_intervals.length===1?intervals:`<details><summary>${g.peak_intervals.length} peak intervals</summary>${intervals}</details>`;
+        const intervals=g.peak_intervals.map(p=>`<div class="wbc-peak-range" role="group" aria-label="Peak interval: ${esc(p.start)} to ${esc(p.end)}">${peakDate(p.start)}<span class="wbc-peak-arrow" aria-hidden="true">→</span>${peakDate(p.end)}</div>`).join('');
+        return g.peak_intervals.length===1?intervals:`<details class="wbc-peak-multiple"><summary><span class="wbc-peak-count">${g.peak_intervals.length}</span> peak intervals</summary><div class="wbc-peak-ranges">${intervals}</div></details>`;
       };
       const table=groups.length?`<div class="wbc-timing-scroll" role="region" tabindex="0" aria-label="Collection timing by host and location; scroll horizontally for all columns"><table class="wbc-host-timing"><thead><tr><th scope="col">Host</th><th scope="col">Geographic scope</th><th scope="col">Abundance peak interval</th><th scope="col">Samples</th><th scope="col">Before peak</th><th scope="col">Overlaps peak</th><th scope="col">After peak</th><th scope="col">Unavailable</th></tr></thead><tbody>${groups.map(g=>{const cells=timingIdentityCells(g);return `<tr data-host="${esc(g.host)}"><th scope="row">${cells.host}</th><td>${cells.location}</td><td class="wbc-timing-peaks">${peakText(g)}</td><td class="wbc-timing-number"><span class="wbc-timing-sample-count">${g.total}</span></td><td class="wbc-timing-number">${g.before}</td><td class="wbc-timing-number">${g.overlap}</td><td class="wbc-timing-number">${g.after}</td><td class="wbc-timing-number">${g.unavailable}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No samples match the host filter.</p>';
       this.root.querySelector('.wbc-run-seasonal-summary').innerHTML=`<h4>Collection timing by host and location</h4><p class="wbc-timing-scope">${included.length} samples · ${esc(this.host==='ALL'?'All hosts':this.host)}. This table follows the host filter; selecting a single sample does not restrict it.</p>${table}<p class="wbc-muted">Each sample is compared with its own matched abundance peak. Counts describe collection timing, not bird numbers. Samples may share the same abundance profile.</p>`;

@@ -270,7 +270,8 @@
 
     const toolbar = make("div", "wse-app-toolbar");
     const sampleLabel = make("label", "wse-app-control");
-    sampleLabel.append(make("span", "wse-app-control-label", "Sample"));
+    const sampleLabelText = make("span", "wse-app-control-label", "Sample");
+    sampleLabel.append(sampleLabelText);
     const sampleSelect = make("select", "wse-app-sample");
     sampleSelect.setAttribute("aria-label", "Selected WINGS sample");
     sampleSelect.append(new Option("Select a sample…", ""));
@@ -406,10 +407,27 @@
       launch.hidden = active !== "genome";
     };
 
+    // Keep the existing host control beside the timing table in Ecology.
+    // Its permanent dock survives the table's innerHTML refreshes.
+    const timingSummary = braid?.querySelector(".wbc-run-seasonal-summary");
+    let timingHostDock = null;
+    if (timingSummary) {
+      const timingSection = make("div", "wse-timing-table-section");
+      timingHostDock = make("div", "wse-timing-host-controls");
+      timingSummary.parentElement.insertBefore(timingSection, timingSummary);
+      timingSection.append(timingHostDock, timingSummary);
+    }
+
     const activate = (name, focus = false) => {
       if (!TAB_ORDER.includes(name)) return;
       active = name;
       root.dataset.wseActiveTab = name;
+      const hostAtTable = name === "ecology" && Boolean(timingHostDock);
+      if (hostAtTable) timingHostDock.append(hostLabel);
+      else toolbar.insertBefore(hostLabel, clearButton);
+      if (timingHostDock) timingHostDock.hidden = !hostAtTable;
+      toolbar.classList.toggle("wse-host-at-table", hostAtTable);
+      sampleLabelText.textContent = hostAtTable ? "Sample for seasonal curve" : "Sample";
       toolbar.hidden = name === "genotypes" || name === "overview";
       if (name === "amino") toolbar.hidden = true;
       if (name === "amino") requestAnimationFrame(() => aminoDashboard?.refresh());
