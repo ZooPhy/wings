@@ -280,7 +280,7 @@ test('a sample without coordinates can switch directly to an explicitly chosen c
   assert.equal(a.selectedSampleId,'c'); // No silent reassignment to another location.
   const picker=q(a,'[data-wmw="weather-sample"]');picker.value='a';picker.fire('change');
   assert.equal(a.selectedSampleId,'a');assert.equal(a.migrationWeaveState.weather,true);assert.ok(weatherSVG(a));
-  assert.match(a.migrationWeaveNode.innerHTML,/Zoomed to 2025-10-13 through 2025-10-27/);
+  assert.match(a.migrationWeaveNode.innerHTML,/Oct 13 – Oct 27 · Follows selected sample/);
 });
 test('weather choices retain the selected member and exclude stale, wrong-season and host-filtered data',()=>{
   const a=weatherApp(),m=model(a.ecology.birdcast.seasons[0]);

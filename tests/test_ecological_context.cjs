@@ -120,10 +120,10 @@ test('Display window follows Migration Weave and eBird while duplicate source pa
     assert.equal(a.ecologyNode.querySelector(`.wse-ecology-${source}`).innerHTML,'');
   }
   assert.ok(a.ecologyNode.querySelector('.wse-ecology-ebird-charts').children.length);
-  assert.match(a.migrationWeaveNode.innerHTML,/Zoomed to 2025-03-26 through 2025-04-09/);
+  assert.match(a.migrationWeaveNode.innerHTML,/Mar 26 – Apr 9 · Follows selected sample/);
   assert.match(a.ecologyNode.querySelector('.wse-ecology-intro').innerHTML,/2025-03-26 through 2025-04-09/);
-  a.setEcologyDays(30);assert.match(a.migrationWeaveNode.innerHTML,/Zoomed to 2025-03-03 through 2025-05-02/);
-  a.setEcologyDays(90);assert.match(a.migrationWeaveNode.innerHTML,/Zoomed to 2025-03-01 through 2025-06-15/);
+  a.setEcologyDays(30);assert.match(a.migrationWeaveNode.innerHTML,/Mar 3 – May 2 · Follows selected sample/);
+  a.setEcologyDays(90);assert.match(a.migrationWeaveNode.innerHTML,/Mar 1 – Jun 15 · Follows selected sample/);
   const select=a.ecologyNode.querySelector('.wse-ecology-days');assert.equal(select.disabled,false);assert.equal(select.value,'90');
   a.selectedSampleId=null;a.renderEcology();assert.equal(select.disabled,true);assert.match(select.title,/Select a sample/);
   assert.equal(a.ecologyNode.querySelector('.wse-ecology-weather-panel').hidden,true);
