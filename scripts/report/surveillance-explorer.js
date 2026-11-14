@@ -350,13 +350,18 @@ globalThis.WINGS_STATE_ARTWORK = [{"name":"Alabama","code":"AL","country":"US","
       if (focus && plottable.includes(focus)) state.page=Math.floor(plottable.indexOf(focus)/8);
     }
     const region=explorer.ecology?.states?.[m.season.state_code] || m.season.state_code;
+    const stateNames=explorer.ecology?.states||{};
+    const stateCodes=[...new Set(models.map(n=>n.season.state_code))].sort((a,b)=>String(stateNames[a]||a).localeCompare(String(stateNames[b]||b)));
+    const stateItems=stateCodes.map(code=>({value:code,label:stateNames[code]||code,src:(globalThis.WINGS_STATE_ARTWORK||[]).find(row=>row.country==='US'&&row.code===code)?.src}));
+    const stateModels=models.filter(n=>n.season.state_code===m.season.state_code);
     const basis=m.complete ? "full-season passage" : `observed passage through ${shortDate(iso(m.through))}`;
     const choices=state.weather?weatherChoices(explorer,m):[];
     const chosenWeather=choices.find(c=>c.ids.includes(explorer.selectedSampleId));
     root.innerHTML=heading+`
       <p class="wmw-subtitle">Sample collections alongside estimated nightly migration.</p>
       <div class="wmw-toolbar">
-        <label>Season <select data-wmw="season" aria-label="Migration season">${models.map(n=>`<option value="${esc(n.season.key)}" ${n===m?"selected":""}>${esc(explorer.ecology?.states?.[n.season.state_code] || n.season.state_code)} · ${esc(n.season.label)}</option>`).join("")}</select></label>
+        <label>State <select data-wmw="state" aria-label="Migration state">${stateItems.map(item=>`<option value="${esc(item.value)}" ${item.value===m.season.state_code?"selected":""}>${esc(item.label)}</option>`).join("")}</select></label>
+        <label>Migration season <select data-wmw="season" aria-label="Migration season">${stateModels.map(n=>`<option value="${esc(n.season.key)}" ${n===m?"selected":""}>${esc(n.season.label)}</option>`).join("")}</select></label>
         <div class="wmw-toggle" role="group" aria-label="Migration horizontal axis"><button type="button" data-wmw="calendar" aria-pressed="${state.mode==="calendar"}">Calendar</button><button type="button" data-wmw="progress" aria-pressed="${state.mode==="progress"}" ${!progressAvailable?"disabled":""}>Migration progress</button></div>
         <div class="wmw-toggle" role="group" aria-label="Migration displayed dates"><button type="button" data-wmw="whole" aria-pressed="${state.view==="season"}">Full season</button><button type="button" data-wmw="sample-window" aria-pressed="${state.view==="sample"}" ${!view.canFollow?"disabled":""}>Sample ±${explorer.ecologyDays || 30} days</button></div>
         <button type="button" data-wmw="weather" aria-pressed="${Boolean(state.weather)}" title="Toggle daily weather at the selected collection location">Weather</button>
@@ -378,6 +383,14 @@ globalThis.WINGS_STATE_ARTWORK = [{"name":"Alabama","code":"AL","country":"US","
       <p class="wmw-note">Drag across a chart to select nights. Collections link to their ${bird.night_offset_days===-1?"preceding migration night":"collection-date evening"}. BirdCast combines species; these links show timing, not host movement.</p>
 `;
     const q=s=>root.querySelector(s), redraw=()=>render(explorer);
+    globalThis.WINGS_EXPLORER_TABS?.decorateIconSelect?.(q('[data-wmw="state"]'),stateItems);
+    q('[data-wmw="state"]').addEventListener("change",e=>{
+      const available=models.filter(n=>n.season.state_code===e.target.value);
+      const next=available.find(n=>n.season.start_date===m.season.start_date&&n.season.end_date===m.season.end_date)||available[0];
+      if(!next)return;
+      state.season=next.season.key;state.view="season";state.range=null;state.page=0;redraw();
+      q('[data-wmw="state"]').parentElement?.querySelector('.wse-icon-trigger')?.focus();
+    });
     for(const [name,key] of [["options","optionsOpen"],["dates","datesOpen"]]) {
       q(`[data-wmw="${name}"]`).addEventListener("toggle",e=>{state[key]=e.target.open;});
     }
@@ -1029,6 +1042,75 @@ THIS SOFTWARE.
     return node;
   };
 
+  let iconPickerSerial = 0;
+  function decorateIconSelect(select, items) {
+    // Keep native controls when artwork or a browser DOM is unavailable.
+    if (!select?.ownerDocument || !items.some(item=>item.src)) return null;
+    const wrapper=make('span','wse-icon-picker');
+    const trigger=make('button','wse-icon-trigger');trigger.type='button';
+    const menu=make('span','wse-icon-menu');menu.hidden=true;
+    menu.id=`wse-icon-menu-${++iconPickerSerial}`;menu.setAttribute('role','listbox');
+    const label=select.getAttribute('aria-label')||'Choose an option';
+    menu.setAttribute('aria-label',label);
+    trigger.setAttribute('aria-haspopup','listbox');trigger.setAttribute('aria-controls',menu.id);trigger.setAttribute('aria-expanded','false');
+    const optionNodes=[];
+    const artwork=(node,item)=>{
+      if(item.src){const img=make('img','wse-picker-icon');img.src=item.src;img.alt='';node.append(img);}
+      else {const blank=make('span','wse-picker-placeholder');blank.setAttribute('aria-hidden','true');node.append(blank);}
+      node.append(make('span','wse-picker-name',item.label));
+    };
+    const close=()=>{menu.hidden=true;trigger.setAttribute('aria-expanded','false');};
+    const refresh=()=>{
+      const selected=items.find(item=>item.value===select.value)||items[0];
+      trigger.replaceChildren();artwork(trigger,selected);trigger.append(make('span','wse-picker-caret','▾'));
+      trigger.setAttribute('aria-label',`${label}: ${selected.label}`);trigger.disabled=select.disabled;
+      optionNodes.forEach((node,i)=>node.setAttribute('aria-selected',String(items[i].value===select.value)));
+    };
+    const open=(last=false)=>{menu.hidden=false;trigger.setAttribute('aria-expanded','true');
+      const index=items.findIndex(item=>item.value===select.value);
+      (last?optionNodes.at(-1):optionNodes[Math.max(0,index)])?.focus();
+    };
+    items.forEach(item=>{
+      const option=make('button','wse-icon-option');option.type='button';option.tabIndex=-1;option.setAttribute('role','option');option.setAttribute('aria-label',item.label);artwork(option,item);
+      option.addEventListener('click',event=>{event.preventDefault();close();trigger.focus();select.value=item.value;select.dispatchEvent(new Event('change',{bubbles:true}));refresh();});
+      optionNodes.push(option);menu.append(option);
+    });
+    trigger.addEventListener('click',event=>{event.preventDefault();if(menu.hidden)open();else close();});
+    trigger.addEventListener('keydown',event=>{
+      if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();open(event.key==='End');if(event.key==='Home')optionNodes[0]?.focus();}
+    });
+    let typed='',typedAt=0;
+    menu.addEventListener('keydown',event=>{
+      const index=optionNodes.indexOf(select.ownerDocument.activeElement);
+      let next=null;
+      if(event.key==='ArrowDown')next=(index+1)%items.length;
+      if(event.key==='ArrowUp')next=(index-1+items.length)%items.length;
+      if(event.key==='Home')next=0;
+      if(event.key==='End')next=items.length-1;
+      if(event.key==='Escape'){event.preventDefault();close();trigger.focus();return;}
+      if(event.key==='Tab'){close();return;}
+      if(next!==null){event.preventDefault();optionNodes[next].focus();return;}
+      if(event.key.length===1 && /\S/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey){
+        const now=Date.now();typed=(now-typedAt<700?typed:'')+event.key.toLowerCase();typedAt=now;
+        const found=items.findIndex(item=>item.label.toLowerCase().startsWith(typed));
+        if(found>=0){event.preventDefault();optionNodes[found].focus();}
+      }
+    });
+    wrapper.addEventListener('focusout',event=>{if(!wrapper.contains(event.relatedTarget))close();});
+    select.parentElement.insertBefore(wrapper,select);wrapper.append(select,trigger,menu);
+    select.hidden=true;select.setAttribute('aria-hidden','true');select.tabIndex=-1;
+    select.addEventListener('change',refresh);refresh();
+    return {refresh};
+  }
+
+  function hostChoice(host) {
+    const key=String(host).trim().toLowerCase();
+    const aliases={blkvul:'BLVU',snogoo:'SNGO',turvul:'TUVU',cangoo:'CANG',cago:'CANG',rethaw:'RTHA'};
+    const code=aliases[key]||String(host).toUpperCase();
+    const item=(globalThis.WINGS_HOST_ARTWORK||[]).find(row=>row.code===code||row.name.toLowerCase()===key);
+    return {value:host,label:item?.name||host,src:item?.src};
+  }
+
   const TAB_ORDER = ["overview", "genome", "amino", "genotypes", "ecology", "coverage", "concordance", "outbreak"];
   const TAB_LABELS = {
     overview: "Overview",
@@ -1304,8 +1386,10 @@ THIS SOFTWARE.
     const hostSelect = make("select", "wse-app-host");
     hostSelect.setAttribute("aria-label", "Browse samples by host");
     hostSelect.append(new Option("All hosts", "ALL"));
-    for (const host of explorer.hosts || []) hostSelect.append(new Option(host, host));
+    const hostChoices = [{value:"ALL",label:"All hosts"},...(explorer.hosts || []).map(hostChoice).sort((a,b)=>a.label.localeCompare(b.label))];
+    for (const item of hostChoices.slice(1)) hostSelect.append(new Option(item.label, item.value));
     hostLabel.append(hostSelect);
+    const hostPicker = decorateIconSelect(hostSelect, hostChoices);
 
     const clearButton = make("button", "wse-app-clear", "Clear selection");
     clearButton.type = "button";
@@ -1535,6 +1619,7 @@ THIS SOFTWARE.
     const sync = () => {
       syncSampleOptions();
       hostSelect.value = explorer.hostFilter || "ALL";
+      hostPicker?.refresh();
       clearButton.disabled = !explorer.selectedSampleId && !explorer.selectedReferenceId && !explorer.selectedTreeTip;
       const sample = explorer.selectedSampleId ? explorer.sampleById?.get(explorer.selectedSampleId) : null;
       if (explorer.selectedTreeTip) {
@@ -1580,7 +1665,7 @@ THIS SOFTWARE.
     return api;
   }
 
-  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, _test:{aggregateCoverageRecords,coverageComparison,mountGenotypeDashboard,mountAminoDashboard} };
+  globalThis.WINGS_EXPLORER_TABS = { VERSION, TAB_ORDER: [...TAB_ORDER], mount, decorateIconSelect, _test:{aggregateCoverageRecords,coverageComparison,mountGenotypeDashboard,mountAminoDashboard} };
 })();
 /* WINGS_EXPLORER_TABS_JS_END */
 /* WINGS_TREE_STUDIO_JS_BEGIN */

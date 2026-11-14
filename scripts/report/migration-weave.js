@@ -343,13 +343,18 @@
       if (focus && plottable.includes(focus)) state.page=Math.floor(plottable.indexOf(focus)/8);
     }
     const region=explorer.ecology?.states?.[m.season.state_code] || m.season.state_code;
+    const stateNames=explorer.ecology?.states||{};
+    const stateCodes=[...new Set(models.map(n=>n.season.state_code))].sort((a,b)=>String(stateNames[a]||a).localeCompare(String(stateNames[b]||b)));
+    const stateItems=stateCodes.map(code=>({value:code,label:stateNames[code]||code,src:(globalThis.WINGS_STATE_ARTWORK||[]).find(row=>row.country==='US'&&row.code===code)?.src}));
+    const stateModels=models.filter(n=>n.season.state_code===m.season.state_code);
     const basis=m.complete ? "full-season passage" : `observed passage through ${shortDate(iso(m.through))}`;
     const choices=state.weather?weatherChoices(explorer,m):[];
     const chosenWeather=choices.find(c=>c.ids.includes(explorer.selectedSampleId));
     root.innerHTML=heading+`
       <p class="wmw-subtitle">Sample collections alongside estimated nightly migration.</p>
       <div class="wmw-toolbar">
-        <label>Season <select data-wmw="season" aria-label="Migration season">${models.map(n=>`<option value="${esc(n.season.key)}" ${n===m?"selected":""}>${esc(explorer.ecology?.states?.[n.season.state_code] || n.season.state_code)} · ${esc(n.season.label)}</option>`).join("")}</select></label>
+        <label>State <select data-wmw="state" aria-label="Migration state">${stateItems.map(item=>`<option value="${esc(item.value)}" ${item.value===m.season.state_code?"selected":""}>${esc(item.label)}</option>`).join("")}</select></label>
+        <label>Migration season <select data-wmw="season" aria-label="Migration season">${stateModels.map(n=>`<option value="${esc(n.season.key)}" ${n===m?"selected":""}>${esc(n.season.label)}</option>`).join("")}</select></label>
         <div class="wmw-toggle" role="group" aria-label="Migration horizontal axis"><button type="button" data-wmw="calendar" aria-pressed="${state.mode==="calendar"}">Calendar</button><button type="button" data-wmw="progress" aria-pressed="${state.mode==="progress"}" ${!progressAvailable?"disabled":""}>Migration progress</button></div>
         <div class="wmw-toggle" role="group" aria-label="Migration displayed dates"><button type="button" data-wmw="whole" aria-pressed="${state.view==="season"}">Full season</button><button type="button" data-wmw="sample-window" aria-pressed="${state.view==="sample"}" ${!view.canFollow?"disabled":""}>Sample ±${explorer.ecologyDays || 30} days</button></div>
         <button type="button" data-wmw="weather" aria-pressed="${Boolean(state.weather)}" title="Toggle daily weather at the selected collection location">Weather</button>
@@ -371,6 +376,14 @@
       <p class="wmw-note">Drag across a chart to select nights. Collections link to their ${bird.night_offset_days===-1?"preceding migration night":"collection-date evening"}. BirdCast combines species; these links show timing, not host movement.</p>
 `;
     const q=s=>root.querySelector(s), redraw=()=>render(explorer);
+    globalThis.WINGS_EXPLORER_TABS?.decorateIconSelect?.(q('[data-wmw="state"]'),stateItems);
+    q('[data-wmw="state"]').addEventListener("change",e=>{
+      const available=models.filter(n=>n.season.state_code===e.target.value);
+      const next=available.find(n=>n.season.start_date===m.season.start_date&&n.season.end_date===m.season.end_date)||available[0];
+      if(!next)return;
+      state.season=next.season.key;state.view="season";state.range=null;state.page=0;redraw();
+      q('[data-wmw="state"]').parentElement?.querySelector('.wse-icon-trigger')?.focus();
+    });
     for(const [name,key] of [["options","optionsOpen"],["dates","datesOpen"]]) {
       q(`[data-wmw="${name}"]`).addEventListener("toggle",e=>{state[key]=e.target.open;});
     }

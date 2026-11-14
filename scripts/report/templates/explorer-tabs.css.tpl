@@ -171,6 +171,7 @@
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-workbench,
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-audit,
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-footer { display: none !important; }
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] { background: #fff; }
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-clock-card { margin-top: 0; }
 
 @media (max-width: 680px) {
@@ -201,3 +202,22 @@
 .wse-app-toolbar.wse-host-at-table{grid-template-columns:minmax(220px,1fr) auto}
 .wse-app-toolbar.wse-host-at-table .wse-app-context{grid-column:1/-1}
 @media(max-width:680px){.wse-app-toolbar.wse-host-at-table{grid-template-columns:minmax(0,1fr)}.wse-timing-host-controls>.wse-app-control{width:100%}}
+
+/* Artwork menus retain a native select for the existing selection state. */
+.wse-icon-picker{display:inline-block;position:relative;min-width:0;width:100%;max-width:100%;vertical-align:middle}
+.wse-icon-picker>select[hidden],.wse-icon-menu[hidden]{display:none!important}
+.wse-icon-picker .wse-icon-trigger{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 10px;border:1px solid #b9c6ca;border-radius:7px;background:#fff;color:#263b43;font:inherit;text-align:left;cursor:pointer}
+.wse-icon-picker .wse-icon-trigger:hover,.wse-icon-picker .wse-icon-trigger[aria-expanded=true]{border-color:#8C1D40;background:#fff9e8}
+.wse-icon-picker .wse-picker-icon,.wse-icon-picker .wse-picker-placeholder{width:36px;height:32px;object-fit:contain;flex:0 0 36px;border-radius:5px}
+.wse-icon-picker .wse-picker-placeholder{background:radial-gradient(circle,#8C1D40 2px,transparent 3px) center/10px 10px;border:1px solid #e3e8e9}
+.wse-icon-picker .wse-picker-name{min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.3}
+.wse-icon-picker .wse-picker-caret{margin-left:auto;flex:0 0 auto;color:#566b75}
+.wse-icon-picker .wse-icon-menu{display:grid;position:absolute;z-index:50;top:calc(100% + 5px);left:0;width:100%;max-height:280px;overflow-y:auto;padding:5px;border:1px solid #b9c6ca;border-radius:9px;background:#fff;box-shadow:0 8px 24px #263b4326}
+.wse-icon-picker .wse-icon-option{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:7px;border:0;border-radius:5px;background:#fff;color:#263b43;font:inherit;text-align:left;cursor:pointer}
+.wse-icon-picker .wse-icon-option[aria-selected=true]{background:#fff1bd;color:#000;font-weight:700}
+.wse-icon-picker .wse-icon-option:hover,.wse-icon-picker .wse-icon-option:focus-visible{background:#fff9e8;outline:2px solid #FFC627;outline-offset:-2px}
+.wmw .wmw-toolbar label:has([data-wmw="state"]){min-width:190px;max-width:100%}
+
+.wmw .wmw-toolbar{align-items:flex-end}
+.wmw .wmw-toolbar>label{display:grid;gap:5px}
+.wmw .wmw-toolbar select,.wmw .wmw-toolbar>button,.wmw .wmw-toolbar>.wmw-toggle button{min-height:44px}

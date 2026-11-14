@@ -354,3 +354,14 @@ test('secondary pointers, cancellation and capture loss cannot leave a weather d
 });
 
 module.exports={Element,render,model,app,svg,groups,weatherApp,weatherSVG};
+
+test('state and season choices stay separate and only select available state-season series',()=>{
+  const a=app(),ky=season(),az={...season(),key:'AZ-fall',state_code:'AZ'},tn={...season(),key:'TN-spring',state_code:'TN',label:'Spring 2026',start_date:'2026-03-01',end_date:'2026-03-04',rows:[40,100,100,200].map((n,i)=>({date:`2026-03-0${i+1}`,cumulative_birds:n}))};
+  a.ecology.states={KY:'Kentucky',AZ:'Arizona',TN:'Tennessee'};a.ecology.birdcast.seasons=[ky,az,tn];render(a);
+  const seasonMarkup=()=>a.migrationWeaveNode.innerHTML.match(/<select data-wmw="season"[^>]*>(.*?)<\/select>/s)[1];
+  assert.match(seasonMarkup(),/Fall 2025/);assert.doesNotMatch(seasonMarkup(),/Kentucky|Spring 2026/);
+  a.migrationWeaveState.range=['2025-10-02','2025-10-03'];a.migrationWeaveState.page=2;
+  let picker=q(a,'[data-wmw="state"]');picker.value='AZ';picker.fire('change');assert.equal(a.migrationWeaveState.season,'AZ-fall');assert.equal(a.migrationWeaveState.range,null);assert.equal(a.migrationWeaveState.page,0);
+  picker=q(a,'[data-wmw="state"]');picker.value='TN';picker.fire('change');assert.equal(a.migrationWeaveState.season,'TN-spring');assert.match(seasonMarkup(),/Spring 2026/);assert.doesNotMatch(seasonMarkup(),/Fall 2025/);
+  a.selectSample('a');assert.equal(a.migrationWeaveState.season,ky.key);
+});
