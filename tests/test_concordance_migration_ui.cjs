@@ -18,7 +18,7 @@ const start=code.indexOf('/* WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE_UI_BEGIN */'),
 const sandbox=vm.createContext({document:{createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag)}});
 vm.runInContext(code.slice(start,end),sandbox);
 const walk=node=>[node,...node.children.flatMap(walk)];
-const points=panel=>walk(panel).filter(n=>n.attrs['data-migration-context']);
+const contextRows=panel=>walk(panel).filter(n=>n.tag==='button'&&n.className==='wm-context-row');
 function app(){
   const panel=new Element(),migration=new Element();
   const data={models:[{segment:'HA',comparison:'migration_vs_ecology',status:'DESCRIPTIVE',display_status:'DESCRIPTIVE',delta_r2:.03,n_samples:2,n_pairs:1,n_migration_contexts:1,diagnostic:'Shared contexts; descriptive only.',eligible_sample_ids:['a','b']},{segment:'NP',comparison:'migration_vs_ecology',status:'INSUFFICIENT_MIGRATION_CONTEXTS',display_status:'INSUFFICIENT_MIGRATION_CONTEXTS',n_samples:0,n_pairs:0,n_migration_contexts:0,diagnostic:'No eligible contexts.',eligible_sample_ids:[]}],readiness:{total_samples:3,samples_with_migration_context:2,distinct_migration_contexts:1},migration_context:{method:'fixture',coverage:'fixture',inference:'fixture',window:'fixed matched night'},migration_samples:[
@@ -30,37 +30,39 @@ function app(){
   a.migrationContextController=sandbox.WINGS_GENOMIC_ECOLOGICAL_CONCORDANCE.mountMigrationContext(a,migration);
   return {a,panel,data,migration};
 }
-test('map groups shared state-nights and shows missing summer context explicitly',()=>{
-  const {panel,migration}=app();assert.equal(points(migration).length,1);
-  assert.match(points(migration)[0].textContent,/2 samples/);
-  assert.match(migration.textContent,/summer: Matched night is outside seasonal coverage/);
+test('context rows group shared state-nights and show unavailable collections explicitly',()=>{
+  const {panel,migration}=app();assert.equal(contextRows(migration).length,1);
+  assert.match(contextRows(migration)[0].textContent,/2 samples/);
+  assert.match(migration.textContent,/summer · 2025-07-01: Matched night is outside seasonal coverage/);
   assert.match(panel.textContent,/Descriptive added fit.*p\/q values are withheld/);
   assert.doesNotMatch(JSON.stringify(walk(migration).map(n=>n.attrs)),/NaN|Infinity/);
 });
-test('click and keyboard activation link actual samples and refresh selection',()=>{
-  const {a,migration:panel}=app();points(panel)[0].fire('click');
-  assert.equal(a.selectedSampleId,'a');assert.equal(points(panel)[0].attrs['aria-pressed'],'true');
+test('native context buttons link actual samples and preserve a selected group member',()=>{
+  const {a,migration:panel}=app();contextRows(panel)[0].fire('click');
+  assert.equal(a.selectedSampleId,'a');assert.equal(contextRows(panel)[0].attrs['aria-pressed'],'true');
   a.selectSample('b');
-  assert.equal(a.selectedSampleId,'b');points(panel)[0].fire('keydown',{key:'Enter'});
-  assert.deepEqual(a.calls,['a','b']);assert.match(panel.textContent,/b · matched night 2025-10-01/);
+  assert.equal(a.selectedSampleId,'b');contextRows(panel)[0].fire('click');
+  assert.deepEqual(a.calls,['a','b']);assert.equal(contextRows(panel)[0].type,'button');assert.match(panel.textContent,/b · 2 samples share this context/);
 });
 test('nightly context lives separately from model comparisons and preserves evidence',()=>{
   const {a,panel,migration,data}=app(),original=JSON.stringify(data);
-  assert.equal(points(panel).length,0);
+  assert.equal(contextRows(panel).length,0);
   assert.doesNotMatch(panel.textContent,/Nightly migration context by state|Compare nightly contexts/);
-  assert.equal(points(migration).length,1);
+  assert.equal(contextRows(migration).length,1);
   assert.match(migration.textContent,/Nightly migration context by state/);
+  assert.doesNotMatch(migration.textContent,/Compare activity and seasonal progress|distinct nightly migration contexts by state shown/);
+  assert.ok(!walk(migration).some(n=>n.attrs['data-migration-context']||n.className==='wgec-migration-readout'));
   assert.doesNotMatch(migration.textContent,/Added fit by segment|Migration comparisons unavailable/);
   a.concordanceController.refresh();
-  assert.equal(points(migration).length,1);assert.equal(JSON.stringify(data),original);
+  assert.equal(contextRows(migration).length,1);assert.equal(JSON.stringify(data),original);
 });
 test('host filtering only changes displayed contexts and legacy reports remain usable',()=>{
   const {a,panel,migration,data}=app();a.hostFilter='Duck';a.selectedSampleId=null;a.migrationContextController.refresh();
-  assert.equal(points(migration).length,1);assert.match(points(migration)[0].textContent,/1 samples/);
+  assert.equal(contextRows(migration).length,1);assert.match(contextRows(migration)[0].textContent,/1 samples/);
   delete data.migration_context;delete data.migration_samples;a.migrationContextController.refresh();a.concordanceController.refresh();
-  assert.equal(points(migration).length,0);assert.equal(migration.hidden,true);assert.match(panel.textContent,/Genomic–Ecological Concordance/);
+  assert.equal(contextRows(migration).length,0);assert.equal(migration.hidden,true);assert.match(panel.textContent,/Genomic–Ecological Concordance/);
 });
-module.exports={Element,app,walk,points};
+module.exports={Element,app,walk,contextRows};
 
 test('migration summary separates available data from configured fit requirements',()=>{
   const {a,panel,data}=app();
