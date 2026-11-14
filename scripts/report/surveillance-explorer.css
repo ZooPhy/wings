@@ -621,6 +621,8 @@
 .wbc .wbc-peak-multiple summary{white-space:nowrap;font-size:12px;color:#8C1D40}
 .wbc .wbc-peak-count{display:inline-block;min-width:22px;padding:2px 5px;background:#FFC627;color:#000;text-align:center;border-radius:5px;font-weight:800}
 .wbc .wbc-peak-ranges{display:grid;gap:8px;margin-top:10px}
+
+.wbc .wbc-method-points{margin:10px 0;padding-left:20px;line-height:1.55}.wbc .wbc-method-points li{margin:5px 0}.wbc .wbc-method-details,.wbc .wbc-source-details{margin-top:12px}.wbc .wbc-source-record{padding-bottom:12px;border-bottom:1px solid #e2e9e8;overflow-wrap:anywhere}
 /* WINGS_BRAID_CLOCK_CSS_END */
 
 
