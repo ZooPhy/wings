@@ -334,11 +334,9 @@
     if (braid) shared.append(braid);
 
     const ecologyActions = make("div", "wse-ecology-clock-actions");
-    const loadPhenology = make("button", "wse-ecology-clock-action", explorer.payload?.ecological_clock ? "Replace bird abundance data" : "Load bird abundance data");
-    loadPhenology.type = "button";
     const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
     exportEvidence.type = "button";
-    ecologyActions.append(loadPhenology, exportEvidence);
+    ecologyActions.append(exportEvidence);
     shared.prepend(ecologyActions);
 
     const treeDetails = make("details", "wse-genome-details");
@@ -385,9 +383,6 @@
     app.append(shared, views);
     shell.append(app);
 
-    loadPhenology.addEventListener("click", () => {
-      braid?.querySelector(".wbc-import-phenology")?.click();
-    });
     exportEvidence.addEventListener("click", () => {
       braid?.querySelector(".wbc-export")?.click();
     });

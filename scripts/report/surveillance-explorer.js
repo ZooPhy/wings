@@ -1334,11 +1334,9 @@ THIS SOFTWARE.
     if (braid) shared.append(braid);
 
     const ecologyActions = make("div", "wse-ecology-clock-actions");
-    const loadPhenology = make("button", "wse-ecology-clock-action", explorer.payload?.ecological_clock ? "Replace bird abundance data" : "Load bird abundance data");
-    loadPhenology.type = "button";
     const exportEvidence = make("button", "wse-ecology-clock-action", "Export evidence");
     exportEvidence.type = "button";
-    ecologyActions.append(loadPhenology, exportEvidence);
+    ecologyActions.append(exportEvidence);
     shared.prepend(ecologyActions);
 
     const treeDetails = make("details", "wse-genome-details");
@@ -1385,9 +1383,6 @@ THIS SOFTWARE.
     app.append(shared, views);
     shell.append(app);
 
-    loadPhenology.addEventListener("click", () => {
-      braid?.querySelector(".wbc-import-phenology")?.click();
-    });
     exportEvidence.addEventListener("click", () => {
       braid?.querySelector(".wbc-export")?.click();
     });
@@ -3668,7 +3663,7 @@ THIS SOFTWARE.
         return g.peak_intervals.length===1?intervals:`<details class="wbc-peak-multiple"><summary><span class="wbc-peak-count">${g.peak_intervals.length}</span> peak intervals</summary><div class="wbc-peak-ranges">${intervals}</div></details>`;
       };
       const table=groups.length?`<div class="wbc-timing-scroll" role="region" tabindex="0" aria-label="Collection timing by host and location; scroll horizontally for all columns"><table class="wbc-host-timing"><thead><tr><th scope="col">Host</th><th scope="col">Geographic scope</th><th scope="col">Abundance peak interval</th><th scope="col">Samples</th><th scope="col">Before peak</th><th scope="col">Overlaps peak</th><th scope="col">After peak</th><th scope="col">Unavailable</th></tr></thead><tbody>${groups.map(g=>{const cells=timingIdentityCells(g);return `<tr data-host="${esc(g.host)}"><th scope="row">${cells.host}</th><td>${cells.location}</td><td class="wbc-timing-peaks">${peakText(g)}</td><td class="wbc-timing-number"><span class="wbc-timing-sample-count">${g.total}</span></td><td class="wbc-timing-number">${g.before}</td><td class="wbc-timing-number">${g.overlap}</td><td class="wbc-timing-number">${g.after}</td><td class="wbc-timing-number">${g.unavailable}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No samples match the host filter.</p>';
-      this.root.querySelector('.wbc-run-seasonal-summary').innerHTML=`<h4>Collection timing by host and location</h4><p class="wbc-timing-scope">${included.length} samples · ${esc(this.host==='ALL'?'All hosts':this.host)}. This table follows the host filter; selecting a single sample does not restrict it.</p>${table}<p class="wbc-muted">Each sample is compared with its own matched abundance peak. Counts describe collection timing, not bird numbers. Samples may share the same abundance profile.</p>`;
+      this.root.querySelector('.wbc-run-seasonal-summary').innerHTML=`<h4>Collection timing by host and location</h4><p class="wbc-timing-scope">${included.length} samples · ${esc(this.host==='ALL'?'All hosts':this.host)}.</p>${table}<p class="wbc-muted">Each sample is compared with its own matched abundance peak. Counts describe collection timing, not bird numbers. Samples may share the same abundance profile.</p>`;
 
       this.renderBraid();this.renderEvidence();this.renderClock();this.renderTable();
     }
