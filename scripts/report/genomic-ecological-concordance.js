@@ -297,10 +297,6 @@
     section.append(style,make("h4","","Nightly migration context by state"),make("p","","Compare nightly activity and seasonal progress. Select a context below to highlight its linked samples."));
     const all=Array.isArray(data.migration_samples)?data.migration_samples:[];
     const samples=all.filter(row=>explorer.hostFilter === "ALL" || !explorer.hostFilter || row.host === explorer.hostFilter || row.sample_id === explorer.selectedSampleId);
-    const selected=all.find(row=>row.sample_id === explorer.selectedSampleId);
-    const readout=make("p","wgec-migration-readout");readout.setAttribute("aria-live","polite");
-    const describe=row=>row?.migration_available?`${row.sample_id} · matched night ${row.migration_night} · ${row.migration_state} · ${row.migration_season_label}. Activity percentile ${(100*row.migration_intensity_percentile).toFixed(1)}%; seasonal progress ${(100*row.migration_progress).toFixed(1)}%.` : row ? `${row.sample_id}: ${row.migration_reason || "Migration context unavailable."}` : "Select a point or collection to inspect its fixed migration context.";
-    readout.textContent=describe(selected);
     const groups=new Map();
     for(const row of samples){if(!row.migration_available || !finite(row.migration_intensity_percentile) || !finite(row.migration_progress) || row.migration_progress<0 || row.migration_progress>1 || row.migration_intensity_percentile<0 || row.migration_intensity_percentile>1)continue;
       if(!groups.has(row.migration_context_key))groups.set(row.migration_context_key,[]);groups.get(row.migration_context_key).push(row);}
@@ -341,29 +337,7 @@
       }
       section.append(list);
     }
-    const hoverReadout=make("p","wm-hover","Hover over or focus a point to inspect it. The selected context stays above.");
-    if(groups.size){
-      const svg=(name,attrs={},text)=>{const node=document.createElementNS("http://www.w3.org/2000/svg",name);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));if(text!==undefined)node.textContent=text;return node;};
-      const chart=svg("svg",{viewBox:"0 0 900 300",role:"group","aria-label":"BirdCast activity percentile versus seasonal migration progress"});
-      const x=value=>70+value*790,y=value=>235-value*190;
-      for(const tick of [0,.25,.5,.75,1]){
-        chart.append(svg("line",{x1:70,x2:860,y1:y(tick),y2:y(tick),stroke:"#e3e9e9","stroke-dasharray":"3 5"}),svg("text",{x:58,y:y(tick)+4,"text-anchor":"end"},`${100*tick}%`),svg("text",{x:x(tick),y:259,"text-anchor":"middle"},`${100*tick}%`));
-      }
-      chart.append(svg("text",{x:70,y:20},"Nightly activity percentile within the source season"),svg("text",{x:465,y:289,"text-anchor":"middle"},"Seasonal progress · cumulative share of complete-season passage"));
-      for(const members of groups.values()){
-        const row=members[0],active=members.some(s=>s.sample_id === explorer.selectedSampleId),cx=x(row.migration_progress),cy=y(row.migration_intensity_percentile),r=active?8:6;
-        const point=svg("g",{class:"wgec-migration-point",tabindex:0,role:"button","aria-pressed":active,"aria-label":`${row.migration_state}, ${row.migration_night}, ${members.length} samples. Select linked collection.`,"data-migration-context":row.migration_context_key});
-        point.append(svg("circle",{cx,cy,r,fill:active?"#8c1d40":"#747474",stroke:"white","stroke-width":2}),svg("circle",{class:"wgec-migration-focus",cx,cy,r:r+5,fill:"none",stroke:"#bd811f","stroke-width":2,"aria-hidden":"true"}),svg("title",{},`${row.migration_night} · ${row.migration_season_label} · ${members.length} samples · ${(100*row.migration_intensity_percentile).toFixed(1)}% activity percentile · ${(100*row.migration_progress).toFixed(1)}% seasonal progress`));
-        if(members.length>1)point.append(svg("text",{x:cx+11,y:cy-8},String(members.length)));
-        const inspect=()=>{const member=members.find(s=>s.sample_id === explorer.selectedSampleId)||row;hoverReadout.textContent=describe(member)+` ${members.length} samples share this nightly migration context.`;};
-        const choose=()=>{const member=members.find(s=>s.sample_id === explorer.selectedSampleId)||row;if(member.sample_id !== explorer.selectedSampleId)explorer.selectSample(member.sample_id);else inspect();};
-        point.addEventListener("pointerenter",inspect);point.addEventListener("focus",inspect);point.addEventListener("click",choose);point.addEventListener("keydown",event=>{if(["Enter"," "].includes(event.key)){event.preventDefault();choose();}});chart.append(point);
-      }
-      const comparison=make("details");
-      comparison.append(make("summary","","Compare activity and seasonal progress"),make("p","wgec-migration-legend","Maroon: selected context. Gray: other contexts. Numbers show samples sharing a context."),chart,hoverReadout);
-      section.append(comparison);
-    }else section.append(make("p","","No completed-season migration contexts are available for this display. Matched nightly estimates may still be available in Migration Weave."));
-    section.append(readout,make("p","",`${groups.size} distinct nightly migration contexts by state shown. Host filtering changes this display; model comparisons use the fixed run inputs. Date brushing in Migration Weave does not refit the models.`));
+    if(!groups.size)section.append(make("p","","No completed-season migration contexts are available for this display. Matched nightly estimates may still be available in Migration Weave."));
     const unavailable=samples.filter(row=>!row.migration_available);
     if(unavailable.length){const details=make("details"),list=make("ul");details.append(make("summary","",`${unavailable.length} collections without analytical migration context`));for(const row of unavailable)list.append(make("li","",`${row.sample_id} · ${row.collection_date}: ${row.migration_reason || "Unavailable"}`));details.append(list);section.append(details);}
     return section;

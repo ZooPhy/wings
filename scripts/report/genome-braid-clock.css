@@ -13,12 +13,23 @@
 .wbc-linkage{min-width:0;max-width:100%;overflow-wrap:anywhere}
 .wbc-linkage code{white-space:normal;overflow-wrap:anywhere;font-size:inherit}
 
-.wbc .wbc-timing-scroll{max-width:100%;overflow-x:auto;margin:12px 0}
-.wbc .wbc-host-timing{width:100%;min-width:780px;border-collapse:collapse;font-size:13px;background:#fff}
-.wbc .wbc-host-timing th,.wbc .wbc-host-timing td{padding:10px 12px;border-bottom:1px solid var(--wbc-line);text-align:left;vertical-align:top}
-.wbc .wbc-host-timing thead th{color:var(--wbc-ink);background:#edf4f3;font-weight:650}
-.wbc .wbc-host-timing tbody th{color:var(--wbc-maroon);font-weight:650}
-.wbc .wbc-timing-peaks{min-width:160px}
-.wbc .wbc-timing-total{margin-top:14px;padding-top:12px;border-top:1px solid var(--wbc-line)}
-.wbc .wbc-timing-total>summary{font-size:13px;color:var(--wbc-muted);cursor:pointer}
-.wbc .wbc-timing-total .wbc-run-seasonal-counts{margin:10px 0 6px;font-size:15px}
+/* Collection timing: match the maroon/gold report tables. */
+.wbc .wbc-run-seasonal-summary{background:#fff;border:1px solid #d8e2e5;border-top:5px solid #FFC627;border-radius:12px;padding:18px}
+.wbc .wbc-run-seasonal-summary h4{color:#8C1D40;font-weight:800;letter-spacing:.1em}
+.wbc .wbc-timing-scope{color:#536872;font-size:13px}
+.wbc .wbc-timing-scroll{max-width:100%;overflow-x:auto;margin:16px 0;border:1px solid #e0e5e8;border-radius:10px;scrollbar-width:thin}
+.wbc .wbc-host-timing{width:100%;min-width:980px;border-collapse:separate;border-spacing:0;font-size:13px;background:#fff}
+.wbc .wbc-host-timing th,.wbc .wbc-host-timing td{padding:16px 14px;border-bottom:1px solid #e4e9ec;text-align:left;vertical-align:middle;white-space:normal}
+.wbc .wbc-host-timing thead th{color:#fff;background:#8C1D40;font-size:11px;line-height:1.4;text-transform:uppercase;letter-spacing:.05em;font-weight:750;border-bottom:3px solid #FFC627}
+.wbc .wbc-host-timing tbody th{color:#000;background:transparent;font-weight:750}
+.wbc .wbc-host-timing tbody tr:nth-child(even){background:#f7f9fa}
+.wbc .wbc-host-timing tbody tr:hover{background:#fff9e8}
+.wbc .wbc-host-timing tbody tr:last-child>*{border-bottom:0}
+.wbc .wbc-timing-identity{display:flex;align-items:center;gap:12px;min-width:170px;line-height:1.35}
+.wbc .wbc-timing-identity>span{max-width:150px;font-weight:700;color:#000}
+.wbc .wbc-timing-identity small{display:block;margin-top:5px;color:#657681;font-size:11px;font-weight:600}
+.wbc .wbc-timing-art{display:block;flex:0 0 84px;width:84px;height:70px;object-fit:contain;border-radius:7px}
+.wbc .wbc-timing-peaks{min-width:140px;font-size:12px;line-height:1.6;color:#536872}
+.wbc .wbc-timing-peaks summary{color:#8C1D40}
+.wbc .wbc-host-timing .wbc-timing-number{text-align:center;font-size:17px;font-weight:750;font-variant-numeric:tabular-nums;color:#263b43}
+.wbc .wbc-timing-sample-count{display:inline-block;min-width:36px;padding:5px 9px;border-radius:8px;background:#8C1D40;color:#fff}

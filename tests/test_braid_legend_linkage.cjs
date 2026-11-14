@@ -63,12 +63,25 @@ test('collection timing follows host filter and does not pull in the selected sa
   const markup=()=>root.querySelector('.wbc-run-seasonal-summary').innerHTML;
   const host=app.m.samples[0].host,inside=app.m.samples.filter(e=>e.host===host),outside=app.m.samples.find(e=>e.host!==host);
   assert.match(markup(),/Collection timing by host and location/);
-  assert.match(markup(),new RegExp(`Combined tally for the ${app.m.samples.length} samples`));
+  assert.match(markup(),new RegExp(`${app.m.samples.length} samples · All hosts`));
   app.host=host;app.selected=outside.key;app.refresh();
-  assert.match(markup(),new RegExp(`Combined tally for the ${inside.length} samples`));
-  assert.ok(!markup().includes(`<th scope="row">${outside.host}</th>`));
+  assert.match(markup(),new RegExp(`${inside.length} samples · ${host}`));
+  assert.ok(!markup().includes(`data-host="${outside.host}"`));
   const filtered=markup();app.selected=inside[0].key;app.refresh();assert.equal(markup(),filtered);
-  assert.match(markup(),/<details class="wbc-timing-total">/);
+  assert.ok(!markup().includes('wbc-timing-total'));assert.ok(!markup().includes('Combined tally'));
   assert.ok(!markup().includes('Whole-run'));
   app.host='No such host';app.refresh();assert.match(markup(),/No samples match the host filter/);assert.ok(!markup().includes('Combined tally'));
 }));
+
+test('timing cells use matching host and country-qualified region artwork with text fallbacks',()=>{
+  const priorBirds=global.WINGS_HOST_ARTWORK,priorStates=global.WINGS_STATE_ARTWORK;
+  global.WINGS_HOST_ARTWORK=[{name:'Canada Goose',code:'CANG',src:'data:image/svg+xml;base64,PHN2Zy8+'}];
+  global.WINGS_STATE_ARTWORK=[{name:'Kentucky',code:'KY',country:'US',src:'data:image/svg+xml;base64,PHN2Zy8+'}];
+  try{dashboard(({app,root})=>{
+    const row=app.m.samples[0];row.raw.host='CAGO';row.host='CAGO';row.raw.state='Kentucky';row.raw.country='US';app.host='CAGO';app.refresh();
+    const html=()=>root.querySelector('.wbc-run-seasonal-summary').innerHTML;
+    assert.match(html(),/Canada Goose<small>CAGO<\/small>/);assert.equal((html().match(/class="wbc-timing-art"/g)||[]).length,2);
+    row.raw.country='Other country';app.refresh();assert.equal((html().match(/class="wbc-timing-art"/g)||[]).length,1);
+    row.raw.host='<unknown>';app.refresh();assert.match(html(),/&lt;unknown&gt;/);assert.ok(!html().includes('<unknown>'));assert.equal((html().match(/class="wbc-timing-art"/g)||[]).length,0);
+  });}finally{if(priorBirds===undefined)delete global.WINGS_HOST_ARTWORK;else global.WINGS_HOST_ARTWORK=priorBirds;if(priorStates===undefined)delete global.WINGS_STATE_ARTWORK;else global.WINGS_STATE_ARTWORK=priorStates;}
+});

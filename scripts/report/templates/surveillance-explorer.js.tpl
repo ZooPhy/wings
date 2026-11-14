@@ -1,3 +1,7 @@
+/* Shared offline bird and location artwork. */
+@@WINGS:assets/birds/host-artwork.js@@
+@@WINGS:assets/states/state-artwork.js@@
+
 /* WINGS_MIGRATION_WEAVE_JS_BEGIN */
 @@WINGS:scripts/report/migration-weave.js@@
 /* WINGS_MIGRATION_WEAVE_JS_END */
@@ -203,17 +207,10 @@
           </section>
           <div class="wse-footer-note">When the optional phylogeny stage is enabled, WINGS infers segment trees from QC-passing consensus sequences. Otherwise, the Explorer displays available external trees. Trees are displayed without rerooting or time calibration. Collection dates come from metadata, not tip labels.</div>
           <section class="wse-panel wse-ecology-panel">
-            <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Ecological context</span><h3>Host reporting, migration, and weather</h3></div><label>Display window ± <select class="wse-ecology-days"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label></div>
+            <div class="wse-panel-heading"><div><span class="wse-panel-kicker">Ecological context</span><h3>Migration and weather</h3></div><label>Display window ± <select class="wse-ecology-days"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label></div>
             <div class="wse-migration-weave"></div>
-            <div class="wse-ecology-intro" aria-live="polite"></div>
-            <section class="wse-ecology-source wse-ebird-panel">
-              <h4>eBird · Host reporting frequency</h4>
-              <div class="wse-ebird"></div>
-              <div class="wse-ecology-ebird-charts"></div>
-            </section>
             <section class="wse-ecology-source wse-ecology-birdcast-panel" hidden><h4>BirdCast · Nocturnal migration</h4><div class="wse-ecology-birdcast"></div></section>
             <section class="wse-ecology-source wse-ecology-weather-panel" hidden><h4>Weather · Historical reanalysis</h4><div class="wse-ecology-weather"></div></section>
-            <div class="wse-ecology-provenance"></div>
           </section>
         </div>`;
 
@@ -621,6 +618,7 @@
       if (!this.ecologyNode) return;
       const intro = this.ecologyNode.querySelector(".wse-ecology-intro");
       const charts = this.ecologyNode.querySelector(".wse-ecology-ebird-charts");
+      if (!intro || !charts) return;
       charts.innerHTML = "";
       const sampleWindow = this.ecologyWindow();
       const sample = this.sampleById.get(this.selectedSampleId);
@@ -664,8 +662,6 @@
       windowSelect.title = window ? "Zoom plots around the selected collection date; Migration Weave is limited to its season." : "Select a sample with a valid collection date to use the display window.";
       const sample = this.sampleById.get(this.selectedSampleId);
       const bird = this.ecology?.birdcast;
-      const provenance = this.ecology ? `<details><summary>Ecological snapshot provenance</summary><p>Snapshot built: ${esc(this.ecology.created_at)} · Cached window: ±${esc(this.ecology.window_days)} days. Changing the display window does not download more data.</p><p>File: ${esc(this.ecology.source_file)}<br>SHA-256: <code>${esc(this.ecology.snapshot_sha256)}</code></p><p>Sources retain their own scales and dates. This offline snapshot stays fixed in saved bundles.</p></details>` : '<p>No BirdCast or weather snapshot is loaded. The existing eBird results remain available.</p>';
-      node(".wse-ecology-provenance").innerHTML = provenance;
       const birdNode = node(".wse-ecology-birdcast"), weatherNode = node(".wse-ecology-weather");
       for (const selector of [".wse-ecology-birdcast-panel", ".wse-ecology-weather-panel"]) {
         const panel = node(selector);
