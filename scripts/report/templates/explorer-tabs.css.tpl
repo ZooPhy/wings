@@ -171,8 +171,11 @@
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-workbench,
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-audit,
 .wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-footer { display: none !important; }
-.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] { background: #fff; }
-.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-clock-card { margin-top: 0; }
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] { background: #fff; padding: 0; max-width: none; }
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-clock-card { margin: 0; padding: 14px 16px; }
+.wse-app-shared .wbc-embedded[data-wse-lens="ecology"] .wbc-method { margin-top: 10px; padding-top: 8px; }
+[data-wse-active-tab="ecology"] .wse-ecology-panel { margin-top: 0; }
+.wse-app-shared:has(.wbc-embedded[data-wse-lens="ecology"]) + .wse-app-views { padding-top: 12px; }
 
 @media (max-width: 680px) {
   .wse-app-shared { padding: .55rem .55rem 0; }
