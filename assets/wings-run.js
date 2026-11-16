@@ -13,7 +13,7 @@
     ["assembly", "Influenza assembly & coverage"],
     ["polishing", "Consensus polishing & variants"],
     ["characterization", "Typing & annotation"],
-    ["phylogeny", "Phylogenetics"],
+    ["phylogeny", "Phylogenetics & phylodynamics"],
     ["surveillance", "Surveillance integration"],
     ["reporting", "Reports & archival"]
   ];
@@ -398,6 +398,7 @@
     }
   }
 
+  $("optPhylodynamics").addEventListener("change",()=>{const enabled=$("optPhylodynamics").checked;if(enabled)$("optExplorer").checked=true;$("optExplorer").disabled=enabled;});
   function preflightRows() {
     const match = validateMetadataMatch();
     const extensions = new Set(state.reads.map((f) => fastqExtension(f.name)));
@@ -418,6 +419,7 @@
         storageDirty || storagePending ? "Validate and apply your edited locations under Run details." : state.runner?.storage_revision
           ? `Runs: ${state.runner.runs_root} · Conda cache: ${state.runner.conda_pkgs_dir || state.runner.conda_pkgs_default || 'default location not detected'}`
           : "Connect to an updated local runner to verify storage."],
+      [!$("optPhylodynamics").checked || Boolean(state.runner?.phylodynamics_available && state.runner?.phylodynamics_ready), "Phylodynamics", !$("optPhylodynamics").checked ? "Not requested" : state.runner?.phylodynamics_ready ? "Fast analysis ready; Explorer included" : "Restart the updated local runner with NCBI_EMAIL set"],
       [readsOk, "Sequence inputs", readsOk ? `${state.reads.length} FASTQ file(s) selected` : "Select FASTQ files with one consistent extension"],
       [metadataOk, "Metadata structure", metadataOk ? `${state.metadataIds.length} sample rows detected` : (state.metadataError || "Select metadata.tsv")],
       [match.ok, "Sample matching", match.detail],
@@ -438,6 +440,7 @@
       $("optGenoflu").checked && "GenoFLU",
       $("optVadr").checked && "VADR",
       $("optPhylogeny").checked && "Phylogenetics",
+      $("optPhylodynamics").checked && "Phylodynamics (Fast)",
       $("optExplorer").checked && "Surveillance Explorer",
       briefingOptions().briefing && "Public health interpretation / agency briefing"
     ].filter(Boolean);
@@ -492,6 +495,7 @@
             genoflu: $("optGenoflu").checked,
             vadr: $("optVadr").checked,
             phylogeny: $("optPhylogeny").checked,
+            phylodynamics: $("optPhylodynamics").checked,
             explorer: $("optExplorer").checked,
             ...briefingOptions()
           }
@@ -874,7 +878,7 @@
     }
     renderMetadata();
   });
-  ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
+  ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optPhylodynamics", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
   $("optBriefing")?.addEventListener("change", syncBriefing);
   $("checkBriefingModel")?.addEventListener("click", checkBriefingModel);
   $("briefingModel")?.addEventListener("input", () => {

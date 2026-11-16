@@ -63,6 +63,10 @@ RULE_STAGE = {
     "contextual_phylogeny_tree": "phylogeny", "phylogeny_complete": "phylogeny",
     "phylogeny_ready_segments": "phylogeny", "select_contextual_references": "phylogeny",
     "finalize_contextual_references": "phylogeny",
+    "phylodynamic_reference_snapshot": "phylogeny", "phylodynamic_reference_selection": "phylogeny",
+    "phylodynamic_replicate": "phylogeny", "phylodynamic_sensitivity": "phylogeny",
+    "phylogeography_results_preflight": "reporting", "phylogeography_results_fast": "reporting",
+    "phylogeography_results": "reporting",
     "ebirdst_phenology": "surveillance", "metadata_ecological_context": "surveillance",
     "run_provenance": "reporting", "archive_replay_inputs": "reporting",
     "select_historical_baseline": "reporting", "historical_stability": "reporting",
@@ -316,6 +320,8 @@ def build_config(run_id: str) -> tuple[Path, int]:
     phylogeny = dict(config.get("phylogeny") or {})
     phylogeny["enabled"] = bool(options.get("phylogeny", False))
     config["phylogeny"] = phylogeny
+    from phylodynamics_job_options import apply_options as apply_phylodynamics_options
+    apply_phylodynamics_options(config, options, REPO_ROOT)
     if options.get("context_setup"):
         context_setup.configure(config, directory / "context", metadata)
 
@@ -992,6 +998,8 @@ class Handler(SimpleHTTPRequestHandler):
                     "config_yaml_present": (REPO_ROOT / "config.yaml").is_file(),
                     "config_yaml_path": str(REPO_ROOT / "config.yaml"),
                     "docker_check_available": True,
+                    "phylodynamics_ready": bool(os.environ.get("NCBI_EMAIL", "").strip()),
+                    "phylodynamics_available": True,
                 })
                 return
             if parsed.path == "/api/runs":
@@ -1168,6 +1176,8 @@ class Handler(SimpleHTTPRequestHandler):
                 options = payload.get("options") or {}
                 if not isinstance(options, dict):
                     raise ValueError("Run options must be an object")
+                from phylodynamics_job_options import validate_options as validate_phylodynamics_options
+                validate_phylodynamics_options(options)
                 interpretation = briefing_options(options)
                 require_briefing_model({"public_health_interpretation": interpretation})
                 name = str(payload.get("name", "")).strip() or "WINGS run"

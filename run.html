@@ -217,8 +217,10 @@
             <label class="option-card"><input id="optGenoflu" type="checkbox" checked><span><strong>GenoFLU</strong><small>Influenza genotype assignment.</small></span></label>
             <label class="option-card"><input id="optVadr" type="checkbox" checked><span><strong>VADR annotation</strong><small>Influenza sequence annotation and validation.</small></span></label>
             <label class="option-card"><input id="optPhylogeny" type="checkbox"><span><strong>Phylogenetics</strong><small>Build segment-level phylogenetic trees when enough sequences are available.</small></span></label>
+            <label class="option-card"><input id="optPhylodynamics" type="checkbox"><span><strong>Phylodynamics (Fast)</strong><small>Reconstruct HA ancestry and geographic spread. Includes reference sampling and the Phylodynamics tab.</small></span></label>
             <label class="option-card"><input id="optExplorer" type="checkbox" checked><span><strong>Surveillance Explorer</strong><small>Generate the integrated run-level surveillance interface.</small></span></label>
           </div>
+          <p class="help" id="phylodynamicsHelp">Phylodynamics analyzes H5 HA ancestry and geographic changes, and enables Surveillance Explorer. Start the local runner with NCBI_EMAIL set for reference retrieval. BEAST MCMC remains an advanced workflow.</p>
           <label class="option-card" style="margin-top:1rem"><input id="optBriefing" type="checkbox"><span><strong>Public health interpretation / agency briefing</strong><small>Generate a briefing from the report evidence using a locally installed Ollama model.</small></span></label>
           <div id="briefingSettings" hidden>
             <div class="field">
@@ -312,7 +314,7 @@
 <script src="assets/wings-metadata-wizard.js?v=6"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
 <script src="assets/wings-context-setup.js?ebird_folder=2&v=12"></script>
-<script src="assets/wings-run.js?v=20261112-ebird-cache-location&wings_context=3"></script>
+<script src="assets/wings-run.js?v=20261116-phylodynamics&wings_context=3"></script>
 <script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>

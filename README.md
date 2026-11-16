@@ -34,6 +34,7 @@ Most tools run in rule-specific Conda environments. IRMA runs in a container sel
 - VADR sequence annotation and validation
 - Interactive sample-level HTML reports
 - Interactive sequencing-run summary report
+- Optional [Phylodynamics](#phylodynamics-in-the-surveillance-explorer): shared offline map, dated ancestry tree, geographic jump diagram, and sampling-sensitivity diagnostics
 - [Protein variation: mutation and coding landscape](#protein-variation-mutation-and-coding-landscape) with reference-coordinate amino-acid plots, sample and change-type filters, codon/nucleotide details, and SVG/TSV/JSON exports
 - Optional internal eight-segment phylogeny inference from QC-qualified WINGS consensuses using MAFFT and IQ-TREE 2
 - Linked eight-segment Surveillance Explorer with synchronized sample selection across timeline, map, and segment trees
@@ -1687,3 +1688,53 @@ even when its outputs are stored elsewhere. Check for active processes
 before unlocking. Let the other run finish, or stop it and confirm its
 worker processes have exited. Only then, if a stale lock remains, use
 `--unlock` with the affected run's Snakefile and configuration.
+
+
+## Phylodynamics in the Surveillance Explorer
+
+Open **Surveillance Explorer → Genomics → Phylodynamics**. The tab embeds the same viewer as the standalone Phylodynamics report: a map, WINGS ancestry tree, geographic jump diagram, entries through time, and ancestor-location probabilities. Results and map artwork are included in the saved `.wings` bundle for offline viewing. The public demo includes an explicitly labelled **simulated illustration**, with synthetic sample IDs; it is not an inference from the demo's sequencing samples.
+
+### Enable for a new job
+
+Start the local runner with an NCBI contact email available in its environment:
+
+```bash
+export NCBI_EMAIL="your.email@example.org"
+python scripts/wings_local_runner.py --runs-dir /path/to/wings/runs
+```
+
+In job submission, under analyses, select **Phylodynamics (Fast)**. It is unchecked by default and automatically includes Surveillance Explorer. This option currently uses the reviewed **H5 HA** workflow. It retrieves references through NCBI, selects location/time-balanced and random comparison sets, and builds the checked Fast results as part of the new job. Initial retrieval and inference require network access and additional runtime. The optional `NCBI_API_KEY` environment variable can also be supplied. Credentials are not written into job configuration or reports.
+
+Fast inference conditions ancestral-location probabilities and sampled geographic transitions on a fixed dated tree. Temporal-signal and numerical/Monte Carlo checks remain mandatory. A failed primary analysis is shown as unavailable; an alternative is not silently substituted. The primary result is the predeclared balanced set 1; other reference sets remain under **Advanced → Reference sampling**. These sets assess sampling sensitivity and are not ranked by their inferred entry counts.
+
+The checkbox does **not** launch BEAST MCMC. BEAST dating and posterior workflows remain advanced options documented in [Bayesian dating](docs/bayesian-dating.md) and [posterior phylogeography](docs/posterior-phylogeography.md). Checked BEAST results use the same viewer when explicitly included in a report. Geographic jumps represent inferred changes in ancestral sampling-location states, not observed transmission or bird flight paths.
+
+### Add existing results without rerunning sequencing
+
+Rebuild checked saved inference using the isolated report workflow:
+
+```bash
+snakemake --snakefile Snakefile.phylogeography-report \
+  --configfile config.yaml config/phylogeography-results.example.yaml \
+  --use-conda --cores 4
+```
+
+This report-only workflow does not schedule reference retrieval or upstream sequencing. To add its `results.json` to an existing saved run, preserve the original bundle and write a new copy:
+
+```bash
+python scripts/refresh_demo_phylodynamics.py --repo . \
+  --bundle /path/to/your-run.wings.gz \
+  --results results/run_summary/phylodynamics/results/fast_v1/results.json \
+  --output /path/to/your-run-with-phylodynamics.wings.gz --apply
+```
+
+The attachment checks that the analyzed WINGS sample IDs belong to the saved report and rejects illustrative data. Unavailable analyses stay unavailable. For new pipeline runs, the explorer builder attaches results automatically when both analyses are enabled.
+
+### Refresh the illustrative demo after UI changes
+
+```bash
+python scripts/build_explorer_assets.py --write
+python scripts/refresh_demo_phylodynamics.py --repo . --apply
+```
+
+This updates the existing demo bundle's viewer and attaches `resources/demo/phylodynamics.json`. Sample reports, biological results, metadata, and provenance remain unchanged. It runs no biological analyses. The Methods and Advanced reference-sampling sections stay collapsed initially; advanced content is indented for readability.

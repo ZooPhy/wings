@@ -8,6 +8,7 @@ Build:   python scripts/build_explorer_assets.py --write
 This does not render reports or modify saved .wings bundles.
 """
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,7 @@ import sys
 import tempfile
 
 MANIFEST = "scripts/report/explorer-assets.json"
-TOKEN = re.compile(r"@@WINGS:([A-Za-z0-9_./-]+(?:#[a-z]+)?)@@")
+TOKEN = re.compile(r"@@WINGS:([A-Za-z0-9_./-]+(?:#[a-z0-9]+)?)@@")
 SUMMARY_BEGIN = "/* WINGS_COMPACT_CONCORDANCE_SUMMARY_BEGIN */"
 SUMMARY_END = "/* WINGS_COMPACT_CONCORDANCE_SUMMARY_END */"
 
@@ -82,6 +83,8 @@ def render_all(repo):
                     raise ValueError("Canonical sources cannot contain template directives: " + path)
             else:
                 raise ValueError("Undeclared asset source: " + path)
+            if selector == 'base64':
+                return base64.b64encode(content.encode('utf-8')).decode('ascii')
             return css_part(content, selector) if selector else content.strip()
 
         result = TOKEN.sub(include, template)

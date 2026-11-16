@@ -79,12 +79,13 @@
     return {value:host,label:item?.name||host,src:item?.src};
   }
 
-  const TAB_ORDER = ["overview", "genome", "amino", "genotypes", "ecology", "coverage", "concordance", "outbreak"];
+  const TAB_ORDER = ["overview", "genome", "amino", "genotypes", "phylogeography", "ecology", "coverage", "concordance", "outbreak"];
   const TAB_LABELS = {
     overview: "Overview",
     genome: "Genome",
     amino: "Amino acids",
     genotypes: "Genotype frequencies",
+    phylogeography: "Phylodynamics",
     ecology: "Ecology",
     coverage: "Sampling & Detections",
     concordance: "Concordance",
@@ -420,6 +421,8 @@
 
     const aminoDashboard = mountAminoDashboard(explorer, panels.amino);
     const genotypeDashboard = mountGenotypeDashboard(explorer, panels.genotypes);
+    const phylogeographyMovie = globalThis.WINGS_PHYLODYNAMICS_TAB.mount(explorer, panels.phylogeography);
+    explorer.phylogeographyMovie = phylogeographyMovie;
 
 
     if (panels.concordance) {
@@ -477,6 +480,7 @@
     const activate = (name, focus = false) => {
       if (!TAB_ORDER.includes(name)) return;
       active = name;
+      phylogeographyMovie?.setActive(name === "phylogeography");
       root.dataset.wseActiveTab = name;
       const hostAtTable = name === "ecology" && Boolean(timingHostDock);
       if (hostAtTable) timingHostDock.append(hostLabel);
@@ -489,7 +493,7 @@
       toolbar.classList.toggle("wse-host-at-table", hostAtTable);
       sampleLabelText.textContent = hostAtTable ? "Sample for seasonal curve" : "Sample";
       toolbar.hidden = name === "genotypes" || name === "overview";
-      if (name === "amino") toolbar.hidden = true;
+      if (name === "amino" || name === "phylogeography") toolbar.hidden = true;
       if (name === "amino") requestAnimationFrame(() => aminoDashboard?.refresh());
       // Explicit display prevents the toolbar grid rule from overriding hidden.
       toolbar.style.display = toolbar.hidden ? "none" : "";

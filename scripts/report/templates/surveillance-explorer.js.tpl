@@ -1,3 +1,10 @@
+/* WINGS_PHYLODYNAMICS_TAB_V1 */
+@@WINGS:scripts/report/phylodynamics-embed.js@@
+@@WINGS:scripts/report/phylodynamics-tab.js@@
+/* WINGS_PHYLOGEOGRAPHY_MOVIE_BEGIN */
+@@WINGS:scripts/report/phylogeography-movie.js@@
+/* WINGS_PHYLOGEOGRAPHY_MOVIE_END */
+
 /* Shared offline bird and location artwork. */
 @@WINGS:assets/birds/host-artwork.js@@
 @@WINGS:assets/states/state-artwork.js@@

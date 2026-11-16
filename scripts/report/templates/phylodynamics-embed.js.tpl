@@ -1,0 +1,1 @@
+globalThis.WINGS_PHYLODYNAMICS_ASSETS={script:"@@WINGS:scripts/report/phylogeography-results.js#base64@@",style:"@@WINGS:scripts/report/phylogeography-results.css#base64@@",boundaries:"@@WINGS:scripts/report/map-boundaries.js#base64@@"};

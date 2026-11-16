@@ -926,6 +926,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ecological-context", type=Path)
     parser.add_argument("--phenology", type=Path)
     parser.add_argument("--surveillance-effort", type=Path)
+    parser.add_argument("--phylodynamics-results", type=Path, help="Checked shared Fast/BEAST results JSON")
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -978,6 +979,22 @@ def main() -> None:
                             reference_loader=reference_loader,
                             phenology=phenology, surveillance_effort=surveillance_effort,
                             ebird_status=ebird_status, context_setup=context_setup)
+    if "snakemake" in globals():
+        inference_inputs = list(getattr(snakemake.input, "phylodynamics", []))
+        if inference_inputs:
+            inference = json.loads(Path(inference_inputs[0]).read_text())
+            payload["phylodynamics"] = {k: inference[k] for k in
+                ("schema", "analyses", "sensitivity", "primary_analyses", "limitations")}
+            if inference.get("phylogeography"):
+                payload["phylogeography"] = inference["phylogeography"]
+    results_inputs = list(getattr(snakemake.input, "phylodynamics_results", [])) if "snakemake" in globals() else ([args.phylodynamics_results] if args.phylodynamics_results else [])
+    if results_inputs:
+        import importlib.util
+        loader = Path(snakemake.input.phylodynamics_loader) if "snakemake" in globals() else Path(__file__).with_name("explorer_phylodynamics.py")
+        spec = importlib.util.spec_from_file_location("explorer_phylodynamics", loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.attach_results(payload, Path(results_inputs[0]))
     output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Safe when embedded in a script[type=application/json] element.

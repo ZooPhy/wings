@@ -1048,6 +1048,8 @@ if RUN_CONCORDANCE:
 
 
 
+include: "rules/phylodynamics.smk"
+
 # Freeze the completed analytical target set before adding the interpretation
 # archive itself. This ensures archival occurs only after the scientific
 # outputs for the run are complete.
@@ -3072,6 +3074,9 @@ rule metadata_ecological_context:
 
 rule surveillance_explorer_data:
     input:
+        phylodynamics=([PHYLODYNAMIC_SUMMARY] if RUN_PHYLODYNAMICS else []),
+        phylodynamics_results=([PHYLOGEOGRAPHY_RESULTS_OUTPUT+"/results.json"] if RUN_PHYLODYNAMICS and PHYLOGEOGRAPHY_RESULTS_CONFIG["enabled"] else []),
+        phylodynamics_loader="scripts/explorer_phylodynamics.py",
         context_setup=([CONTEXT_SELECTION] if CONTEXT_SELECTION else []),
         ebird_status=EBIRD_STATUS_INPUT,
         ebird_package_loader="scripts/ebird_context_package.py",

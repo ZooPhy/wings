@@ -19,13 +19,20 @@
     "scripts/report/genome-braid-clock.css",
     "scripts/report/tree-studio.css",
     "scripts/report/concordance-model-explorer.js",
-    "scripts/report/concordance-model-explorer.css"
+    "scripts/report/concordance-model-explorer.css",
+    "scripts/report/phylogeography-movie.js",
+    "scripts/report/phylogeography-movie.css",
+    "scripts/report/phylodynamics-tab.js",
+    "scripts/report/phylogeography-results.js",
+    "scripts/report/phylogeography-results.css",
+    "scripts/report/map-boundaries.js"
   ],
   "outputs": {
     "scripts/report/sample-navigation.js": "scripts/report/templates/sample-navigation.js.tpl",
     "scripts/report/sample-navigation.css": "scripts/report/templates/sample-navigation.css.tpl",
     "scripts/report/explorer-tabs.css": "scripts/report/templates/explorer-tabs.css.tpl",
     "scripts/report/surveillance-explorer.js": "scripts/report/templates/surveillance-explorer.js.tpl",
-    "scripts/report/surveillance-explorer.css": "scripts/report/templates/surveillance-explorer.css.tpl"
+    "scripts/report/surveillance-explorer.css": "scripts/report/templates/surveillance-explorer.css.tpl",
+    "scripts/report/phylodynamics-embed.js": "scripts/report/templates/phylodynamics-embed.js.tpl"
   }
 }
