@@ -28,7 +28,7 @@ function environment(source) {
   const ctx=vm.createContext({document,matchMedia:()=>({matches:true})});
   vm.runInContext(read('scripts/report/vendor/d3-hierarchy.v3.min.js'),ctx);
   vm.runInContext(source,ctx);
-  const labels={overview:'Overview',genome:'Genome',amino:'Amino acids',genotypes:'Genotype frequencies',ecology:'Ecology',coverage:'Sampling & Detections',outbreak:'Outbreak context',concordance:'Concordance'};
+  const labels={overview:'Overview',genome:'Genome',amino:'Amino acids',genotypes:'Genotype frequencies',phylogeography:'Phylogeography movie',ecology:'Ecology',coverage:'Sampling & Detections',outbreak:'Outbreak context',concordance:'Concordance'};
   const buttons=Object.fromEntries(Object.entries(labels).map(([key,label])=>{const n=new Node('button');n.id='wse-tab-'+key;n.textContent=label;n.setAttribute('aria-selected',String(key==='overview'));return [key,n];}));
   const nav=new Node('div');
   const api=ctx.WINGS_VIEW_NAVIGATOR.mount(nav,buttons);
@@ -50,11 +50,11 @@ for(const [name,source] of [['canonical navigator',moduleSource],['generated nav
     assert.equal(e.api.element.tagName,'nav');
     assert.equal(e.api.element.getAttribute('aria-label'),'Explorer navigation');
   });
-  test('all eight views are visible initially, including Outbreak context',()=>{
+  test('all nine views are visible initially, including Outbreak context',()=>{
     const e=environment(source);
-    assert.equal(e.api.visibleViews().length,8);
+    assert.equal(e.api.visibleViews().length,9);
     assert.ok(e.api.visibleViews().includes('outbreak'));
-    assert.equal(Object.values(e.buttons).filter(b=>!b.hidden).length,8);
+    assert.equal(Object.values(e.buttons).filter(b=>!b.hidden).length,9);
     assert.equal(e.nav.getAttribute('aria-orientation'),'vertical');
     assert.ok(parseFloat(e.buttons.outbreak.style.top)<parseFloat(e.nav.style.height));
   });
