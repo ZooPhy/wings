@@ -11,7 +11,7 @@ const api = context.WINGS_EXPLORER_TABS;
 
 test('exports application views including the embedded genotype dashboard', () => {
   assert.equal(api.VERSION, '0.4.0');
-  assert.deepEqual(Array.from(api.TAB_ORDER), ['overview', 'genome', 'amino', 'genotypes', 'ecology', 'coverage', 'concordance', 'outbreak']);
+  assert.deepEqual(Array.from(api.TAB_ORDER), ['overview', 'genome', 'amino', 'genotypes', 'phylogeography', 'ecology', 'coverage', 'concordance', 'outbreak']);
 });
 
 test('mount rejects a missing Explorer instance', () => {

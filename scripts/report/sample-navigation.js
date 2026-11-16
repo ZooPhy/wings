@@ -24,7 +24,7 @@ THIS SOFTWARE.
 (() => {
   "use strict";
   const GROUPS = [
-    {id: "genomics", label: "Genomics", views: ["genome", "amino", "genotypes"]},
+    {id: "genomics", label: "Genomics", views: ["genome", "amino", "genotypes", "phylogeography"]},
     {id: "context", label: "Ecological context", views: ["ecology", "coverage", "outbreak"]},
     {id: "evidence", label: "Integrated evidence", views: ["concordance"]},
   ];

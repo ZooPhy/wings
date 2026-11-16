@@ -728,3 +728,6 @@
 .wse-evidence-scope, .wse-evidence-synthesis small { display: block; font-size: .85rem; margin: .75rem 0; }
 .wse-evidence-meaning .wse-evidence-scope { margin: .8rem 0 0; color: #47716a; }
 .wse-evidence-synthesis :focus-visible { outline: 3px solid #216b79; outline-offset: 3px; }
+
+/* WINGS_PHYLOGEOGRAPHY_MOVIE_CSS */
+@@WINGS:scripts/report/phylogeography-movie.css@@
