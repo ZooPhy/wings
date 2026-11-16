@@ -11,11 +11,15 @@ import json
 from pathlib import Path
 from refresh_demo_ui import ReportHTML, asset_bytes, refresh_html, atomic_write
 from explorer_phylodynamics import attach_results
+from refresh_demo_navigation import build_refresh as refresh_navigation
 
 
 def refresh(data, repo, results=None):
     bundle = json.loads(data)
-    html, _ = refresh_html(bundle['run_summary']['html'], asset_bytes(repo))
+    bundle, _, _ = refresh_navigation(bundle, asset_bytes(repo),
+        (repo / 'scripts/report/sample-navigation.css').read_text(encoding='utf-8'),
+        (repo / 'scripts/report/sample-navigation.js').read_text(encoding='utf-8'))
+    html = bundle['run_summary']['html']
     blocks = [b for b in ReportHTML(html).blocks if b['kind'] == 'script' and (b['attrs'].get('id') or '').startswith('wings-surveillance-data-')]
     if len(blocks) != 1:
         raise ValueError('Expected one surveillance payload in the saved report')

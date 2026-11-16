@@ -1737,4 +1737,4 @@ python scripts/build_explorer_assets.py --write
 python scripts/refresh_demo_phylodynamics.py --repo . --apply
 ```
 
-This updates the existing demo bundle's viewer and attaches `resources/demo/phylodynamics.json`. Sample reports, biological results, metadata, and provenance remain unchanged. It runs no biological analyses. The Methods and Advanced reference-sampling sections stay collapsed initially; advanced content is indented for readability.
+This updates the existing demo bundle's viewer and attaches `resources/demo/phylodynamics.json`. Report presentation is refreshed; biological results, metadata, and provenance remain unchanged. It runs no biological analyses. The Methods and Advanced reference-sampling sections stay collapsed initially; advanced content is indented for readability.

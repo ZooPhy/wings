@@ -61,7 +61,8 @@ def main():
     shutil.copyfile(metadata,harness/'metadata.tsv')
     shutil.copyfile(metadata,harness/'results/metadata/validated_metadata.tsv')
     for name in ('ebird_context_package.py','build_ebird_cache.py','filter_ebird_for_wings.py',
-                 'build_surveillance_explorer.py','public_reference_context.py','build_ecological_context.py'):
+                 'build_surveillance_explorer.py','public_reference_context.py','build_ecological_context.py',
+                 'explorer_phylodynamics.py'):
         shutil.copyfile(repo/'scripts'/name,harness/'scripts'/name)
     (harness/'resources').mkdir()
     shutil.copyfile(repo/'resources/ebird_host_codes_2025.tsv',harness/'resources/ebird_host_codes_2025.tsv')
@@ -97,7 +98,8 @@ def main():
         raise RuntimeError('Snakemake is required for integration execution; self-check passed. Install/use your Snakemake environment.')
     # Only genomic inputs are stubbed; the eBird config, rules, and Explorer rule
     # are extracted unchanged from the installed production Snakefile.
-    constants='''REFERENCE_ENABLED = ECOLOGY_ENABLED = PHENOLOGY_ENABLED = SURVEILLANCE_EFFORT_ENABLED = OUTBREAK_ENABLED = RUN_GENOFLU = False
+    constants='''REFERENCE_ENABLED = ECOLOGY_ENABLED = PHENOLOGY_ENABLED = SURVEILLANCE_EFFORT_ENABLED = OUTBREAK_ENABLED = RUN_GENOFLU = RUN_PHYLODYNAMICS = False
+PHYLOGEOGRAPHY_RESULTS_CONFIG = {"enabled": False}
 FROZEN_PHENOLOGY = ""
 CONTEXT_SELECTION = ""
 SAMPLES = []
@@ -111,10 +113,10 @@ rule all:
     runs=[]
     def run(label,data,success=True):
         (harness/'settings.json').write_text(json.dumps(data))
-        proc=subprocess.run([executable,'--cores','1','--nolock'],cwd=harness,capture_output=True,text=True)
+        proc=subprocess.run([executable,'--cores','1','--nolock','--profile','none','--workflow-profile','none'],cwd=harness,capture_output=True,text=True)
         (work/(label+'.log')).write_text(proc.stdout+'\n'+proc.stderr)
         if (proc.returncode==0)!=success:
-            raise RuntimeError(label+' failed; inspect '+str(work/(label+'.log')))
+            raise RuntimeError(label+' failed; inspect '+str(work/(label+'.log'))+'\n'+(proc.stdout+'\n'+proc.stderr)[-12000:])
         runs.append(label)
         if success:
             return json.loads((harness/'results/run_summary/surveillance_explorer.json').read_text())

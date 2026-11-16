@@ -67,6 +67,7 @@ function mount(text=source) {
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../scripts/report/vendor/d3-hierarchy.v3.min.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../scripts/report/explorer-view-navigator.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../scripts/report/phylodynamics-tab.js'),'utf8'),context);
   vm.runInContext(text,context);
   const samples=[{sample_id:'a',host:'Duck',collection_date:'2025-01-01'}];
   const explorer={root,payload:{},samples,hosts:['Duck'],sampleById:new Map(samples.map(s=>[s.sample_id,s])),referenceById:new Map(),hostFilter:'ALL',selectedSampleId:null,updateSelection(){}};
@@ -77,7 +78,7 @@ function mount(text=source) {
 test('standalone tabs mount, switch all views, and retain the concordance controller',()=>{
   const h=mount();
   assert.equal(h.explorer.concordanceController,h.concordance);
-  for(const name of ['overview','genome','amino','genotypes','ecology','coverage','concordance','outbreak']){
+  for(const name of ['overview','genome','amino','genotypes','phylogeography','ecology','coverage','concordance','outbreak']){
     assert.doesNotThrow(()=>h.tabs.activate(name));assert.equal(h.tabs.active,name);
     assert.equal(h.root.dataset.wseActiveTab,name);
   }
@@ -392,6 +393,14 @@ test('compact profile preserves a lone coordinate and explicitly marks an empty 
   assert.equal(one.querySelector('.wsp-coordinates').querySelectorAll('dd').length,1);
   const empty=profileHarness('2025-10-20',[['Latitude','']]).profileApi.profile;
   assert.equal(empty.querySelector('.wsp-coordinates').querySelector('dd').textContent,'Not recorded');
+});
+
+
+test('Phylodynamics tab keeps its explicit empty state when no results are attached',()=>{
+  const h=mount();h.tabs.activate('phylogeography');
+  assert.equal(h.tabs.active,'phylogeography');
+  assert.match(h.tabs.panels.phylogeography.querySelector('p').textContent,/No Phylodynamics results/);
+  assert.equal(h.tabs.panels.phylogeography.querySelector('iframe'),null);
 });
 
 
