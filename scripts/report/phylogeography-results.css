@@ -11,3 +11,14 @@
 /* WINGS_REFERENCE_INDENT_V1 */
 #reference-controls > :not(summary){margin-inline-start:20px}
 @media(max-width:600px){#reference-controls > :not(summary){margin-inline-start:12px}}
+
+/* WINGS_CHORD_FOCUS_V1: shape-following focus instead of an SVG bounding box. */
+#chord path[role="button"]{cursor:pointer}
+#chord path[role="button"]:focus{
+  outline:none;
+  filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px #b47a00);
+}
+#chord path[role="button"][fill="none"]:focus{stroke-width:17}
+#chord path[role="button"]:not([fill="none"]):focus{
+  opacity:1;stroke:#8c1d40;stroke-width:2;stroke-linejoin:round;
+}
