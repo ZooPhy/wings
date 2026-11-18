@@ -22,6 +22,7 @@ from urllib.parse import urlparse, parse_qs
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT/'scripts') not in sys.path:
     sys.path.insert(0,str(ROOT/'scripts'))
+from wings_credentials import runtime_environment
 SCHEMA = 'wings.context-selection.v1'
 PROVIDERS = ('ecology','phenology','public_genotypes','ebird','outbreak')
 
@@ -150,7 +151,8 @@ def find_ebird(metadata,opts):
     return {'status':'NEEDS_IMPORT','reason':'; '.join(reasons[:2]) or 'Download matching EBD and sampling-event data, then import the extracted folder'}
 
 
-def plan(metadata,settings=None):
+def plan(metadata,settings=None,environment=None):
+    environment=runtime_environment() if environment is None else environment
     opts=options(settings);scope=metadata_scope(metadata,opts['days'])
     source=find_ebird(metadata,opts) if source_enabled(opts,'ebird') else {'status':'DISABLED','reason':'Not selected'}
     windows=sorted({(r['country'],r['state_name'],r['date_from'],r['date_to']) for r in scope['scopes'] if r['country']!='UNKNOWN'})
@@ -164,8 +166,8 @@ def plan(metadata,settings=None):
                              'instructions':'Request all species for these regions and complete date windows. Include sampling-event data. Extract the downloaded archive and retain its terms and citation. If a window extends beyond the release, use a covering release or an explicitly revised analysis window.'},
             'providers':{'ebird':source,
               'ecology':{'status':'PLANNED','reason':f"{len(scope['weather_queries'])} unique point/date weather requests; {len(scope['birdcast_queries'])} unique state/night migration requests"},
-              'phenology':{'status':'DISABLED' if not opts['phenology'] else ('PLANNED' if os.environ.get('EBIRDST_ACCESS_KEY') else 'NEEDS_ACCESS'),
-                           'reason':'Reference annual cycle version '+str(opts['phenology_year'])+'; use EBIRDST_ACCESS_KEY in the runner environment, or existing cached rasters. Host names are resolved against the source taxonomy during preparation.'},
+              'phenology':{'status':'DISABLED' if not opts['phenology'] else ('PLANNED' if environment.get('EBIRDST_ACCESS_KEY') else 'NEEDS_ACCESS'),
+                           'reason':'Reference annual cycle version '+str(opts['phenology_year'])+'; add the eBird Status and Trends key in WINGS Settings, use EBIRDST_ACCESS_KEY for a native runner, or use existing cached rasters. Host names are resolved against the source taxonomy during preparation.'},
               'public_genotypes':{'status':'PLANNED','reason':'Snapshot public genotype metadata, then select host/region/month matches' if not opts['global_genotypes'] else 'Explicit global public comparison selected'},
               'outbreak':{'status':'PLANNED','reason':'Retrieve the official APHIS CSV when downloads are allowed; use a validated saved snapshot if unavailable. A supplied CSV overrides automatic retrieval.'},
               'run_genotypes':{'status':'AFTER_ANALYSIS','reason':'Computed from the run GenoFLU calls; no external download. Pairing is optional.'}}}
@@ -272,10 +274,13 @@ def normalized_metadata(source,destination):
     return destination
 
 
-def prepare(metadata,directory,settings=None,progress=None,executor=command):
+def prepare(metadata,directory,settings=None,progress=None,executor=command,environment=None):
     """Write a new immutable selection; preserve previous snapshots on failure."""
     metadata=Path(metadata).resolve();directory=Path(directory).resolve();opts=options(settings)
-    proposal=plan(metadata,opts);identity=proposal['metadata_sha256'];statuses={};cache=cache_root()
+    environment=runtime_environment() if environment is None else dict(environment)
+    if executor is command:
+        executor=lambda args,log,timeout=900: command(args,log,timeout=timeout,env=environment)
+    proposal=plan(metadata,opts,environment=environment);identity=proposal['metadata_sha256'];statuses={};cache=cache_root()
     store=directory/'snapshots';store.mkdir(parents=True,exist_ok=True)
     token=uuid.uuid4().hex
     with tempfile.TemporaryDirectory(prefix='.preparing-',dir=store) as tmp:
@@ -325,9 +330,9 @@ def prepare(metadata,directory,settings=None,progress=None,executor=command):
         def phenology():
             if not opts['phenology']:event('phenology','DISABLED','Phenology not selected');return
             if not opts['network']:event('phenology','UNAVAILABLE','Offline preparation does not invoke the phenology downloader; reuse an existing prepared selection');return
-            raster_cache=Path(os.environ.get('WINGS_EBIRDST_CACHE','~/.cache/wings/ebirdst')).expanduser()
-            if not os.environ.get('EBIRDST_ACCESS_KEY') and not next(raster_cache.glob('**/*.tif'),None):
-                event('phenology','NEEDS_ACCESS','Set EBIRDST_ACCESS_KEY before starting the runner, then prepare again');return
+            raster_cache=Path(environment.get('WINGS_EBIRDST_CACHE','~/.cache/wings/ebirdst')).expanduser()
+            if not environment.get('EBIRDST_ACCESS_KEY') and not next(raster_cache.glob('**/*.tif'),None):
+                event('phenology','NEEDS_ACCESS','Add the Status and Trends key in WINGS Settings, then prepare again (native runner: set EBIRDST_ACCESS_KEY)');return
             engine=shutil.which('snakemake')
             if not engine:raise ValueError('Snakemake is needed to prepare the phenology environment')
             request={'metadata':str(metadata),'output':str(stage/'phenology.json'),'cache':str(raster_cache.resolve()),

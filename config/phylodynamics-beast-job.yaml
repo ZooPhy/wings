@@ -1,0 +1,40 @@
+# New-job BEAST preset. Chain length is a budget, not evidence of convergence.
+# Publication requires the existing convergence and precision gates.
+bayesian_dating:
+  enabled: true
+  analyses:
+  - HA/balanced/replicate_1
+  run_id: submission_20m
+  chains: 2
+  chain_length: 20000000
+  log_every: 1000
+  burnin: 0.1
+  seed: 73129
+  threads: 2
+  clock_rate_median: 0.003
+  clock_rate_log_sd: 1.5
+  population_median: 1.0
+  population_log_sd: 2.0
+  max_rhat: 1.01
+  min_bulk_ess: 400
+  min_tail_ess: 400
+  min_chain_ess: 100
+  beast_command:
+  - beast
+  prior_only: false
+posterior_phylogeography:
+  enabled: true
+  analyses:
+  - HA/balanced/replicate_1
+  dating_run: submission_20m
+  run_id: submission_posterior
+  trees_per_chain: 5000
+  seed: 19073
+  max_rhat: 1.01
+  min_bulk_ess: 400
+  min_tail_ess: 400
+  min_chain_ess: 100
+  max_date_mcse_days: 7
+  max_hpd_endpoint_mcse_days: 14
+  max_mean_mcse: 0.15
+  max_probability_mcse: 0.025

@@ -1,0 +1,59 @@
+name: Phylodynamic reference sampling
+on:
+  push:
+    paths: ['Snakefile', 'rules/phylodynamics.smk', 'scripts/phylodynamic_*.py', 'scripts/build_phylodynamic_comparison.py', 'scripts/report/phylodynamic-comparison.*', 'scripts/report/phylogeography-movie.*', 'tests/test_phylogeography_analysis_focal.cjs', 'tests/test_phylodynamic_comparison_browser.cjs', 'envs/phylodynamics.yaml', 'envs/bayesian-dating.yaml', 'rules/bayesian_dating.smk', 'scripts/validate_bayesian_dating.py', 'scripts/WingsBeast.java', 'tests/check_bayesian_dating_workflow.py', 'tests/test_phylodynamics*.py', 'tests/check_phylodynamics_workflow.py', '.github/workflows/phylodynamics.yml']
+  pull_request:
+    paths: ['Snakefile', 'rules/phylodynamics.smk', 'scripts/phylodynamic_*.py', 'scripts/build_phylodynamic_comparison.py', 'scripts/report/phylodynamic-comparison.*', 'scripts/report/phylogeography-movie.*', 'tests/test_phylogeography_analysis_focal.cjs', 'tests/test_phylodynamic_comparison_browser.cjs', 'envs/phylodynamics.yaml', 'envs/bayesian-dating.yaml', 'rules/bayesian_dating.smk', 'scripts/validate_bayesian_dating.py', 'scripts/WingsBeast.java', 'tests/check_bayesian_dating_workflow.py', 'tests/test_phylodynamics*.py', 'tests/check_phylodynamics_workflow.py', '.github/workflows/phylodynamics.yml']
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        snakemake: ['8.30.0', '9.24.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: envs/phylodynamics.yaml
+          environment-name: phylodynamics
+          create-args: snakemake=${{ matrix.snakemake }}
+          cache-environment: true
+      - name: Numerical and real-tool integration tests
+        shell: bash -el {0}
+        env:
+          WINGS_TEST_PHYLODYNAMIC_TOOLS: '1'
+          WINGS_TEST_PHYLODYNAMIC_LINEAGES: '1'
+        run: python -m unittest discover -s tests -p 'test_phylodynamics*.py' -v
+      - name: Parse the updated workflow
+        shell: bash -el {0}
+        run: python tests/check_phylodynamics_workflow.py
+      - name: Movie regression tests
+        shell: bash -el {0}
+        run: node --test tests/test_phylogeography_movie.cjs tests/test_phylogeography_analysis_focal.cjs tests/test_phylogeography_analysis_validation.cjs
+      - name: Browser comparison regression tests
+        shell: bash -el {0}
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          node tests/test_phylodynamic_comparison_browser.cjs
+      - name: Known-tree benchmark smoke test
+        shell: bash -el {0}
+        run: python scripts/phylodynamic_benchmark.py --output benchmark-smoke --partition development --replicates 1 --histories 40 --budgets 12 --scenarios equal_rates geographic_bias
+
+  bayesian-dating:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: envs/bayesian-dating.yaml
+          environment-name: bayesian-dating
+          create-args: snakemake=9.24.0
+          cache-environment: true
+      - name: Live BEAST and ArviZ synthetic preflight
+        shell: bash -el {0}
+        run: python scripts/validate_bayesian_dating.py --output preflight.json
+      - name: Parse and dry-run dating rules
+        shell: bash -el {0}
+        run: python tests/check_bayesian_dating_workflow.py

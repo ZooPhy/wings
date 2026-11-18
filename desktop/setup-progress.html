@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'unsafe-inline'; img-src 'self' file:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>WINGS · Setup</title>
+<style>
+:root {font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#263c45;background:#f4f6f6;color-scheme:light}
+* {box-sizing:border-box} body {margin:0;padding:40px 20px} main {max-width:720px;margin:auto;background:white;border:1px solid #d8e1e4;border-radius:20px;padding:32px 40px;box-shadow:0 12px 40px #263c450a}
+.brand-header {display:flex;align-items:center;gap:18px;margin:0 0 24px}.brand-logo {display:block;width:76px;height:88px;object-fit:contain;flex-shrink:0}.brand {color:#8b1d40;font-weight:800;letter-spacing:.16em;font-size:14px;margin:0} h1 {font-size:28px;letter-spacing:-.025em;line-height:1.2;margin:0 0 12px} #detail {line-height:1.55;min-height:48px;margin:0 0 20px;color:#51636d}
+progress {width:100%;height:12px;border:0;border-radius:8px;background:#edf1f2;appearance:none} progress::-webkit-progress-bar {background:#edf1f2;border-radius:8px} progress::-webkit-progress-value {background:#8b1d40;border-radius:8px;transition:width .4s} progress::-moz-progress-bar {background:#8b1d40;border-radius:8px}
+.metrics {display:flex;justify-content:space-between;gap:12px;color:#64767e;font-size:13px;margin-top:9px} ol {list-style:none;padding:0;margin:26px 0} li {display:flex;align-items:center;gap:12px;padding:11px 0;color:#718089}.marker {display:grid;place-items:center;width:30px;height:30px;border:1px solid #d6dfe3;border-radius:50%;font-size:13px;flex-shrink:0} .state {margin-left:auto;font-size:12px}.complete {color:#385b4a}.complete .marker {background:#edf5ef;border-color:#c8ded0}.active {color:#263c45;font-weight:650}.active .marker {color:white;background:#8b1d40;border-color:#8b1d40;box-shadow:0 0 0 4px #f9eaf0}
+#activity {font-size:13px;margin:12px 0;color:#536771;line-height:1.5}.running #activity::before {content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#8b1d40;margin-right:8px;animation:pulse 1.8s infinite}.failed h1 {color:#9f2836}.stale h1 {color:#84611b} #note {font-size:13px;line-height:1.5;color:#718089;margin:0 0 22px}.footer {border-top:1px solid #e4eaed;padding-top:18px;display:flex;justify-content:space-between;align-items:center;gap:12px} a,button {font:inherit;font-size:13px;color:#8b1d40}button {border:1px solid #d6dfe3;border-radius:7px;padding:9px 13px;background:white;cursor:pointer} a:focus-visible,button:focus-visible {outline:3px solid #eabf3e;outline-offset:3px}a[hidden]{display:none}
+@keyframes pulse {50%{opacity:.35}} @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}} @media(max-width:520px){body{padding:12px}main{padding:24px 20px}h1{font-size:24px}.metrics{flex-wrap:wrap}.state{font-size:11px}li{gap:9px;font-size:14px}}
+</style>
+<script src="./setup-progress.js" defer></script>
+</head>
+<body><main id="status" class="running">
+<header class="brand-header"><img class="brand-logo" src="./wings_logo.jpg" alt="WINGS logo" width="76" height="88"><p class="brand">WINGS / SETUP</p></header>
+<div aria-live="polite"><h1 id="title">Starting WINGS setup…</h1><p id="detail">This page will update automatically while WINGS gets ready.</p></div>
+<progress id="bar" max="6" value="0" aria-label="Completed setup steps"></progress>
+<div class="metrics"><span id="count">0 of 6 steps completed</span><span id="elapsed">Elapsed: 0m 0s</span></div>
+<ol aria-label="Setup steps">
+<li id="step-0"><span class="marker">1</span><span>Check Docker Desktop</span><span class="state">Pending</span></li>
+<li id="step-1"><span class="marker">2</span><span>Install WINGS workflow</span><span class="state">Pending</span></li>
+<li id="step-2"><span class="marker">3</span><span>Prepare analysis runtime</span><span class="state">Pending</span></li>
+<li id="step-3"><span class="marker">4</span><span>Prepare influenza references</span><span class="state">Pending</span></li>
+<li id="step-4"><span class="marker">5</span><span>Prepare analysis tools</span><span class="state">Pending</span></li>
+<li id="step-5"><span class="marker">6</span><span>Start WINGS</span><span class="state">Pending</span></li>
+</ol>
+<p id="activity">Waiting for setup status…</p><p id="note">The first setup can take a while. Keep Docker Desktop running.</p>
+<div class="footer"><a id="log" href="#" target="_blank" rel="noopener">View technical log</a><button id="refresh" type="button">Refresh status</button></div>
+<noscript><p>Enable JavaScript to see automatic setup updates.</p></noscript>
+</main></body></html>

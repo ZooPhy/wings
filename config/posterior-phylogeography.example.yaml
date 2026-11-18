@@ -1,0 +1,16 @@
+# This overlay reads completed BEAST chains; it does not start or resume BEAST.
+posterior_phylogeography:
+  enabled: true
+  analyses: [HA/balanced/replicate_1]
+  dating_run: long20m
+  run_id: posterior_v1
+  trees_per_chain: 1000
+  seed: 19073
+  max_rhat: 1.01
+  min_bulk_ess: 400
+  min_tail_ess: 400
+  min_chain_ess: 100
+  max_date_mcse_days: 7
+  max_hpd_endpoint_mcse_days: 14
+  max_mean_mcse: 0.15
+  max_probability_mcse: 0.025

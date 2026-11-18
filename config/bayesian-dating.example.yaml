@@ -1,0 +1,23 @@
+# Overlay for existing screened inference outputs; does not change main config.yaml.
+bayesian_dating:
+  enabled: true
+  analyses: [HA/balanced/replicate_1] # predeclared primary; add other IDs for separate sensitivity fits
+  run_id: initial # choose a NEW name whenever inputs, priors or chain settings change
+  chains: 2
+  chain_length: 5000000 # initial computational budget, NOT evidence of convergence
+  log_every: 1000
+  burnin: 0.1
+  seed: 73129
+  threads: 2 # per chain
+  # Proper working priors, independent of the fitted TreeTime rate. Assess sensitivity.
+  # lognormal medians; log_sd is standard deviation on the natural-log scale.
+  clock_rate_median: 0.003 # substitutions/site/year
+  clock_rate_log_sd: 1.5
+  population_median: 1.0 # coalescent effective size × generation time, in years
+  population_log_sd: 2.0
+  max_rhat: 1.01
+  min_bulk_ess: 400
+  min_tail_ess: 400
+  min_chain_ess: 100
+  beast_command: [beast] # BEAST 2.7.7; a list, not a shell command
+  prior_only: false # true writes a PRIOR-ONLY result; use a different run_id

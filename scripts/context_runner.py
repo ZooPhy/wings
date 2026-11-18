@@ -8,6 +8,7 @@ import tempfile
 import threading
 from urllib.parse import unquote, urlparse
 import context_setup
+from wings_credentials import runtime_environment
 
 JOBS = set()
 UPLOADS = set()
@@ -57,9 +58,9 @@ def handle_get(handler,api):
     return True
 
 
-def provider_executor(run_state,api):
+def provider_executor(run_state,api,environment=None):
     """Use this run's saved package cache without mutating process-wide settings."""
-    environment=os.environ.copy()
+    environment=runtime_environment() if environment is None else dict(environment)
     if 'conda_pkgs_dirs' in run_state:
         if run_state['conda_pkgs_dirs']:
             environment['CONDA_PKGS_DIRS']=run_state['conda_pkgs_dirs']
@@ -78,6 +79,7 @@ def provider_executor(run_state,api):
 def start(run_id,payload,api):
     directory=api['run_dir'](run_id);metadata=directory/'inputs'/'metadata.tsv';context=directory/'context'
     settings=context_setup.options(payload.get('options'))
+    environment=runtime_environment()
     with api['LOCK']:
         run_state=api['read_state'](run_id)
         if busy(run_id) or run_state.get('status')!='created':raise ValueError('Context can be prepared only for an idle, unstarted run')
@@ -113,7 +115,8 @@ def start(run_id,payload,api):
         progress({'status':'PREPARING','providers':{}})
         def work():
             try:
-                selection=context_setup.prepare(metadata,context,settings,progress=progress,executor=provider_executor(run_state,api))
+                selection=context_setup.prepare(metadata,context,settings,progress=progress,
+                    executor=provider_executor(run_state,api,environment),environment=environment)
                 progress({'status':selection['status'],'providers':selection['providers'],
                           'snapshot_id':selection['snapshot_id'],'blocked_sources':selection['blocked_sources']})
             except Exception as error:

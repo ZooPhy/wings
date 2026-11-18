@@ -1,0 +1,55 @@
+# Merge phylodynamics into config.yaml, or use both configs on the command line:
+# snakemake --configfile config.yaml config/phylodynamics.example.yaml --use-conda --cores 8 --dry-run
+# This overlay disables the separate legacy COMPLETE-GENOME contextual reference
+# pipeline, which otherwise still requests your old H5Nx_sequences.fasta path.
+# Omit these two lines only if that separate pipeline is intentionally configured.
+public_references:
+  enabled: false
+  build_contextual: false
+phylodynamics:
+  enabled: true
+  segments: [HA]
+  references:
+    source: ncbi
+    subtypes: [H5]  # H5Nx; [] infers H families from recorded study annotations
+    snapshot: initial  # Change deliberately to refresh the public accession universe
+    cache_dir: resources/phylodynamics/ncbi-cache
+    offline: false
+    email_env: NCBI_EMAIL
+    api_key_env: NCBI_API_KEY  # optional; keep credentials out of this file
+    batch_size: 100
+    max_records: 250000  # fail above this limit; never take a first-N subset
+  countries: []  # global context; or an explicit list, e.g. [USA, Canada, Mexico]
+  lookback_days: 730
+  lookahead_days: 90
+  strategies: [balanced, available]  # add diversity for the optional genetic sensitivity
+  time_bin: month  # sensitivity: quarter or year
+  stratify_host: false  # recorded host labels; no assumed wild/domestic categories
+  replicates: 3
+  seed: 1729
+  # These are computational limits, NOT literature-validated optimal quotas.
+  max_references: 180
+  max_per_location: 40
+  requested_locations: []  # e.g. ["USA:KY", "USA:OH", "FRA:FRA"]
+  min_callable: 0.95
+  min_length_fraction: 0.8
+  max_length_fraction: 1.2
+  min_tips: 8
+  min_locations: 2
+  min_date_span_days: 90
+  min_clock_r2: 0.1
+  histories: 600
+  rate_prior_shape: 1.0
+  rate_prior_rate: 1.0
+  threads: 4
+
+  # Classify HA before sampling; retain the single clade observed in study tips.
+  lineage:
+    dataset: community/moncla-lab/iav-h5/ha/all-clades
+    tag: ""  # Resolve once, freeze exact version and file hashes in the cache.
+    snapshot: initial
+    cache_dir: resources/phylodynamics/nextclade-cache
+    nearest_per_study: 2
+  temporal:
+    permutations: 199
+    alpha: 0.05

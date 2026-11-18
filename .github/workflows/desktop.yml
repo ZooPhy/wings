@@ -1,0 +1,70 @@
+name: Desktop package
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['desktop/**', 'scripts/**', 'rules/**', 'envs/**', 'config/**', 'Snakefile', '.github/workflows/desktop.yml']
+permissions:
+  contents: read
+jobs:
+  controller:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy scipy pyyaml pytest
+      - name: Desktop orchestration and gateway tests
+        run: python -m unittest discover -s desktop/tests -v
+      - name: Desktop Ollama settings and browser defaults
+        run: |
+          python -m unittest discover -s tests -p test_desktop_ollama.py -v
+          python -m unittest discover -s tests -p test_browser_briefing_v2.py -v
+          node tests/test_browser_briefing_v2.cjs
+      - name: Existing runner and storage regression tests
+        run: python -m pytest -q tests/test_wings_local_runner.py tests/test_storage_folder_picker.py tests/test_runner_storage_options.py tests/test_runner_browser_storage.py
+      - name: Optional credentials and context regression tests
+        run: python -m pytest -q tests/test_desktop_credentials.py tests/test_context_setup.py tests/test_context_runner.py
+      - name: Bundle only distributable source
+        run: python desktop/package.py --source . --output /tmp/wings-dist
+      - name: Build the actual controller runtime
+        run: docker build --platform linux/amd64 -t wings-desktop-ci desktop/runtime
+      - name: Verify an installed source snapshot and Fast/BEAST DAGs
+        run: |
+          mkdir -p /tmp/wings-workspace/release
+          tar -xzf /tmp/wings-dist/WINGS.app/Contents/Resources/source.tar.gz -C /tmp/wings-workspace/release
+          docker run --rm --platform linux/amd64 \
+            --mount type=bind,source=/tmp/wings-workspace,target=/tmp/wings-workspace \
+            wings-desktop-ci smoke --repo /tmp/wings-workspace/release --workspace /tmp/wings-workspace
+      - name: Retain resolved dependency versions
+        run: docker run --rm --entrypoint cat wings-desktop-ci /opt/conda-explicit.txt > /tmp/conda-explicit.txt
+      - name: Build and query a tiny real BLAST database in a path containing spaces
+        run: |
+          docker run --rm --platform linux/amd64 --entrypoint python \
+            --mount type=bind,source=/tmp/wings-workspace,target=/tmp/wings-workspace \
+            wings-desktop-ci -m unittest discover \
+            -s /tmp/wings-workspace/release/tests -p test_blast_setup_spaces.py -v
+      - uses: actions/upload-artifact@v4
+        with:
+          name: controller-dependencies
+          path: /tmp/conda-explicit.txt
+  mac-app:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native key-paste and hyphen validation
+        run: python -m unittest discover -s desktop/tests -p test_key_input.py -v
+      - name: Setup progress model
+        run: python -m unittest discover -s desktop/tests -p test_setup_status.py -v
+      - name: Native settings menu persistence
+        run: python -m unittest discover -s desktop/tests -p test_settings_menu.py -v
+      - run: python desktop/package.py --source . --output /tmp/wings-preview
+      - name: Compile the native Mac app and create unsigned preview DMG
+        run: bash desktop/build-macos.sh /tmp/wings-preview/WINGS.app /tmp/wings-native
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-macos-preview
+          path: /tmp/wings-native/WINGS-Desktop-Preview.dmg

@@ -36,11 +36,15 @@ def browser_origin(handler):
 
 
 def roots(api):
-    home=Path.home().resolve()
+    desktop=os.environ.get('WINGS_DESKTOP_WORKSPACE')
+    home=Path(os.environ.get('WINGS_HOST_HOME') or Path.home()).resolve()
     repo=Path(api['REPO_ROOT']).resolve()
-    candidates=[('Downloads',home/'Downloads'),('Documents',home/'Documents'),('Home',home),
-                ('WINGS project',repo),('Project parent',repo.parent),('WINGS runs',Path(api['RUNS_ROOT']))]
-    candidates += [('Mounted volumes',Path('/Volumes')),('Mounted data',Path('/mnt')),('Removable media',Path('/media')),('Data',Path('/data'))]
+    candidates=[('Downloads',home/'Downloads'),('Documents',home/'Documents'),('Desktop',home/'Desktop'),('Home',home)]
+    if desktop:
+        candidates += [('WINGS Workspace',Path(desktop)),('External drives',Path('/Volumes'))]
+    else:
+        candidates += [('WINGS project',repo),('Project parent',repo.parent),('WINGS runs',Path(api['RUNS_ROOT'])),
+                       ('Mounted volumes',Path('/Volumes')),('Mounted data',Path('/mnt')),('Removable media',Path('/media')),('Data',Path('/data'))]
     for raw in os.environ.get('WINGS_BROWSE_ROOTS','').split(os.pathsep):
         if raw.strip():
             path=Path(raw).expanduser().resolve();candidates.append((path.name or str(path),path))
@@ -108,6 +112,31 @@ def select(api,payload):
     return {'status':'SELECTED','path':str(path)}
 
 
+def resolve_path(api,payload):
+    purpose=kind(payload)
+    raw=payload.get('path')
+    if not isinstance(raw,str) or not raw.strip() or len(raw)>4096 or any(c in raw for c in ('\x00','\n','\r')):
+        raise ValueError('Enter an absolute folder path, or a path starting with ~/.')
+    raw=raw.strip()
+    home=Path(os.environ.get('WINGS_HOST_HOME') or Path.home())
+    path=home if raw=='~' else home/raw[2:] if raw.startswith('~/') else Path(raw)
+    if not path.is_absolute():raise ValueError('Enter an absolute folder path, or a path starting with ~/.')
+    try:path=path.resolve()
+    except (OSError,RuntimeError) as error:raise ValueError('This folder cannot be resolved. Check the path and access permissions.') from error
+    choices=sorted(roots(api),key=lambda r:len(Path(r['path']).parts),reverse=True)
+    for root in choices:
+        base=Path(root['path'])
+        if not path.is_relative_to(base):continue
+        relative=str(path.relative_to(base))
+        mapped={'kind':purpose,'root_id':root['id'],'relative':'' if relative=='.' else relative}
+        location(api,mapped)
+        if purpose=='aphis_csv' and path.is_file():return select(api,mapped)
+        return browse(api,mapped)
+    if os.environ.get('WINGS_DESKTOP_WORKSPACE'):
+        raise ValueError('Share this folder in WINGS Settings → Share a folder with WINGS, then restart the service. Docker Desktop must also allow access to it.')
+    raise ValueError('This folder is outside the available locations. Add its parent to WINGS_BROWSE_ROOTS.')
+
+
 def native_available():
     return sys.platform=='darwin' and not os.environ.get('SSH_CONNECTION') and Path('/usr/bin/osascript').is_file()
 
@@ -145,6 +174,7 @@ def handle_post(handler,api):
     if action=='roots':result={'status':'BROWSE','roots':roots(api)}
     elif action=='native':result=native(api,payload)
     elif action=='browse':result=browse(api,payload)
+    elif action=='resolve':result=resolve_path(api,payload)
     elif action=='select':result=select(api,payload)
     else:raise ValueError('Unknown picker action.')
     handler.json_response(result)

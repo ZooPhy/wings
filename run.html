@@ -203,6 +203,7 @@
               <h3 id="contextFolderTitle">Choose a folder</h3>
               <p class="context-note">Browsing files on the computer running WINGS. Selecting a path does not upload or import data.</p>
               <div class="field"><label for="contextFolderRoot">Location</label><select id="contextFolderRoot"></select></div>
+              <div class="field"><label for="contextFolderGoPath">Folder path</label><div style="display:flex;gap:8px"><input id="contextFolderGoPath" type="text" placeholder="~/Downloads or /Volumes/Drive/data" style="flex:1;min-width:0"><button id="contextFolderGo" type="button" class="btn">Go</button></div></div>
               <p id="contextFolderPath" class="context-folder-path"></p>
               <p id="contextFolderMessage" role="status" aria-live="polite"></p>
               <div class="context-folder-navigation"><button id="contextFolderUp" type="button" class="btn">Up one folder</button><button id="contextFolderPrevious" type="button" class="btn">Previous page</button><button id="contextFolderNext" type="button" class="btn">Next page</button></div>
@@ -217,10 +218,19 @@
             <label class="option-card"><input id="optGenoflu" type="checkbox" checked><span><strong>GenoFLU</strong><small>Influenza genotype assignment.</small></span></label>
             <label class="option-card"><input id="optVadr" type="checkbox" checked><span><strong>VADR annotation</strong><small>Influenza sequence annotation and validation.</small></span></label>
             <label class="option-card"><input id="optPhylogeny" type="checkbox"><span><strong>Phylogenetics</strong><small>Build segment-level phylogenetic trees when enough sequences are available.</small></span></label>
-            <label class="option-card"><input id="optPhylodynamics" type="checkbox"><span><strong>Phylodynamics (Fast)</strong><small>Reconstruct HA ancestry and geographic spread. Includes reference sampling and the Phylodynamics tab.</small></span></label>
+            <label class="option-card"><input id="optPhylodynamics" type="checkbox"><span><strong>Phylodynamics</strong><small>Reconstruct HA ancestry and geographic spread. Includes reference sampling and the Phylodynamics tab.</small></span></label>
             <label class="option-card"><input id="optExplorer" type="checkbox" checked><span><strong>Surveillance Explorer</strong><small>Generate the integrated run-level surveillance interface.</small></span></label>
           </div>
-          <p class="help" id="phylodynamicsHelp">Phylodynamics analyzes H5 HA ancestry and geographic changes, and enables Surveillance Explorer. Start the local runner with NCBI_EMAIL set for reference retrieval. BEAST MCMC remains an advanced workflow.</p>
+          <div id="phylodynamicsSettings" hidden style="margin-top:1rem">
+            <div class="field">
+              <label for="phylodynamicsMethod">Phylodynamics method</label>
+              <select id="phylodynamicsMethod" aria-describedby="phylodynamicsMethodHint" disabled>
+                <option value="fast">Fast (default)</option>
+                <option value="beast">BEAST (MCMC)</option>
+              </select>
+              <p class="help" id="phylodynamicsMethodHint">Both methods include the same map, tree and geographic jump views.</p>
+            </div>
+          </div>
           <label class="option-card" style="margin-top:1rem"><input id="optBriefing" type="checkbox"><span><strong>Public health interpretation / agency briefing</strong><small>Generate a briefing from the report evidence using a locally installed Ollama model.</small></span></label>
           <div id="briefingSettings" hidden>
             <div class="field">
@@ -236,6 +246,7 @@
               </select>
             </div>
             <button id="checkBriefingModel" class="btn btn-secondary" type="button">Check local model</button>
+            <p id="briefingServerStatus" class="help"></p>
             <p id="briefingModelStatus" class="help" role="status" aria-live="polite">Check that Ollama is running and the selected model is installed.</p>
             <p class="help">Requires Surveillance Explorer. Install Ollama and the model separately. This option applies to new runs.</p>
           </div>
@@ -314,7 +325,7 @@
 <script src="assets/wings-metadata-wizard.js?v=6"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
 <script src="assets/wings-context-setup.js?ebird_folder=2&v=12"></script>
-<script src="assets/wings-run.js?v=20261116-phylodynamics&wings_context=3"></script>
+<script src="assets/wings-run.js?v=20261116-beast-submission&wings_context=3"></script>
 <script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>

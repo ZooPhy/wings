@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - mafft=7.*
+  - nextclade=3.25.0
+  - pyyaml=6.*
+  - iqtree=2.*
+  - treetime=0.11.4
+  - biopython=1.85
+  - numpy=1.26.*
+  - scipy=1.14.*
+  - pandas=2.2.*
+  - nodejs=22.*

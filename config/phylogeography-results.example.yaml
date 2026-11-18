@@ -1,0 +1,22 @@
+# Fast is the default. This overlay does not launch or resume BEAST.
+bayesian_dating:
+  enabled: false
+posterior_phylogeography:
+  enabled: false
+phylogeography_results:
+  enabled: true
+  method: fast
+  run_id: fast_v1
+  saved_inputs_only: true  # Never schedule reference selection, inference or BEAST.
+  analyses: []  # All replicates recorded in selection/selection_summary.json.
+  histories: 600
+  seed: 19073
+  # Preserve the source geographic prior and reuse matching completed histories.
+  geographic_prior:
+    family: source
+  max_mean_mcse: 0.15
+  max_probability_mcse: 0.025
+  # Includes BEAST only when its completed, checked publication is available.
+  include_beast: true
+  dating_run: long20m
+  posterior_run: posterior_5k
