@@ -244,10 +244,59 @@ on configureOllama(resourcePath, backend, workspace)
     end if
 end configureOllama
 
+on settingsActions(category)
+    if category is "NCBI & eBird access" then return {"Add or update NCBI email", "Add or update eBird access key", "Get an eBird access key", "Remove eBird access key"}
+    if category is "Ollama" then return {"Configure Ollama", "Check Ollama connection"}
+    if category is "Folders and storage" then return {"Share a folder with WINGS", "Open workspace"}
+    if category is "Setup and diagnostics" then return {"View setup progress", "Export installation diagnostics"}
+    return {}
+end settingsActions
+
+on chooseSettingsCategory()
+    set selected to choose from list {"NCBI & eBird access", "Ollama", "Folders and storage", "Setup and diagnostics", "Stop WINGS service"} with title "WINGS settings" with prompt "Choose a settings category." OK button name "Select" cancel button name "Done"
+    if selected is false then return false
+    return item 1 of selected
+end chooseSettingsCategory
+
+on chooseSettingsAction(category)
+    set options to my settingsActions(category)
+    set selected to choose from list options with title category with prompt "Choose an action. Back returns to all settings." OK button name "Select" cancel button name "Back"
+    if selected is false then return false
+    return item 1 of selected
+end chooseSettingsAction
+
+on settingsError(messageText)
+    display dialog messageText buttons {"OK"} with title "WINGS settings"
+end settingsError
+
 on showWINGSSettings(resourcePath, backend, workspace)
-        set action to choose from list {"Configure Ollama", "Check Ollama connection", "View setup progress", "Share a folder with WINGS", "Add or update NCBI email", "Add or update eBird access key", "Get an eBird access key", "Remove eBird access key", "Open workspace", "Export installation diagnostics", "Stop WINGS service"} with title "WINGS settings" with prompt "Manage reference retrieval, eBird abundance access and local storage. Stop analyses in the browser before stopping the service."
-        if action is false then return
-        set action to item 1 of action
+    repeat
+        set category to my chooseSettingsCategory()
+        if category is false then return
+        if category is "Stop WINGS service" then
+            try
+                my runSettingsAction(category, resourcePath, backend, workspace)
+                return
+            on error messageText number errorNumber
+                if errorNumber is not -128 then my settingsError(messageText)
+            end try
+        else
+            repeat
+                set action to my chooseSettingsAction(category)
+                if action is false then exit repeat
+                try
+                    my runSettingsAction(action, resourcePath, backend, workspace)
+                on error messageText number errorNumber
+                    -- Saving, cancelling, or a recoverable error keeps settings open.
+                    if errorNumber is not -128 then my settingsError(messageText)
+                end try
+            end repeat
+        end if
+    end repeat
+end showWINGSSettings
+
+
+on runSettingsAction(action, resourcePath, backend, workspace)
         if action is "Configure Ollama" then
             my configureOllama(resourcePath, backend, workspace)
         else if action is "Check Ollama connection" then
@@ -281,11 +330,11 @@ on showWINGSSettings(resourcePath, backend, workspace)
             on error messageText
                 display dialog messageText buttons {"OK"} with title "WINGS diagnostics"
             end try
-        else
+        else if action is "Stop WINGS service" then
             display dialog "Stop WINGS? Finish or stop every analysis in the browser first. Stopping the service interrupts workflow management; assembly containers already started may continue. Your saved files will remain." buttons {"Cancel", "Stop service"} default button "Cancel" with title "Stop WINGS"
             do shell script "/bin/bash " & backend & " stop " & quoted form of workspace
         end if
-end showWINGSSettings
+end runSettingsAction
 
 on chooseWINGSAction()
     return button returned of (display dialog "Run WINGS on this Mac. Your data and analyses stay in your workspace. Docker Desktop must be installed and running." buttons {"Quit", "Settings", "Open WINGS"} default button "Open WINGS" with title "WINGS Desktop")
