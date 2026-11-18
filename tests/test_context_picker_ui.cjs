@@ -22,7 +22,7 @@ Element.prototype.showModal=function(){this.open=true;};
 Element.prototype.close=function(){this.open=false;};
 Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])this.listeners[event.type](event);if(event.bubbles&&this.parent)this.parent.dispatchEvent(event);return true;};
 (async()=>{
-  const ids=['contextSetup','contextSource','contextPackage','contextCoverage','contextCoverageRow','contextPickerNotice','contextFolderDialog','contextFolderRoot','contextFolderTitle','contextFolderPath','contextFolderMessage','contextFolderEntries','contextFolderUp','contextFolderPrevious','contextFolderNext','contextFolderUse','contextFolderCancel'];
+  const ids=['contextSetup','contextSource','contextPackage','contextCoverage','contextCoverageRow','contextPickerNotice','contextFolderDialog','contextFolderRoot','contextFolderGoPath','contextFolderGo','contextFolderTitle','contextFolderPath','contextFolderMessage','contextFolderEntries','contextFolderUp','contextFolderPrevious','contextFolderNext','contextFolderUse','contextFolderCancel'];
   const elements=Object.fromEntries(ids.map(id=>[id,new Element()]));
   elements.contextSetup.append(...Object.entries(elements).filter(([id])=>id!=='contextSetup').map(([,el])=>el));
   let invalidations=0;elements.contextSetup.addEventListener('input',()=>invalidations++);
@@ -36,6 +36,7 @@ Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])th
     if(failure)return {ok:false,json:async()=>({error:'secret diagnostic'})};
     let data;
     if(action==='native')data={status:nativeStatus,path:nativePath,roots};
+    else if(action==='resolve')data={status:'BROWSE',root_id:'home',relative:'Pasted folder'};
     else if(action==='browse'){
       if(deferBrowse)await new Promise(resolve=>{deferBrowse.resolve=resolve;});
       data={status:'BROWSE',root_id:body.root_id,path:'/home/user/'+(body.relative||''),relative:body.relative||'',parent:body.relative?'':null,offset:body.offset||0,next_offset:body.offset?null:100,entries:body.relative?[]:[{name:'Bird folder <img>',relative:'Bird folder <img>',directory:true},...(body.kind==='aphis_csv'?[{name:'snapshot.csv',relative:'snapshot.csv',directory:false}]:[])]};
@@ -66,6 +67,11 @@ Element.prototype.dispatchEvent=function(event){if(this.listeners[event.type])th
   assert.equal(elements.contextFolderDialog.open,false);assert.equal(picker.isBusy(),false);
   elements.contextSource.value='/manual/download';elements.contextCoverage.checked=true;elements.contextSource.dispatchEvent(new sandbox.Event('input',{bubbles:true}));assert.equal(elements.contextPackage.value,'');assert.equal(elements.contextCoverage.checked,false);
   clear.listeners.click();assert.equal(elements.contextSource.value,'');
+  failure=false;nativeStatus='BROWSE';await buttons[0].listeners.click();
+  elements.contextFolderGoPath.value='/home/user/Pasted folder';await elements.contextFolderGo.listeners.click();
+  assert.equal(elements.contextFolderPath.textContent,'/home/user/Pasted folder');
+  assert(calls.some(c=>c.action==='resolve'&&c.body.path==='/home/user/Pasted folder'));
+  await elements.contextFolderUse.listeners.click();assert.equal(elements.contextSource.value,'/home/user/Pasted folder');
   assert.equal(calls.some(c=>c.action==='start'||c.action==='prepare'),false);
   const html=fs.readFileSync(path.join(__dirname,'../run.html'),'utf8');
   for(const id of ids)assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,id);

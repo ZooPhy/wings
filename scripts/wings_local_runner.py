@@ -28,6 +28,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import context_setup
 import context_runner
+from wings_credentials import runtime_environment
+import wings_ollama
 
 try:
     import yaml
@@ -67,6 +69,10 @@ RULE_STAGE = {
     "phylodynamic_replicate": "phylogeny", "phylodynamic_sensitivity": "phylogeny",
     "phylogeography_results_preflight": "reporting", "phylogeography_results_fast": "reporting",
     "phylogeography_results": "reporting",
+    "bayesian_dating_preflight": "phylogeny", "bayesian_dating_chain": "phylogeny",
+    "bayesian_dating_summary": "phylogeny", "posterior_phylogeography_preflight": "phylogeny",
+    "posterior_phylogeography_gate": "phylogeny", "posterior_phylogeography_map": "phylogeny",
+    "posterior_phylogeography_publish": "reporting",
     "ebirdst_phenology": "surveillance", "metadata_ecological_context": "surveillance",
     "run_provenance": "reporting", "archive_replay_inputs": "reporting",
     "select_historical_baseline": "reporting", "historical_stability": "reporting",
@@ -215,52 +221,30 @@ def briefing_options(options: dict) -> dict:
         raise ValueError("Briefing selection must be true or false")
     if not enabled:
         return {"enabled": False}
-    model = str(options.get("briefing_model", "gpt-oss:20b")).strip()
+    ollama = wings_ollama.settings()
+    model = str(options.get("briefing_model", ollama["model"])).strip()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", model):
         raise ValueError("Enter a valid local Ollama model name")
     audience = options.get("briefing_audience", "wildlife")
     if audience not in {"wildlife", "animal_health", "public_health"}:
         raise ValueError("Choose a valid briefing audience")
     return {"enabled": True, "provider": "ollama", "mode": "staged",
-            "model": model, "audience": audience, "url": BRIEFING_URL,
+            "model": model, "audience": audience, "url": ollama["url"],
             "timeout_seconds": 180, "allow_remote": False}
 
 
-def check_briefing_model(model: str) -> dict:
-    """Inspect local model tags only; never download a model or follow redirects."""
-    model = briefing_options({"briefing": True, "briefing_model": model})["model"]
-    connection = HTTPConnection("127.0.0.1", 11434, timeout=5)
-    try:
-        connection.request("GET", "/api/tags")
-        response = connection.getresponse()
-        if response.status != 200:
-            return {"ready": False, "detail": "Ollama did not return its local model list."}
-        raw = response.read(1024 * 1024 + 1)
-        if len(raw) > 1024 * 1024:
-            raise ValueError("Model list is too large")
-        payload = json.loads(raw)
-        models = payload.get("models")
-        if not isinstance(models, list):
-            raise ValueError("Invalid model list")
-        def normalize(tag):
-            return tag if ":" in tag.rsplit("/", 1)[-1] else tag + ":latest"
-        installed = {normalize(tag) for row in models if isinstance(row, dict)
-                     for tag in (row.get("name"), row.get("model"))
-                     if isinstance(tag, str) and tag}
-        ready = normalize(model) in installed
-        return {"ready": ready, "detail": "Selected local model is installed." if ready
-                else "Selected model is not installed. Install it in Ollama, then check again."}
-    except (OSError, HTTPException, ValueError, AttributeError):
-        return {"ready": False, "detail": "Cannot read local Ollama models. Start Ollama, then check again."}
-    finally:
-        connection.close()
+def check_briefing_model(model: str, url: str | None = None) -> dict:
+    """Check the same endpoint used by a briefing, without downloading a model."""
+    if url is None:
+        url = wings_ollama.settings()["url"]
+    return wings_ollama.check_model(model, url, connection_factory=HTTPConnection)
 
 
 def require_briefing_model(config: dict) -> None:
     interpretation = config.get("public_health_interpretation") or {}
     if interpretation.get("enabled") is not True:
         return
-    result = check_briefing_model(interpretation.get("model", ""))
+    result = check_briefing_model(interpretation.get("model", ""), interpretation.get("url"))
     if not result["ready"]:
         raise ValueError(result["detail"])
 
@@ -916,7 +900,7 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
         attempt_provenance = capture_attempt_provenance(
             attempt_dir, command, config_path, started, resume
         )
-        environment = os.environ.copy()
+        environment = wings_ollama.runtime_environment(runtime_environment())
         if "conda_pkgs_dirs" in state:
             if state["conda_pkgs_dirs"]:
                 environment["CONDA_PKGS_DIRS"] = state["conda_pkgs_dirs"]
@@ -998,8 +982,11 @@ class Handler(SimpleHTTPRequestHandler):
                     "config_yaml_present": (REPO_ROOT / "config.yaml").is_file(),
                     "config_yaml_path": str(REPO_ROOT / "config.yaml"),
                     "docker_check_available": True,
-                    "phylodynamics_ready": bool(os.environ.get("NCBI_EMAIL", "").strip()),
+                    "phylodynamics_ready": bool(runtime_environment().get("NCBI_EMAIL", "").strip()),
+                    "desktop_mode": bool(os.environ.get("WINGS_DESKTOP_WORKSPACE")),
+                    "ollama": wings_ollama.public_settings(),
                     "phylodynamics_available": True,
+                    "phylodynamics_methods": __import__("phylodynamics_job_options").supported_methods(REPO_ROOT),
                 })
                 return
             if parsed.path == "/api/runs":
@@ -1177,7 +1164,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(options, dict):
                     raise ValueError("Run options must be an object")
                 from phylodynamics_job_options import validate_options as validate_phylodynamics_options
-                validate_phylodynamics_options(options)
+                validate_phylodynamics_options(options, REPO_ROOT)
                 interpretation = briefing_options(options)
                 require_briefing_model({"public_health_interpretation": interpretation})
                 name = str(payload.get("name", "")).strip() or "WINGS run"
@@ -1232,6 +1219,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.error_response("Unknown endpoint", 404)
 
 
+def desktop_storage_path(path: Path) -> Path:
+    """Keep desktop outputs on the persistent host mount, including symlinks."""
+    path = path.resolve()
+    root = os.environ.get("WINGS_DESKTOP_WORKSPACE")
+    if root and not path.is_relative_to(Path(root).resolve()):
+        raise ValueError("Choose a folder inside your WINGS Workspace so files remain on this Mac.")
+    return path
+
+
 def browse_storage_directories(payload: dict) -> dict:
     """List folders on this runner without creating directories or changing storage."""
     if not isinstance(payload, dict):
@@ -1250,6 +1246,7 @@ def browse_storage_directories(payload: dict) -> dict:
     if not path.is_absolute():
         raise ValueError("Choose an absolute path on the runner machine.")
     path = path.resolve()
+    path = desktop_storage_path(path)
     requested = path
     while not path.exists() and path.parent != path:
         path = path.parent
@@ -1264,8 +1261,9 @@ def browse_storage_directories(payload: dict) -> dict:
                 continue
             try:
                 if entry.is_dir():
+                    desktop_storage_path(Path(entry.path))
                     folders.append({"name": entry.name, "path": str(path / entry.name)})
-            except OSError:
+            except (OSError, ValueError):
                 continue
     folders.sort(key=lambda item: (item["name"].casefold(), item["name"]))
     limit = 200
@@ -1274,8 +1272,19 @@ def browse_storage_directories(payload: dict) -> dict:
                           ("Volumes", Path("/Volumes")), ("Mounts", Path("/mnt")),
                           ("Media", Path("/media")), ("Filesystem", Path(path.anchor))]:
         if target.is_dir():
-            shortcuts.append({"name": label, "path": str(target.resolve())})
-    return {"path": str(path), "parent": str(path.parent), "directories": folders[offset:offset + limit],
+            try:
+                desktop_storage_path(target)
+                shortcuts.append({"name": label, "path": str(target.resolve())})
+            except ValueError:
+                pass
+    desktop_root = os.environ.get("WINGS_DESKTOP_WORKSPACE")
+    parent = path.parent
+    if desktop_root:
+        root = Path(desktop_root).resolve()
+        shortcuts.insert(0, {"name": "WINGS Workspace", "path": str(root)})
+        if path == root:
+            parent = root
+    return {"path": str(path), "parent": str(parent), "directories": folders[offset:offset + limit],
             "total": len(folders), "offset": offset, "limit": limit, "shortcuts": shortcuts,
             "notice": "Showing the nearest existing folder." if path != requested else ""}
 
@@ -1292,7 +1301,7 @@ def create_storage_folder(payload: dict) -> dict:
     parent = Path(value).expanduser()
     if not parent.is_absolute():
         raise ValueError("Choose an absolute parent folder")
-    parent = parent.resolve()
+    parent = desktop_storage_path(parent)
     if not parent.is_dir():
         raise ValueError("The parent folder no longer exists")
     destination = parent / name
@@ -1302,7 +1311,7 @@ def create_storage_folder(payload: dict) -> dict:
 
 def prepare_storage_directory(value: str) -> Path:
     """Resolve, create and check a writable directory without moving existing data."""
-    directory = Path(value).expanduser().resolve()
+    directory = desktop_storage_path(Path(value).expanduser())
     directory.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile(dir=directory) as probe:
         probe.write(b"WINGS storage check\n")

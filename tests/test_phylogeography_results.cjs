@@ -1,0 +1,14 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const api=require('../scripts/report/phylogeography-results.js');
+function fixture(method='fast'){
+ const nodes=[{id:'r',parent:null,date:'2020-01-01'},{id:'a',parent:'r',date:'2024-01-01',sample_id:'a',observed_state:'KY'},{id:'b',parent:'r',date:'2025-01-01',sample_id:'b',observed_state:'KY'}];
+ const draws=[{id:'1',chain:1,state:100,history:{root_state:'MI',jumps:[{branch:'a',date:'2022-01-01',from:'MI',to:'KY'},{branch:'b',date:'2023-01-01',from:'MI',to:'KY'}]}},{id:'2',chain:2,state:200,history:{root_state:'KY',jumps:[]}}];
+ if(method==='beast')draws.forEach((d,i)=>{d.nodes=structuredClone(nodes);d.nodes[0].date=i?'2021-01-01':'2020-01-01';d.focal_mrca='r';});
+ return {status:'passed',method,nodes,draws,locations:[{id:'KY',label:'Kentucky'},{id:'MI',label:'Michigan'}],focal_mrca:'r',focal_sample_ids:['a','b']};
+}
+test('node probabilities average all histories and sum to one',()=>{const p=api.prepare(fixture());assert.equal(p.stats.get('r').states.KY,.5);assert.equal(p.stats.get('r').states.MI,.5);assert.equal(p.stats.get('a').states.KY,1);});
+test('directed chord counts include zero histories, scope and date',()=>{const p=api.prepare(fixture());assert.equal(api.flow(p,Date.parse('2021-01-01')).length,0);const f=api.flow(p,Date.parse('2026-01-01'));assert.equal(f.length,1);assert.equal(f[0].from,'MI');assert.equal(f[0].to,'KY');assert.equal(f[0].mean,1);const s=api.pairSummary(p,f[0].pair,Date.parse('2026-01-01'));assert.deepEqual(s,{mean:1,low:0,high:2,pAny:.5});});
+test('timeline agrees with chord endpoint counts',()=>{const p=api.prepare(fixture()),time=Date.parse('2026-01-01');const curve=api.cumulative(p,'KY',[Date.parse('2021-01-01'),time]);assert.equal(curve[0].mean,0);assert.equal(curve[1].mean,api.flow(p,time).reduce((s,x)=>s+x.mean,0));});
+test('BEAST uses own dates and equal chain weights',()=>{const p=api.prepare(fixture('beast'));assert.equal(p.min,Date.parse('2020-01-01'));assert.equal(p.stats.get('r').interval[1],Date.parse('2021-01-01'));const d=fixture('beast');d.draws.push({...d.draws[0],state:101});assert.throws(()=>api.prepare(d),/Unequal/);});
+test('incompatible tip states, missing samples and out-of-branch events fail',()=>{let d=fixture();d.nodes[1].observed_state='MI';assert.throws(()=>api.prepare(d),/Observed/);d=fixture();d.focal_sample_ids=['a'];assert.throws(()=>api.prepare(d),/WINGS/);d=fixture();d.draws[0].history.jumps[0].date='2010-01-01';assert.throws(()=>api.prepare(d),/event/);});
+test('BEAST selection stays explicit when unavailable',()=>{const m={schema:'wings.phylogeography-results.v1',default_method:'beast',default_analysis:'HA/balanced/replicate_1',analyses:[{id:'HA/balanced/replicate_1',methods:{fast:fixture()},unavailable:{beast:'gate failed'}}]};assert.equal(api.validateModel(m).default_method,'beast');});

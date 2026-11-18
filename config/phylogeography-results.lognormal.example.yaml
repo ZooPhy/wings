@@ -1,0 +1,9 @@
+# Merge AFTER phylogeography-results.example.yaml. Prior sensitivity example;
+# median 1 exit/year and log SD 1 are illustrative, not a validated WINGS prior.
+phylogeography_results:
+  run_id: fast_lognormal
+  geographic_prior:
+    family: lognormal
+    parameter: exit_rate
+    median: 1.0
+    log_sd: 1.0

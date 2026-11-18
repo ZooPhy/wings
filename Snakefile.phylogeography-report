@@ -1,0 +1,25 @@
+# WINGS_REPORT_ONLY_V3: deliberately never includes the main WINGS Snakefile.
+configfile: 'config.yaml'
+
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(workflow.basedir) / 'scripts'))
+from build_phylogeography_results import config as report_configuration
+if 'saved_inputs_only' not in report_configuration():
+    raise ValueError('Report-only repair V3 is not installed completely; rerun wings_repair_report_only_v3.py.')
+RESULTS = os.path.normpath(str(config.get('results_dir', 'results')))
+FINAL_TARGETS = []
+RUN_PHYLODYNAMICS = True
+PHYLODYNAMIC_IDS = []
+report_settings = dict(config.get('phylogeography_results', {}) or {})
+report_settings.update(enabled=True, saved_inputs_only=True)
+config['phylogeography_results'] = report_settings
+
+include: 'rules/phylogeography_results.smk'
+
+rule all:
+    input: FINAL_TARGETS
+    default_target: True

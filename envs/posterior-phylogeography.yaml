@@ -1,0 +1,8 @@
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy=1.26.*
+  - scipy=1.14.*
+  - arviz=0.21.0
+  - matplotlib-base=3.9.*

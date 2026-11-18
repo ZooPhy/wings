@@ -8,7 +8,7 @@
   async function request(action,payload={}) {
     const response=await fetch(origin+'/api/context/files/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await response.json();
-    if(!response.ok)throw new Error('The folder could not be opened. Check access on the runner computer.');
+    if(!response.ok)throw new Error(action==='resolve' && typeof data.error==='string' && data.error.startsWith('Share this folder in WINGS Settings') ? data.error : 'The folder could not be opened. Check access on the runner computer.');
     return data;
   }
   function notice(text) {$('contextPickerNotice').textContent=text;$('contextPickerNotice').hidden=!text;}
@@ -26,9 +26,9 @@
     finish();notice('Selection saved. Check the folder, then prepare context.');$(target).focus();
     if(target==='contextSource')window.WINGS_CONTEXT_SETUP?.checkEbirdFolder?.();
   }
-  function error() {$('contextFolderMessage').textContent='Could not open this location. Choose another folder.';}
+  function error(e) {$('contextFolderMessage').textContent=e?.message||'Could not open this location. Choose another folder.';}
   function navigationDisabled(value) {
-    for(const id of ['contextFolderRoot','contextFolderUp','contextFolderPrevious','contextFolderNext','contextFolderUse'])$(id).disabled=value;
+    for(const id of ['contextFolderGo','contextFolderRoot','contextFolderUp','contextFolderPrevious','contextFolderNext','contextFolderUse'])$(id).disabled=value;
   }
   async function browse(relative='',offset=0) {
     if(!active)return;
@@ -38,7 +38,7 @@
     try {
       const data=await request('browse',{kind:active.kind,root_id:$('contextFolderRoot').value,relative,offset});
       if(!active||token!==generation)return;
-      listing=data;$('contextFolderPath').textContent=data.path;
+      listing=data;$('contextFolderPath').textContent=data.path;$('contextFolderGoPath').value=data.path;
       $('contextFolderMessage').textContent=data.entries.length?'':(active.kind==='aphis_csv'?'No folders or CSV files here.':'No subfolders. You can select this folder.');
       for(const row of data.entries) {
         const button=document.createElement('button');button.type='button';button.className='context-folder-entry';
@@ -51,7 +51,7 @@
       $('contextFolderPrevious').disabled=data.offset===0;
       $('contextFolderNext').disabled=data.next_offset===null;
       $('contextFolderUse').hidden=active.kind==='aphis_csv';
-    } catch(e) {if(active&&token===generation){error();$('contextFolderRoot').disabled=false;}}
+    } catch(e) {if(active&&token===generation){error(e);$('contextFolderRoot').disabled=false;$('contextFolderGo').disabled=false;}}
   }
   async function select(relative) {
     if(!active||!listing)return;
@@ -59,7 +59,7 @@
     try {
       const result=await request('select',{kind:active.kind,root_id:listing.root_id,relative});
       if(active&&token===generation&&result.status==='SELECTED')apply(result.path);
-    } catch(e) {if(active&&token===generation){error();navigationDisabled(false);}}
+    } catch(e) {if(active&&token===generation){error(e);navigationDisabled(false);}}
   }
   async function openBrowser(roots) {
     const root=$('contextFolderRoot');root.replaceChildren();
@@ -68,7 +68,7 @@
     $('contextFolderTitle').textContent=active.kind==='aphis_csv'?'Choose an APHIS CSV':'Choose a folder';
     $('contextFolderUse').hidden=active.kind==='aphis_csv';
     if(!dialog.open)dialog.showModal();
-    if(!roots.length){navigationDisabled(true);$('contextFolderMessage').textContent='No accessible locations. Set WINGS_BROWSE_ROOTS or enter a path in the form.';return;}
+    if(!roots.length){navigationDisabled(true);$('contextFolderMessage').textContent='No accessible locations. Check the shared folders in WINGS Settings or the runner configuration.';return;}
     await browse();root.focus();
   }
   async function choose(kind,target,button) {
@@ -92,6 +92,20 @@
     $(id==='contextSource'?'contextPackage':'contextSource').value='';$('contextCoverage').checked=false;
     $('contextCoverageRow').hidden=true;
   });
+  async function goToPath() {
+    if(!active)return;
+    const token=++generation;navigationDisabled(true);listing=null;
+    $('contextFolderEntries').replaceChildren();$('contextFolderMessage').textContent='Opening path…';
+    try {
+      const data=await request('resolve',{kind:active.kind,path:$('contextFolderGoPath').value});
+      if(!active||token!==generation)return;
+      if(data.status==='SELECTED'){apply(data.path);return;}
+      $('contextFolderRoot').value=data.root_id;
+      await browse(data.relative);
+    } catch(e) {if(active&&token===generation){error(e);$('contextFolderRoot').disabled=false;$('contextFolderGo').disabled=false;}}
+  }
+  $('contextFolderGo').addEventListener('click',goToPath);
+  $('contextFolderGoPath').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();goToPath();}});
   $('contextFolderRoot').addEventListener('change',()=>browse());
   $('contextFolderUp').addEventListener('click',()=>listing&&listing.parent!==null&&browse(listing.parent));
   $('contextFolderPrevious').addEventListener('click',()=>listing&&browse(listing.relative,Math.max(0,listing.offset-100)));

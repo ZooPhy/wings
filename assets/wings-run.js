@@ -211,6 +211,7 @@
       const response = await fetch(`${localOrigin}/api/health`, {cache: "no-store"});
       if (!response.ok) throw new Error("runner unavailable");
       state.runner = await response.json();
+      applyOllamaDefaults(state.runner.ollama);
       pill.className = "runner-pill ready";
       if (!state.runner.snakemake_available) $("runnerText").textContent = "Runner found · Snakemake missing";
       else if (!state.runner.config_yaml_present) $("runnerText").textContent = "Runner found · config.yaml missing";
@@ -350,6 +351,24 @@
 
   let briefingRequest = 0;
   let briefingCheck = null;
+  let briefingModelEdited = false;
+  let briefingEndpoint = null;
+
+  function applyOllamaDefaults(settings) {
+    if (!settings) return;
+    const input = $("briefingModel");
+    const modelChanged = !briefingModelEdited && input && settings.model && input.value !== settings.model;
+    if (modelChanged) input.value = settings.model;
+    if (modelChanged || briefingEndpoint !== settings.url) {
+      ++briefingRequest;
+      briefingCheck = null;
+      briefingEndpoint = settings.url;
+    }
+    const message = $("briefingServerStatus");
+    if (message) message.textContent = settings.error || (settings.display_url ?
+      `Ollama server: ${settings.display_url}. Change the default address and model in WINGS Settings.` : "");
+  }
+
 
   function briefingOptions() {
     return {
@@ -398,7 +417,30 @@
     }
   }
 
-  $("optPhylodynamics").addEventListener("change",()=>{const enabled=$("optPhylodynamics").checked;if(enabled)$("optExplorer").checked=true;$("optExplorer").disabled=enabled;});
+  function phylodynamicsLabel() {
+    return $("phylodynamicsMethod").value === "beast" ? "BEAST (MCMC)" : "Fast";
+  }
+  function updatePhylodynamics() {
+    const enabled = $("optPhylodynamics").checked;
+    if (enabled) $("optExplorer").checked = true;
+    $("optExplorer").disabled = enabled;
+    $("phylodynamicsSettings").hidden = !enabled;
+    $("phylodynamicsMethod").disabled = !enabled;
+    $("phylodynamicsMethodHint").textContent = $("phylodynamicsMethod").value === "beast"
+      ? "Slower: runs two MCMC chains. Results are released only after convergence and precision checks pass."
+      : "Both methods include the same map, tree and geographic jump views.";
+  }
+  function phylodynamicsPreflight() {
+    if (!$("optPhylodynamics").checked) return [true, "Phylodynamics", "Not requested"];
+    const method = $("phylodynamicsMethod").value;
+    const supported = state.runner?.phylodynamics_methods || [];
+    if (!supported.includes(method)) return [false, "Phylodynamics", "Restart the updated local runner to use the selected method."];
+    if (!state.runner?.phylodynamics_ready) return [false, "Phylodynamics", state.runner?.desktop_mode ? "Add an NCBI contact email in WINGS Settings → Add or update NCBI email, then refresh this page." : "Start the local runner with NCBI_EMAIL set."];
+    return [true, "Phylodynamics", `${phylodynamicsLabel()} selected; Explorer included${method === "beast" ? "; diagnostic checks required" : ""}`];
+  }
+  $("optPhylodynamics").addEventListener("change", updatePhylodynamics);
+  $("phylodynamicsMethod").addEventListener("change", updatePhylodynamics);
+  updatePhylodynamics();
   function preflightRows() {
     const match = validateMetadataMatch();
     const extensions = new Set(state.reads.map((f) => fastqExtension(f.name)));
@@ -419,7 +461,7 @@
         storageDirty || storagePending ? "Validate and apply your edited locations under Run details." : state.runner?.storage_revision
           ? `Runs: ${state.runner.runs_root} · Conda cache: ${state.runner.conda_pkgs_dir || state.runner.conda_pkgs_default || 'default location not detected'}`
           : "Connect to an updated local runner to verify storage."],
-      [!$("optPhylodynamics").checked || Boolean(state.runner?.phylodynamics_available && state.runner?.phylodynamics_ready), "Phylodynamics", !$("optPhylodynamics").checked ? "Not requested" : state.runner?.phylodynamics_ready ? "Fast analysis ready; Explorer included" : "Restart the updated local runner with NCBI_EMAIL set"],
+      phylodynamicsPreflight(),
       [readsOk, "Sequence inputs", readsOk ? `${state.reads.length} FASTQ file(s) selected` : "Select FASTQ files with one consistent extension"],
       [metadataOk, "Metadata structure", metadataOk ? `${state.metadataIds.length} sample rows detected` : (state.metadataError || "Select metadata.tsv")],
       [match.ok, "Sample matching", match.detail],
@@ -440,7 +482,7 @@
       $("optGenoflu").checked && "GenoFLU",
       $("optVadr").checked && "VADR",
       $("optPhylogeny").checked && "Phylogenetics",
-      $("optPhylodynamics").checked && "Phylodynamics (Fast)",
+      $("optPhylodynamics").checked && `Phylodynamics (${phylodynamicsLabel()})`,
       $("optExplorer").checked && "Surveillance Explorer",
       briefingOptions().briefing && "Public health interpretation / agency briefing"
     ].filter(Boolean);
@@ -496,6 +538,7 @@
             vadr: $("optVadr").checked,
             phylogeny: $("optPhylogeny").checked,
             phylodynamics: $("optPhylodynamics").checked,
+            phylodynamics_method: $("phylodynamicsMethod").value,
             explorer: $("optExplorer").checked,
             ...briefingOptions()
           }
@@ -878,10 +921,11 @@
     }
     renderMetadata();
   });
-  ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optPhylodynamics", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
+  ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optPhylodynamics", "phylodynamicsMethod", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
   $("optBriefing")?.addEventListener("change", syncBriefing);
   $("checkBriefingModel")?.addEventListener("click", checkBriefingModel);
   $("briefingModel")?.addEventListener("input", () => {
+    briefingModelEdited = true;
     ++briefingRequest;
     briefingCheck = null;
     $("checkBriefingModel").disabled = false;

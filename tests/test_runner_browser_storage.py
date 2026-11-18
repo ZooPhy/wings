@@ -17,6 +17,14 @@ class BrowserStorageTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.runner = load_runner()
+        # This API test exercises storage and run isolation, not the host's
+        # Conda installation. A real `conda info` probe can exhaust the same
+        # five-second deadline used by the HTTP client below. Discovery and
+        # its timeout behavior are covered in test_runner_storage_options.py.
+        self.default_cache = str(self.root / 'default-packages')
+        cache_probe = patch.object(self.runner, 'conda_cache_default', return_value=self.default_cache)
+        cache_probe.start()
+        self.addCleanup(cache_probe.stop)
         self.runner.RUNS_ROOT = self.runner.prepare_storage_directory(str(self.root / 'original'))
 
     def settings(self, name='project'):
@@ -93,7 +101,9 @@ class BrowserStorageTests(unittest.TestCase):
             second_request['conda_pkgs_dir'] = str(self.root / 'other-packages')
             request('/api/storage', second_request)
             self.assertEqual(runner.run_dir(run['run_id']), original_directory)
-            self.assertEqual(request('/api/health')['conda_pkgs_dir'], str(self.root / 'other-packages'))
+            health = request('/api/health')
+            self.assertEqual(health['conda_pkgs_dir'], str(self.root / 'other-packages'))
+            self.assertEqual(health['conda_pkgs_default'], self.default_cache)
             with self.assertRaises(HTTPError):
                 request('/api/runs', {'storage_revision': first['storage_revision']})
             # Capture the real launch environment, without starting any analysis.

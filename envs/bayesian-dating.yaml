@@ -1,0 +1,12 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - beast2=2.7.7
+  - openjdk=17
+  - numpy=1.26.*
+  - scipy=1.14.*
+  - arviz=0.21.0
+  # ArviZ 0.21 uses the old matplotlib.style.core API; keep a compatible release.
+  - matplotlib-base=3.9.4

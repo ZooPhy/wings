@@ -22,6 +22,8 @@ class StorageFolderPickerTests(unittest.TestCase):
         self.scope = dict(Path=Path, os=os, RUNS_ROOT=self.root, REPO_ROOT=ROOT,
                           json=json, subprocess=subprocess,
                           context_runner=types.SimpleNamespace(handle_post=lambda *_: False))
+        guard = next(n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name == 'desktop_storage_path')
+        exec(compile(ast.Module(body=[guard], type_ignores=[]), '<desktop storage guard>', 'exec'), self.scope)
         function = next(n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name == 'browse_storage_directories')
         exec(compile(ast.Module(body=[function], type_ignores=[]), '<folder listing>', 'exec'), self.scope)
         self.browse = self.scope['browse_storage_directories']

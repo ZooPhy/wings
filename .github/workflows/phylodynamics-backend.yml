@@ -1,0 +1,16 @@
+name: Phylodynamics backend
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install 'numpy==1.26.*' 'scipy==1.14.*' 'arviz==0.21.0' 'matplotlib==3.9.4' pyyaml snakemake
+      - run: python tests/check_phylodynamics_backend.py --unit --dag
+      - run: node --test tests/test_phylogeography_movie.cjs tests/test_phylogeography_results.cjs tests/test_posterior_phylogeography.cjs tests/test_phylogeography_regions.cjs

@@ -22,16 +22,19 @@ for (const match of html.matchAll(/<[^>]+\bid="([^"]+)"[^>]*>/g)) {
   nodes.set(match[1], node);
 }
 nodes.get('briefingAudience').value = 'wildlife';
+nodes.get('phylodynamicsMethod').value = 'fast';
 let installed = true;
 let created = null;
 let storageRequest = null;
 let storageOk = true;
 const context = vm.createContext({
+  window: {WINGS_CONTEXT_SETUP:{setCreateSettings(){},async readyForRun(){},async attach(){}}},
   document: {getElementById: id => nodes.get(id) || null, querySelectorAll: () => [], createElement: element},
   location: {hostname: '', search: '', origin: 'null'},
   URLSearchParams, URL, AbortController, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
   alert() {}, console,
   fetch: async (url, options) => {
+    if (url.endsWith('/api/docker/check')) return {ok:true,json:async()=>({ready:true,message:'Docker ready'})};
     if (url.endsWith('/api/storage')) {
       storageRequest = JSON.parse(options.body);
       return {ok: storageOk, json: async () => storageOk ? {
@@ -45,12 +48,15 @@ const context = vm.createContext({
   }
 });
 let source = fs.readFileSync(path.join(root, 'assets/wings-run.js'), 'utf8');
-source = source.replace(/\}\)\(\);\s*$/, 'globalThis.fixture = {state, briefingOptions, syncBriefing, checkBriefingModel, preflightRows, startRun, syncStorage, applyStorage, renderPreflight};\n})();');
+source = source.replace(/\}\)\(\);\s*$/, 'globalThis.fixture = {state, briefingOptions, syncBriefing, checkBriefingModel, preflightRows, startRun, syncStorage, applyStorage, renderPreflight, applyOllamaDefaults};\n})();');
 vm.runInContext(source, context);
 const t = context.fixture;
 const $ = id => nodes.get(id);
 (async () => {
   assert.equal(t.briefingOptions().briefing, false);
+  t.applyOllamaDefaults({model:'saved:7b',url:'http://host.docker.internal:12345/api/chat',display_url:'http://localhost:12345'});
+  assert.equal($('briefingModel').value,'saved:7b');
+  assert.match($('briefingServerStatus').textContent,/localhost:12345/);
   $('optExplorer').checked = false;
   $('optBriefing').checked = true;
   $('optBriefing').handlers.change();
@@ -61,8 +67,12 @@ const $ = id => nodes.get(id);
   assert.equal(row()[0], false);
   await t.checkBriefingModel();
   assert.equal(row()[0], true);
+  t.applyOllamaDefaults({model:'saved:7b',url:'http://host.docker.internal:23456/api/chat',display_url:'http://localhost:23456'});
+  assert.equal(row()[0],false,'Changing endpoint invalidates the old connection check');
   $('briefingModel').value = 'custom:latest';
   $('briefingModel').handlers.input();
+  t.applyOllamaDefaults({model:'changed:8b',url:'http://host.docker.internal:23456/api/chat',display_url:'http://localhost:23456'});
+  assert.equal($('briefingModel').value,'custom:latest','User-selected model survives health refresh');
   assert.equal(row()[0], false);
   installed = false;
   await t.checkBriefingModel();
@@ -74,6 +84,7 @@ const $ = id => nodes.get(id);
   t.state.runner = {snakemake_available: true, config_yaml_present: true,
     runs_root: '/original/runs', storage_revision: 'initial', free_bytes: 100000,
     conda_pkgs_default: 'Conda configuration default'};
+  t.state.docker={ready:true,selection_vadr:true};
   t.state.reads = [{name: 'sample.fastq.gz', size: 100}];
   t.state.metadata = {name: 'metadata.tsv', size: 10};
   t.state.metadataIds = ['sample'];
@@ -102,7 +113,7 @@ const $ = id => nodes.get(id);
   assert.equal($('preflightList').innerHTML.includes('<runs>'), false);
   await t.startRun();
   assert.equal(created.storage_revision, 'applied');
-  assert.deepEqual(created.options, {genoflu: true, vadr: true, phylogeny: false,
+  assert.deepEqual(created.options, {context_setup:true, genoflu: true, vadr: true, phylogeny: false, phylodynamics:false, phylodynamics_method:'fast',
     explorer: true, briefing: true, briefing_model: 'custom:latest', briefing_audience: 'public_health'});
   $('optBriefing').checked = false;
   t.syncBriefing();

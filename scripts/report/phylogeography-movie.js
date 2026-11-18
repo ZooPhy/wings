@@ -18,7 +18,9 @@
     if(typeof v !== 'string' || !v.trim() || v.length>300) fail(where+' must be a nonempty string (up to 300 characters).');
     return v;
   }
-  function validate(raw) {
+  // Browser playback retains indexed histories; offline validation checks every
+  // draw but releases each draw's indexes instead of retaining a player model.
+  function validateReconstruction(raw, playback) {
     if (!raw || raw.schema !== SCHEMA) fail('Expected '+SCHEMA+' reconstruction JSON.');
     if (typeof raw.synthetic !== 'boolean') fail('Declare synthetic: true or false.');
     if (!raw.provenance || raw.provenance.uncertainty !== 'conditional-on-fixed-tree') fail('This version requires histories conditional on fixed dated segment trees.');
@@ -60,7 +62,7 @@
       if(end<=start) fail('A positive dated-tree duration is required.');
       tips.forEach(n=>{if(!states.has(n.observed_state)) fail('Every tip must have a known observed_state: '+n.id);});
       if(!Array.isArray(segment.histories) || !segment.histories.length || segment.histories.length>10000) fail('Provide 1–10,000 equally weighted, post-burn-in histories per segment.');
-      if(segment.histories.length*nodes.size>1000000) fail('Limit each segment to 1,000,000 node × history combinations for browser playback.');
+      if(playback && segment.histories.length*nodes.size>1000000) fail('Limit each segment to 1,000,000 node × history combinations for browser playback.');
       let focal=null;
       const marked=tips.filter(n=>n.sample_id).map(n=>n.sample_id);
       const declared=segment.focal_sample_ids??(marked.length>=2?marked:undefined);
@@ -78,7 +80,7 @@
         string(h.id,'History ID'); if(hids.has(h.id)) fail('Duplicate history ID: '+h.id); hids.add(h.id);
         if(own(h,'weight')) fail('Weighted histories are not supported; supply equally weighted posterior draws.');
         if(!states.has(h.root_state) || !Array.isArray(h.jumps)) fail('Each history needs root_state and a jumps array, including zero-jump histories.');
-        eventTotal+=h.jumps.length; if(eventTotal>500000) fail('File exceeds the 500,000-event limit.');
+        eventTotal+=h.jumps.length; if(playback && eventTotal>500000) fail('File exceeds the 500,000-event limit.');
         const byBranch=new Map(), jumps=h.jumps.map(j=>{
           const n=nodes.get(j.branch), t=stamp(j.date);
           if(!n || n.parent===null) fail('Jump must reference a non-root child node.');
@@ -98,14 +100,17 @@
           if(n.observed_state!==undefined && current!==n.observed_state) fail('History does not match observed state at '+n.id);
           nodeStates.set(n.id,current);
         }
+        if(!playback)return null; // Continuity, dates and observed states were all checked.
         const incoming=new Map([...states.keys()].map(k=>[k,[]]));
         jumps.forEach(j=>{if(!focal||focal.branches.has(j.branch))incoming.get(j.to).push(j.t);});
         return {...h,jumps,byBranch,nodeStates,incoming};
       });
+      if(!playback)return {id:segment.id,history_count:segment.histories.length};
       return {id:segment.id,nodes,order,root:roots[0],tips,start,end,histories,focal};
     });
-    return {raw,states,segments};
+    return playback ? {raw,states,segments} : {segments,event_count:eventTotal};
   }
+  function validate(raw) { return validateReconstruction(raw,true); }
   function upperBound(a,t) { let l=0,r=a.length;while(l<r){const m=(l+r)>>>1;if(a[m]<=t)l=m+1;else r=m;}return l; }
   function quantile(a,p) {return a[Math.max(0,Math.ceil(p*a.length)-1)];}
   function studyView(segment) {
@@ -386,5 +391,6 @@
   }
   const api={SCHEMA,validate,studyView,summarize,probabilities,branchPieces,routes,exampleData,mount};
   globalThis.WINGS_PHYLOGEOGRAPHY_MOVIE=api;
-  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+  // Offline entry point is deliberately absent from the browser API.
+  if(typeof module!=='undefined'&&module.exports)module.exports={...api,validateForAnalysis:raw=>validateReconstruction(raw,false)};
 })();

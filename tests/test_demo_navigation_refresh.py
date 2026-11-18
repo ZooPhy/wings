@@ -27,6 +27,11 @@ class DemoNavigationTests(unittest.TestCase):
         summary = ('<html><head><style>.wings-surveillance-explorer .wse-genome-controls{}</style>'
                    '<style>:root{--escape-maroon:red}.report-header{}</style></head><body>'
                    '<div class="report-brand-logo">old logo</div>'
+                   '<p><strong>Segment PASS criteria:</strong></p><ul>'
+                   '<li>Median depth ≥ <strong>20x</strong></li>'
+                   '<li>Reference positions at ≥ <strong>20x</strong>: ≥ <strong>90%</strong></li>'
+                   '<li>Consensus length ≥ configured segment minimum</li>'
+                   '<li>Consensus N fraction ≤ <strong>10%</strong></li></ul>'
                    '<script>class Explorer {} /* WINGS_MIGRATION_WEAVE_JS_BEGIN */</script>'
                    '<script type="application/json">{"original_data":true}</script></body></html>')
         sample = ('<html><body><aside id="wings-ebird-refresh-notice">Old notice</aside>'

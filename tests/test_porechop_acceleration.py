@@ -83,6 +83,8 @@ class AccelerationTests(unittest.TestCase):
         (cls.package/'version.py').write_text("__version__='0.5.1'\n")
         (cls.package/'porechop_abi.py').write_text(TOOL)
         (cls.package/'abinitio.py').write_text(ABI)
+        (cls.package/'approx_counter').write_text(COUNTER)
+        (cls.package/'approx_counter').chmod(0o755)
 
     @classmethod
     def tearDownClass(cls):
@@ -316,7 +318,7 @@ class AccelerationTests(unittest.TestCase):
         self.assertEqual(command[command.index('--cores')+1], '4')
         self.assertEqual(command[command.index('--resources')+1], 'wings_task_slots=1')
 
-    def run_rule_shell(self, enabled, threads):
+    def run_rule_shell(self, enabled, threads, installed_abi=1):
         # Execute the exact rule's shell body; real Snakemake DAG validation is separate.
         source = (ROOT/'Snakefile').read_text()
         rule = source.split('rule porechop:', 1)[1].split('rule fastplong:', 1)[0]
@@ -332,9 +334,10 @@ class AccelerationTests(unittest.TestCase):
                     values = self.value if isinstance(self.value, list) else [self.value]
                     return ' '.join(shlex.quote(str(value)) for value in values)
                 return str(self.value)
-        params = SimpleNamespace(accelerated=int(enabled), adapter_search_threads=1)
+        params = SimpleNamespace(accelerated=int(enabled), adapter_search_threads=1, installed_abi=installed_abi)
         input_values = SimpleNamespace(fastq=Value(self.input),
             runner=Value(SCRIPTS/'run_porechop_accelerated.py'),
+            installed_runner=Value(SCRIPTS/'run_porechop_abi.py'),
             counter_build=Value([self.manifest_path] if enabled else []))
         shell = shell.format(input=input_values, output=SimpleNamespace(trimmed=Value(self.output)),
                              log=Value(self.output.parent/'porechop.log'), params=params,
@@ -357,11 +360,13 @@ class AccelerationTests(unittest.TestCase):
             result.stderr += log.read_text()
         return result
 
-    def test_disabled_rule_shell_preserves_installed_command_and_quoted_paths(self):
+    def test_disabled_acceleration_uses_installed_counter_with_intact_paths(self):
         result = self.run_rule_shell(False, 1)
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
-        arguments = json.loads(self.output.with_suffix('.installed-argv.json').read_text())
-        self.assertEqual(arguments, ['-abi', '--threads', '1', '-i', str(self.input), '-o', str(self.output)])
+        record = json.loads(self.output.with_name(self.output.name+'.porechop-provenance.json').read_text())
+        self.assertEqual(record['backend'], 'installed')
+        self.assertEqual(record['counter_commands'][0][1], str(self.input))
+        self.assertEqual(record['argv'][:7], ['porechop_abi', '-abi', '--threads', '1', '-i', str(self.input), '-o'])
         self.assertEqual(self.output.read_bytes(), self.input.read_bytes())
 
     def test_enabled_rule_shell_passes_allocated_threads_to_wrapper(self):
@@ -371,6 +376,13 @@ class AccelerationTests(unittest.TestCase):
         self.assertEqual(self.output.read_bytes(), self.input.read_bytes())
         calls = [json.loads(s) for s in (self.output.parent/'stage_threads.jsonl').read_text().splitlines()]
         self.assertEqual([r['threads'] for r in calls], [1, min(4, os.cpu_count()), min(4, os.cpu_count())])
+
+    def test_custom_command_branch_is_preserved(self):
+        result = self.run_rule_shell(False, 1, installed_abi=0)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        arguments = json.loads(self.output.with_suffix('.installed-argv.json').read_text())
+        self.assertEqual(arguments, ['-abi', '--threads', '1', '-i', str(self.input), '-o', str(self.output)])
+        self.assertEqual(self.output.read_bytes(), self.input.read_bytes())
 
 
 if __name__ == '__main__':

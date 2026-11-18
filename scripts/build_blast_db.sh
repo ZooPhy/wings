@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 RESOURCE_DIR="${ROOT_DIR}/resources"
-ZIP="${RESOURCE_DIR}/fluA_reference.fasta.zip"
+ZIP="${WINGS_REFERENCE_ARCHIVE:-${RESOURCE_DIR}/fluA_reference.fasta.zip}"
 DB_DIR="${RESOURCE_DIR}/flu_db"
 FASTA="${DB_DIR}/fluA_reference.fasta"
 DB_PREFIX="${DB_DIR}/fluA_db"
@@ -22,7 +22,7 @@ BLAST_DB_VERSION="${BLAST_DB_VERSION:-4}"
 DEFAULT_ARCHIVE_SHA256="36645a72b290f3043b67c7f43196b438da5defbca24c00c1a592ce92fa6ba0e6"
 EXPECTED_ARCHIVE_SHA256="${EXPECTED_ARCHIVE_SHA256:-}"
 
-mkdir -p "${RESOURCE_DIR}" "${DB_DIR}"
+mkdir -p "${RESOURCE_DIR}" "${DB_DIR}" "$(dirname "${ZIP}")"
 
 sha256_file() {
     local file="$1"
@@ -47,7 +47,7 @@ if [[ ! -f "${ZIP}" ]]; then
         if gh release download "${RELEASE_TAG}" \
             --repo "${GITHUB_REPO}" \
             --pattern "${ASSET_NAME}" \
-            --dir "${RESOURCE_DIR}" \
+            --dir "$(dirname "${ZIP}")" \
             --clobber; then
             [[ -s "${ZIP}" ]] && download_ok=true
         else
@@ -144,11 +144,12 @@ fi
 cp -f "${FASTA_SRC}" "${FASTA}"
 FASTA_SHA256="$(sha256_file "${FASTA}")"
 
-# Remove an older database before rebuilding so incompatible database files
-# cannot be mixed.
-find "${DB_DIR}" -maxdepth 1 -type f \
-    \( -name 'fluA_db.n*' -o -name 'fluA_db.*db' \) \
-    -delete
+# Build into a unique, physically space-free directory. makeblastdb can reopen
+# its output using an absolute path internally, even when -out is a basename.
+# Keep any installed database intact until the replacement has been verified.
+BUILD_DIR="$(mktemp -d /tmp/wings-blast.XXXXXXXX)"
+cleanup_build() { rm -rf "${BUILD_DIR}" "${TMP_DIR}"; }
+trap cleanup_build EXIT
 
 BUILD_METHOD=""
 MAKEBLASTDB_VERSION=""
@@ -157,10 +158,17 @@ build_with_local_blast() {
     echo "Building BLAST database version ${BLAST_DB_VERSION} with local makeblastdb..."
     BUILD_METHOD="local"
     MAKEBLASTDB_VERSION="$(makeblastdb -version 2>&1 | awk '/^makeblastdb:/{print; found=1} END{if(!found) print "unknown"}' | tr '\t' ' ')"
+    # makeblastdb parses -in as a list and can split a quoted path at spaces.
+    # Stage the actual bytes, not a symlink back to the space-containing path.
+    echo "Staging FASTA input in the temporary build directory..."
+    cp "${FASTA}" "${BUILD_DIR}/fluA_reference.fasta"
     makeblastdb \
-        -in "${FASTA}" \
+        -in "${BUILD_DIR}/fluA_reference.fasta" \
         -dbtype nucl \
-        -out "${DB_PREFIX}"
+        -blastdb_version "${BLAST_DB_VERSION}" \
+        -out "${BUILD_DIR}/fluA_db"
+    echo "Verifying the new BLAST database..."
+    blastdbcmd -db "${BUILD_DIR}/fluA_db" -info
 }
 
 build_with_docker() {
@@ -168,13 +176,17 @@ build_with_docker() {
     BUILD_METHOD="docker"
     MAKEBLASTDB_VERSION="$(docker run --rm "${BLAST_IMAGE}" makeblastdb -version 2>&1 | awk '/^makeblastdb:/{print; found=1} END{if(!found) print "unknown"}' | tr '\t' ' ')"
     docker run --rm \
-        -v "${ROOT_DIR}:/workspace" \
-        -w /workspace \
+        -v "${DB_DIR}:/db" \
+        -v "${BUILD_DIR}:/build" \
+        -w /db \
         "${BLAST_IMAGE}" \
         makeblastdb \
-            -in "/workspace/resources/flu_db/fluA_reference.fasta" \
+            -in "/db/fluA_reference.fasta" \
             -dbtype nucl \
-            -out "/workspace/resources/flu_db/fluA_db"
+            -blastdb_version "${BLAST_DB_VERSION}" \
+            -out "/build/fluA_db"
+    echo "Verifying the new BLAST database..."
+    docker run --rm -v "${BUILD_DIR}:/build" "${BLAST_IMAGE}" blastdbcmd -db /build/fluA_db -info
 }
 
 build_with_apptainer() {
@@ -182,12 +194,16 @@ build_with_apptainer() {
     BUILD_METHOD="apptainer"
     MAKEBLASTDB_VERSION="$(apptainer exec "docker://${BLAST_IMAGE}" makeblastdb -version 2>&1 | awk '/^makeblastdb:/{print; found=1} END{if(!found) print "unknown"}' | tr '\t' ' ')"
     apptainer exec \
-        --bind "${ROOT_DIR}:/workspace" \
+        --bind "${DB_DIR}:/db" \
+        --bind "${BUILD_DIR}:/build" \
         "docker://${BLAST_IMAGE}" \
         makeblastdb \
-            -in "/workspace/resources/flu_db/fluA_reference.fasta" \
+            -in "/db/fluA_reference.fasta" \
             -dbtype nucl \
-            -out "/workspace/resources/flu_db/fluA_db"
+            -blastdb_version "${BLAST_DB_VERSION}" \
+            -out "/build/fluA_db"
+    echo "Verifying the new BLAST database..."
+    apptainer exec --bind "${BUILD_DIR}:/build" "docker://${BLAST_IMAGE}" blastdbcmd -db /build/fluA_db -info
 }
 
 build_with_singularity() {
@@ -195,15 +211,19 @@ build_with_singularity() {
     BUILD_METHOD="singularity"
     MAKEBLASTDB_VERSION="$(singularity exec "docker://${BLAST_IMAGE}" makeblastdb -version 2>&1 | awk '/^makeblastdb:/{print; found=1} END{if(!found) print "unknown"}' | tr '\t' ' ')"
     singularity exec \
-        --bind "${ROOT_DIR}:/workspace" \
+        --bind "${DB_DIR}:/db" \
+        --bind "${BUILD_DIR}:/build" \
         "docker://${BLAST_IMAGE}" \
         makeblastdb \
-            -in "/workspace/resources/flu_db/fluA_reference.fasta" \
+            -in "/db/fluA_reference.fasta" \
             -dbtype nucl \
-            -out "/workspace/resources/flu_db/fluA_db"
+            -blastdb_version "${BLAST_DB_VERSION}" \
+            -out "/build/fluA_db"
+    echo "Verifying the new BLAST database..."
+    singularity exec --bind "${BUILD_DIR}:/build" "docker://${BLAST_IMAGE}" blastdbcmd -db /build/fluA_db -info
 }
 
-if command -v makeblastdb >/dev/null 2>&1; then
+if command -v makeblastdb >/dev/null 2>&1 && command -v blastdbcmd >/dev/null 2>&1; then
     build_with_local_blast
 elif command -v docker >/dev/null 2>&1; then
     if ! docker info >/dev/null 2>&1; then
@@ -222,6 +242,17 @@ else
     rm -rf "${TMP_DIR}"
     exit 1
 fi
+
+# Publish only after makeblastdb and blastdbcmd both succeed. A failed build
+# must never leave a success manifest that makes the desktop skip preparation.
+echo "Installing the verified BLAST database..."
+rm -f "${MANIFEST}"
+find "${DB_DIR}" -maxdepth 1 -type f \
+    \( -name 'fluA_db.n*' -o -name 'fluA_db.*.n*' -o -name 'fluA_db.*db' \) -delete
+for database_file in "${BUILD_DIR}"/fluA_db.*; do
+    [[ -f "${database_file}" ]] || { echo "ERROR: No BLAST database files were produced." >&2; exit 1; }
+    cp "${database_file}" "${DB_DIR}/"
+done
 
 CREATED_AT_UTC="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 

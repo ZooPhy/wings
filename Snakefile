@@ -1119,6 +1119,7 @@ rule porechop:
     input:
         fastq=lambda wildcards: SAMPLE_FASTQ[wildcards.sample],
         runner="scripts/run_porechop_accelerated.py",
+        installed_runner="scripts/run_porechop_abi.py",
         counter_build=([PORECHOP_COUNTER_BUILD] if PORECHOP_COUNTER_BUILD else [])
     output:
         trimmed=f"{RESULTS}/{{sample}}/porechop/trimmed.fastq"
@@ -1133,6 +1134,7 @@ rule porechop:
         time_min=int(config.get("porechop_time_min", 240))
     params:
         accelerated=int(bool(PORECHOP_COUNTER_BUILD)),
+        installed_abi=int(PORECHOP_CMD == "porechop_abi"),
         adapter_search_threads=max(1, int(config.get("porechop_adapter_search_threads", 1)))
     shell:
         r"""
@@ -1146,6 +1148,9 @@ rule porechop:
               --adapter-search-threads {params.adapter_search_threads} \
               --input {input.fastq:q} \
               --output {output.trimmed:q}
+        elif [ {params.installed_abi} -eq 1 ]; then
+            python {input.installed_runner:q} --threads {threads} \
+              --input {input.fastq:q} --output {output.trimmed:q}
         else
             {PORECHOP_CMD} -abi --threads {threads} -i {input.fastq:q} -o {output.trimmed:q}
         fi
@@ -1999,14 +2004,18 @@ rule blastn:
             exit 0
         fi
 
+        query_path="$(cd "$(dirname {input.fasta:q})" && pwd)/$(basename {input.fasta:q})"
+        database_name="$(basename {params.database_prefix:q})"
+        (
+        cd "$(dirname {params.database_prefix:q})"
         blastn \
-            -query {input.fasta:q} \
-            -db {params.database_prefix:q} \
+            -query "$query_path" \
+            -db "$database_name" \
             -outfmt '6 qseqid sacc stitle pident length qlen qstart qend sstart send evalue bitscore' \
             -max_target_seqs {params.max_target_seqs} \
             -max_hsps {params.max_hsps} \
-            -num_threads {threads} \
-            2> {log:q} \
+            -num_threads {threads}
+        ) 2> {log:q} \
           | LC_ALL=C sort -t $'\t' -k12,12gr -k11,11g -k4,4gr \
           > {output.txt:q}
         """
