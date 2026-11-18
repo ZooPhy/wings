@@ -21,6 +21,10 @@ put_string CFBundleName WINGS
 put_string CFBundleShortVersionString 0.1.12
 put_string CFBundleVersion 13
 put_string CFBundleIconFile WINGS.icns
+# Remove the inherited AppleScript icon override.
+if /usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$plist"
+fi
 if [[ -n "${WINGS_SIGN_IDENTITY:-}" ]]; then
     /usr/bin/codesign --force --options runtime --timestamp --sign "$WINGS_SIGN_IDENTITY" "$destination/WINGS.app"
     /usr/bin/codesign --verify --strict --verbose=2 "$destination/WINGS.app"
