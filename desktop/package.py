@@ -43,6 +43,7 @@ def bundle(source, destination):
     resources.mkdir(parents=True, exist_ok=True)
     binary.mkdir(parents=True, exist_ok=True)
     files = dict(source_files(source))
+    (resources / "README.md").write_bytes(files["README.md"])
     forbidden = [name for name in files if name.startswith(('results/', 'data/', '.env', 'demo/'))]
     if forbidden:
         raise ValueError('Unexpected private/runtime data: ' + repr(forbidden[:5]))
