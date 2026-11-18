@@ -94,6 +94,40 @@ class Lineages(unittest.TestCase):
             self.assertIn('missing_or_unresolved_lineage_screen',result['reasons'])
             self.assertIsNone(json.loads((out/'movie.json').read_text()));self.assertFalse((out/'dated_nodes.json').exists())
 
+    def test_reverse_rescue_preserves_orientation_hashes_and_qc_gate(self):
+        forward='AAAACCGT'*15
+        reverse='ACGGTTTT'*15
+        study=[row('s','study',forward)]
+        refs=[row('forward',sequence=forward),row('reverse',sequence=reverse),row('bad',sequence=forward)]
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)
+            def run(args,**kwargs):
+                # Model a tool/dataset that does not rescue reverse input unless requested.
+                rescue=('--retry-reverse-complement' in args and
+                        args[args.index('--retry-reverse-complement')+1]=='true')
+                calls=[dict(seqName=k,**call()) for k in ('s','forward','reverse','bad')]
+                calls[2].update(isReverseComplement='true' if rescue else 'false',
+                    errors='' if rescue else 'unable to align input orientation',
+                    **{'qc.overallStatus':'good' if rescue else 'bad'})
+                calls[3]['qc.overallStatus']='bad'
+                table=Path(args[args.index('--output-tsv')+1])
+                with table.open('w') as f:
+                    writer=csv.DictWriter(f,fieldnames=list(calls[0]),delimiter='\t')
+                    writer.writeheader();writer.writerows(calls)
+                Path(args[args.index('--output-fasta')+1]).write_text(''.join(
+                    '>'+k+'\n'+forward+'\n' for k in ('s','forward','reverse','bad')))
+            with patch.object(lin,'frozen_dataset',return_value=(p,{'resolved_tag':'fixture'})),patch.object(lin.subprocess,'check_output',return_value='nextclade fixture'),patch.object(lin.subprocess,'run',side_effect=run):
+                kept,excluded,audit=lin.screen(study,refs,'HA',p/'out',lin.configuration({}),1)
+            self.assertEqual({r['id'] for r in kept},{'forward','reverse'})
+            self.assertEqual([(r['id'],r['reason']) for r in excluded],[('bad','nextclade_unusable')])
+            self.assertEqual([r['sequence'] for r in kept],[forward,forward])
+            decision=next(d for d in audit['decisions'] if d['id']=='reverse')
+            self.assertTrue(decision['reverse_complemented'])
+            self.assertEqual(decision['original_sequence_sha256'],hashlib.sha256(reverse.encode()).hexdigest())
+            self.assertEqual(decision['oriented_sequence_sha256'],hashlib.sha256(forward.encode()).hexdigest())
+            self.assertEqual(kept[1]['sequence_sha256'],decision['oriented_sequence_sha256'])
+            self.assertEqual(json.loads((p/'out/lineage.json').read_text())['command'],audit['command'])
+
 class Temporal(unittest.TestCase):
     def fixture(self):
         from datetime import date
@@ -144,12 +178,19 @@ class NextcladeIntegration(unittest.TestCase):
             p=Path(t);cfg=lin.configuration(dict(cache_dir=str(p/'cache')))
             dataset,_=lin.frozen_dataset(cfg)
             seq=next(iter(lin.read_fasta(dataset/'reference.fasta').values())).replace('-','')
-            reverse=seq.translate(str.maketrans('ACGT','TGCA'))[::-1]
+            from Bio.Seq import Seq
+            reverse=str(Seq(seq).reverse_complement())
             study=[row('study','study',seq)];refs=[row('forward',sequence=seq),row('reverse',sequence=reverse)]
-            kept,_,audit=lin.screen(study,refs,'HA',p/'classification',cfg,1)
-            self.assertEqual(audit['status'],'ready',audit);self.assertEqual(len(kept),2)
+            kept,excluded,audit=lin.screen(study,refs,'HA',p/'classification',cfg,1)
+            diagnostic=json.dumps(dict(dataset=audit.get('dataset'),software=audit.get('software'),
+                command=audit.get('command'),decisions=audit.get('decisions'),
+                exclusions=[{'id':r['id'],'reason':r['reason']} for r in excluded]),indent=2)
+            self.assertEqual(audit['status'],'ready',diagnostic)
+            self.assertEqual({r['id'] for r in kept},{'forward','reverse'},diagnostic)
+            self.assertEqual(len(kept),2,diagnostic)
+            self.assertEqual(excluded,[],diagnostic)
             self.assertTrue(next(x for x in audit['decisions'] if x['id']=='reverse')['reverse_complemented'])
-            self.assertEqual(kept[1]['sequence'],seq)
+            self.assertTrue(all(r['sequence']==seq for r in kept),diagnostic)
 
 if __name__=='__main__':unittest.main()
 

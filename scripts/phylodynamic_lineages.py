@@ -172,7 +172,10 @@ def screen(study,candidates,segment,output,cfg,threads,offline=False):
     table=output/'nextclade.tsv'; alignment=output/'nextclade.aligned.fasta'
     # Failed runs must never consume outputs left by a previous invocation.
     for p in (table,alignment):p.unlink(missing_ok=True)
+    # Request rescue explicitly instead of depending on tool/dataset defaults.
+    # Clade and QC eligibility still come from the resulting Nextclade calls.
     command=['nextclade','run','--input-dataset',str(dataset),'--jobs',str(threads),
+             '--retry-reverse-complement','true',
              '--output-tsv',str(table),'--output-fasta',str(alignment),str(fasta)]
     with (output/'nextclade.log').open('w') as log:
         subprocess.run(command,stdout=log,stderr=log,check=True)
