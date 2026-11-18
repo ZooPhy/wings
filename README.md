@@ -6,7 +6,7 @@
 
 WINGS analyzes avian influenza A virus from Oxford Nanopore sequencing reads and brings genomic results, sample metadata, geographic ancestry, and ecological context into an interactive **Surveillance Explorer**. It combines a Snakemake analysis workflow, a browser-based submission interface, and portable reports that can be viewed without rerunning the analysis.
 
-WINGS was developed in support of the [Pandemic ESCAPE Center](https://escape.engr.uky.edu/).
+WINGS was developed in support of the [Pandemic ESCAPE Center](http://www.escape-center.org/).
 
 **Start here:** [Choose how to run WINGS](#choose-how-to-run-wings) · [Desktop setup](#desktop-setup) · [Submit a job](#submit-a-job) · [Phylodynamics](#phylodynamics-in-the-surveillance-explorer) · [Q&A](docs/faq.md) · [Detailed guides](#documentation)
 
@@ -32,10 +32,6 @@ WINGS was developed in support of the [Pandemic ESCAPE Center](https://escape.en
 | **Report viewer / demo** | Explore completed results without installing the analysis pipeline. | Open the [WINGS portal](https://wings.scotchlab.org/) and load a `.wings` bundle or the demo. Bundle viewing is local to the browser. |
 
 The project documents evaluated native Apple Silicon and Linux ARM64/SLURM configurations. These are distinct from the desktop preview, which runs a **Linux AMD64 runtime through Docker**, including on Apple Silicon. Windows/WSL2 workflow validation remains pending. The app's minimum declared macOS version is 13; Docker Desktop has its own [system requirements](https://docs.docker.com/desktop/setup/install/mac-install/).
-
-### Is everything in one container?
-
-The desktop app manages **one controller container plus the IRMA/VADR containers used by the workflow**. Other tools use rule-specific Conda environments inside the controller. The app is a launcher with a bundled workflow, not a single offline executable containing every model, reference dataset and dependency.
 
 ## Desktop setup
 
