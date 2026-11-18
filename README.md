@@ -8,6 +8,12 @@ WINGS analyzes avian influenza A virus from Oxford Nanopore sequencing reads and
 
 WINGS was developed in support of the [Pandemic ESCAPE Center](http://www.escape-center.org/).
 
+## Download WINGS Desktop
+
+**[Download for macOS — Preview](https://github.com/ZooPhy/wings/releases/download/desktop-preview-2026-11-18/WINGS.dmg)** · [Release notes](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-18)
+
+Requires Docker Desktop. This is an unsigned macOS preview; additional resources download during initial setup.
+
 **Start here:** [Choose how to run WINGS](#choose-how-to-run-wings) · [Desktop setup](#desktop-setup) · [Submit a job](#submit-a-job) · [Phylodynamics](#phylodynamics-in-the-surveillance-explorer) · [Q&A](docs/faq.md) · [Detailed guides](#documentation)
 
 ## What WINGS provides
@@ -35,10 +41,10 @@ The project documents evaluated native Apple Silicon and Linux ARM64/SLURM confi
 
 ## Desktop setup
 
-Obtain the **WINGS Desktop Preview** archive from the project maintainers. The preview described here is distributed separately from a bare source checkout; do not assume a GitHub clone installs the app.
+Download **[WINGS.dmg](https://github.com/ZooPhy/wings/releases/download/desktop-preview-2026-11-18/WINGS.dmg)** from the published **[WINGS Desktop macOS preview](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-18)**. Choose the DMG asset to install the app; the source-code archives are for working with the repository.
 
 1. Install and start Docker Desktop for your Mac.
-2. Extract the preview archive and move **WINGS.app** to Applications.
+2. Open **WINGS.dmg** and drag **WINGS** into the **Applications** folder.
 3. Open WINGS and choose where to create its **WINGS Workspace**.
 4. Enter optional access details or choose **Add later**. Skipping is remembered for that workspace.
 5. Choose **Open WINGS**. A setup progress page opens in your usual browser, followed by the submission interface when the service is ready.
