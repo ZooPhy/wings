@@ -6,7 +6,7 @@
 
 WINGS analyzes avian influenza A virus from Oxford Nanopore sequencing reads and brings genomic results, sample metadata, geographic ancestry, and ecological context into an interactive **Surveillance Explorer**. It combines a Snakemake analysis workflow, a browser-based submission interface, and portable reports that can be viewed without rerunning the analysis.
 
-WINGS was developed in support of the [Pandemic ESCAPE Center](https://escape.engr.uky.edu/). It supports research and surveillance interpretation; inferred geographic changes and overlapping detection records do not establish transmission between sampled birds.
+WINGS was developed in support of the [Pandemic ESCAPE Center](https://escape.engr.uky.edu/).
 
 **Start here:** [Choose how to run WINGS](#choose-how-to-run-wings) · [Desktop setup](#desktop-setup) · [Submit a job](#submit-a-job) · [Phylodynamics](#phylodynamics-in-the-surveillance-explorer) · [Q&A](docs/faq.md) · [Detailed guides](#documentation)
 
