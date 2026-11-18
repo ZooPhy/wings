@@ -15,12 +15,12 @@ WINGS was developed in support of the [Pandemic ESCAPE Center](https://escape.en
 | Area | Outputs and capabilities |
 | --- | --- |
 | Read processing and assembly | Porechop ABI trimming, fastplong filtering, NanoPlot QC, IRMA FLU-minion assembly, and segment recovery checks. |
-| Sequence evidence | Depth, breadth and N-content QC; Medaka polishing and variant calls; BLAST segment identification; H5Nx screening; conditional GenoFLU assignment; VADR annotation. |
-| Genomic exploration | Linked segment trees, genome coverage, protein changes in reference coordinates, and genotype-frequency comparisons with explicit denominators. |
-| Phylodynamics | Optional Fast or BEAST-based dating/conditional geographic reconstruction, with a shared map, ancestry tree, Markov-jump chord diagram, entry timeline, and location probabilities. |
+| Sequence evidence | Depth, breadth and N-content QC; Medaka polishing and variant calls; BLAST segment identification; H5Nx screening; GenoFLU assignment; VADR annotation. |
+| Genomic exploration | Linked segment trees, genome coverage, amino acid variants, and genotype-frequency. |
+| Phylodynamics | Optional Fast or BEAST-based dating/conditional geographic reconstruction, with a shared map, ancestry tree, Markov-jump chord diagram, viral introduction timeline, and phylodynamic location node probabilities. |
 | Surveillance context | Metadata-matched eBird reporting and seasonal abundance, available BirdCast pilot data, weather, and USDA APHIS wild-bird detections with source provenance. |
 | Reporting and reproducibility | Sample and run HTML reports, portable `.wings` bundles, saved data snapshots, configuration and source hashes, and diagnostic records. |
-| Optional interpretation | An Ollama-generated **Knowledge for action** briefing based on the run's recorded evidence. |
+| Optional interpretation | An Ollama-generated **Knowledge for action** briefing based on the recorded evidence and tailored to the user's preference (wildlife, agriculture, or public health surveillance). |
 
 ## Choose how to run WINGS
 
