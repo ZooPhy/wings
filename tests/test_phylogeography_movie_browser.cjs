@@ -36,6 +36,8 @@ const movie=require('../scripts/report/phylogeography-movie.js');
     await page.getByRole('button',{name:'Highlight',exact:true}).first().click();
     const previous=await page.evaluate(()=>player.state.segment);
     await page.getByLabel('Load phylogeographic reconstruction JSON').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from('{"schema":"wrong"}')});
+    // Selecting the file does not await the async File.text()/validation handler.
+    await page.waitForFunction(()=>document.querySelector('.wpm-status')?.textContent.startsWith('Could not load reconstruction:'));
     assert.match(await page.locator('.wpm-status').innerText(),/Could not load/);assert.equal(await page.evaluate(()=>player.state.segment),previous);
     const valid=movie.exampleData();valid.synthetic=false;valid.provenance.inference='empirical-bayes';valid.title='Test only, not study results';
     await page.getByLabel('Load phylogeographic reconstruction JSON').setInputFiles({name:'fixture.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(valid))});
