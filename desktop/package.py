@@ -43,10 +43,12 @@ def bundle(source, destination):
     resources.mkdir(parents=True, exist_ok=True)
     binary.mkdir(parents=True, exist_ok=True)
     files = dict(source_files(source))
-    (resources / "README.md").write_bytes(files["README.md"])
     forbidden = [name for name in files if name.startswith(('results/', 'data/', '.env', 'demo/'))]
     if forbidden:
         raise ValueError('Unexpected private/runtime data: ' + repr(forbidden[:5]))
+    if 'README.md' not in files:
+        raise ValueError('Missing required source README.md; build from the official repository checkout.')
+    (resources / 'README.md').write_bytes(files['README.md'])
     files['config.yaml'] = b'# WINGS Desktop defaults, generated from the example.\n' + files['config/config.example.yaml']
     manifest = {'format': 1, 'version': '0.1.13-preview', 'files': {
         name: hashlib.sha256(data).hexdigest() for name, data in files.items()}}
