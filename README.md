@@ -26,7 +26,7 @@ WINGS was developed in support of the [Pandemic ESCAPE Center](https://escape.en
 
 | Route | Intended use | Requirements and status |
 | --- | --- | --- |
-| **WINGS Desktop — macOS preview** | Launch from an app, manage settings, and submit jobs in the browser. | Docker Desktop plus the WINGS app. Host Python, Conda and Snakemake are not required. The current developer preview is **0.1.12**; it is unsigned and is not a fully validated production installer. |
+| **WINGS Desktop — macOS only** | Launch from an app, manage settings, and submit jobs in the browser. | Docker Desktop plus the WINGS app. Host Python, Conda and Snakemake are not required. |
 | **Native local runner** | Run from a source checkout while using the same browser submission interface. | A compatible Python/Conda/Snakemake environment and the configured container runtime. On Apple Silicon, use native ARM64 tools. |
 | **Command line / HPC** | Scripted analyses, custom configuration, or scheduled cluster work. | Snakemake, Conda/Mamba, and the appropriate Docker, Apptainer, Singularity or local IRMA installation. See the [command-line guide](docs/command-line-guide.md). |
 | **Report viewer / demo** | Explore completed results without installing the analysis pipeline. | Open the [WINGS portal](https://wings.scotchlab.org/) and load a `.wings` bundle or the demo. Bundle viewing is local to the browser; it does not upload sequencing reads. |
