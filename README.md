@@ -77,7 +77,7 @@ bash scripts/start_wings.sh /path/to/conda /path/to/conda/envs/snakemake_env \
   --conda-pkgs-dir /path/to/conda-cache
 ```
 
-Replace the paths with your actual installation and writable storage. On Apple Silicon, check that the selected Python reports `arm64`; an Intel environment under Rosetta is a different execution route. See [native runner setup](docs/native-runner.md).
+Replace the paths with your actual installation and writable storage. On Apple Silicon, check that the selected Python reports `arm64`; an Intel environment is a different execution route. See [native runner setup](docs/native-runner.md).
 
 For native Phylodynamics reference retrieval, set `NCBI_EMAIL` in the environment that starts the runner. For uncached Status & Trends downloads, set `EBIRDST_ACCESS_KEY` there. Desktop Settings and native shell environment variables are separate configuration mechanisms.
 
