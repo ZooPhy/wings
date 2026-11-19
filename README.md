@@ -42,12 +42,7 @@ Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/ta
 3. Open WINGS and choose where to create its **WINGS Workspace**.
 4. Enter optional access details or choose **Add later**. Skipping is remembered for that workspace.
 5. Choose **Open WINGS**. A setup progress page opens in your usual browser, followed by the submission interface when the service is ready.
-
-The setup page shows six steps: **Check Docker Desktop → Install WINGS workflow → Prepare analysis runtime → Prepare influenza references → Prepare analysis tools → Start WINGS**.
-
-The progress bar counts completed steps, not elapsed-time percentage. The current task, elapsed time and status updates remain visible during downloads and database building. A quiet process and a missing status update are reported differently. The technical log remains available for troubleshooting, but opening it is not required to follow normal setup.
-
-Use **Settings → View setup progress** to reopen the page. Closing that browser tab does not cancel setup. After completion, the WINGS interface opens in another tab or window.
+6. The setup page shows six steps: **Check Docker Desktop → Install WINGS workflow → Prepare analysis runtime → Prepare influenza references → Prepare analysis tools → Start WINGS**.
 
 ### Settings and optional access
 
