@@ -60,14 +60,6 @@ Saving, skipping or cancelling a settings action returns to the launcher menu. *
 
 Settings are workspace-specific. Refresh the WINGS browser page after changing access details or Ollama defaults. New launches/attempts read the applicable saved credentials; already-running processes retain their existing environment. Existing jobs retain their saved analysis configuration, including the Ollama model and endpoint.
 
-### Input folders and output storage
-
-The desktop context picker includes accessible **Home, Documents, Downloads, Desktop, WINGS Workspace and external drives**. Paste an absolute Mac path or `~/…` and choose **Go**, or add another location through **Settings → Share a folder with WINGS**.
-
-Shared input folders are mounted read-only at their original paths. Selecting a path does not copy or import data; context preparation is a separate action. Docker Desktop and macOS must permit access. The workspace remains writable for run inputs, prepared context, caches and results. The output-storage picker remains restricted to the desktop workspace.
-
-A workspace contains `runs/`, `cache/`, `releases/`, `logs/`, and app-managed settings. It is separate from a native checkout such as `~/wings`. Replacing the app does not replace or delete the workspace. See the [folder and storage Q&A](docs/faq.md#folders-and-storage).
-
 ### Updating the app
 
 For **0.1.12**, finish active jobs, choose **Settings → Stop WINGS service**, choose **Quit**, replace the app and reopen it. This release changes the runner and needs one service restart. Its runtime recipe is unchanged from 0.1.11, so the existing Docker image, reference cache and credentials can be reused.
