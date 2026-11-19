@@ -48,7 +48,7 @@ Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/ta
 
 | Setting | When it is needed | How it is used |
 | --- | --- | --- |
-| **Add or update NCBI email** | Reference retrieval for Phylodynamics. | Saved in the workspace and sent with NCBI requests. Choose **Add later** if this analysis is not needed yet. |
+| **Add or update NCBI email** | Retrieval of reference sequences for phylodynamics. | Saved in the workspace and sent with NCBI requests. Choose **Add later** if this analysis is not needed yet. |
 | **Add or update eBird access key** | Downloading uncached eBird Status & Trends products. | Requires a **Status & Trends access key**, not merely a general eBird API token. Hyphens and letter case are retained. Cached products can be reused without a new download. |
 | **Configure Ollama** | Optional model-generated briefings. | Save a local server address and the exact installed model name. **Save and check** also tests availability. |
 | **Check Ollama connection** | Before enabling a briefing, or when troubleshooting. | Checks the server and selected model from the WINGS container. It does not download a model or generate text. |
