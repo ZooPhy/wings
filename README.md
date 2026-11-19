@@ -41,7 +41,7 @@ Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/ta
 2. Extract the preview archive and move **WINGS.app** to Applications.
 3. Open WINGS and choose where to create its **WINGS Workspace**.
 4. Enter optional access details or choose **Add later**. Skipping is remembered for that workspace.
-5. Choose **Open WINGS**. A setup progress page opens in your usual browser, followed by the submission interface when the service is ready.
+5. Choose **Open WINGS**. A setup progress page opens in a HTML browser, followed by the submission interface when the service is ready.
 6. The setup page shows six steps: **Check Docker Desktop → Install WINGS workflow → Prepare analysis runtime → Prepare influenza references → Prepare analysis tools → Start WINGS**.
 
 ### Settings and optional access
