@@ -43,8 +43,6 @@ Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/ta
 4. Enter optional access details or choose **Add later**. Skipping is remembered for that workspace.
 5. Choose **Open WINGS**. A setup progress page opens in your usual browser, followed by the submission interface when the service is ready.
 
-The unsigned preview may require approval through macOS Privacy & Security. Do not disable Gatekeeper globally. First setup needs internet access and sufficient space for the runtime, reference data, models and analysis outputs. Later launches reuse cached resources; a first analysis can still need additional rule environments.
-
 ### Setup progress
 
 The setup page shows six steps: **Check Docker Desktop → Install WINGS workflow → Prepare analysis runtime → Prepare influenza references → Prepare analysis tools → Start WINGS**.
