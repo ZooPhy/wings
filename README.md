@@ -86,10 +86,10 @@ For NCBI .fasta reference sequences, set `NCBI_EMAIL` in the environment that st
 1. **Run details:** name the run, choose resources, and validate any edited storage locations.
 2. **Reads:** select one FASTQ file per sample using a consistent supported filename extension.
 3. **Metadata:** provide the sample table, select context sources, and use **Prepare context** for the selected sources. Review unavailable or mismatched data before continuing.
-4. **Analysis:** select the optional modules, including Phylogenetics, Phylodynamics, Surveillance Explorer and/or the local briefing.
+4. **Analysis:** select the optional modules, including phylogenetics, phylodynamics, surveillance explorer and/or the local briefing.
 5. **Preflight:** resolve the displayed input, storage, runtime, reference-access and model checks, then start the job.
 
-Context preparation derives geographic/date windows and host scope from metadata. It reuses compatible cached data and does not run assembly or polishing. Prepared context and its provenance are retained for that job. See [context setup](docs/context-setup.md) and [portable eBird context packages](docs/ebird-context-packages.md).
+Context preparation derives geographic/date windows and host scope from metadata. It reuses compatible cached data. See [context setup](docs/context-setup.md) and [portable eBird context packages](docs/ebird-context-packages.md).
 
 ### Input data and metadata
 
