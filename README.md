@@ -50,7 +50,7 @@ Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/ta
 | --- | --- | --- |
 | **Add or update NCBI email** | Retrieval of reference sequences. | Saved in the workspace and sent with NCBI requests. Choose **Add later** if this analysis is not needed yet. |
 | **Add or update eBird access key** | Downloading uncached eBird Status & Trends products. | Requires a **[Status & Trends access key](https://science.ebird.org/status-and-trends/download-data)**, not merely a general eBird API token. Hyphens and letter case are retained. Cached products can be reused without a new download. |
-| **Configure Ollama** | Optional model-generated briefings. | Save a local server address and the exact installed model name. **Save and check** also tests availability. |
+| **Configure [Ollama](https://ollama.com/download)** | Optional model-generated briefings. | Save a local server address and the exact installed model name. |
 | **Check Ollama connection** | Before enabling a briefing, or when troubleshooting. | Checks the server and selected model from the WINGS container. It does not download a model or generate text. |
 | **Share a folder with WINGS** | Reading inputs outside the usual Mac folder shortcuts. | Add or remove a folder using the native Mac chooser. Apply changes by restarting the service after active jobs finish. |
 | **View setup progress / Open workspace / Export installation diagnostics** | Monitoring and troubleshooting. | Open the saved progress page, files, or a diagnostic report. |
