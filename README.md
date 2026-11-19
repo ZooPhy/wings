@@ -58,14 +58,6 @@ Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/ta
 
 Saving, skipping or cancelling a settings action returns to the launcher menu. **Quit** closes the launcher; **Open WINGS** hands setup/service work to the independent background coordinator. The launcher icon will disappear while the service continues running.
 
-Settings are workspace-specific. Refresh the WINGS browser page after changing access details or Ollama defaults. New launches/attempts read the applicable saved credentials; already-running processes retain their existing environment. Existing jobs retain their saved analysis configuration, including the Ollama model and endpoint.
-
-### Updating the app
-
-For **0.1.12**, finish active jobs, choose **Settings → Stop WINGS service**, choose **Quit**, replace the app and reopen it. This release changes the runner and needs one service restart. Its runtime recipe is unchanged from 0.1.11, so the existing Docker image, reference cache and credentials can be reused.
-
-Later Ollama settings changes do not require another service restart; refresh the browser before creating a new job. Changes to shared folders require a restart because they change container mounts. Follow the instructions supplied with future releases rather than assuming every update has the same restart requirements.
-
 ## Native runner and command-line setup
 
 Use this route when working directly from the repository or on a cluster. **Desktop users do not need to perform these steps inside the app's installed release folder.**
