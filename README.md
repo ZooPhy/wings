@@ -35,7 +35,7 @@ The project documents evaluated native Apple Silicon and Linux ARM64/SLURM confi
 
 ## Desktop setup
 
-Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-18.1)** archive from the project maintainers. The preview described here is distributed separately from a bare source checkout; do not assume a GitHub clone installs the app.
+Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-18.1)** pre-release. The app is distributed separately from a bare source checkout; a GitHub clone does not install the app.
 
 1. Install and start Docker Desktop for your Mac.
 2. Extract the preview archive and move **WINGS.app** to Applications.
