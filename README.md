@@ -56,7 +56,7 @@ Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/ta
 | **View setup progress / Open workspace / Export installation diagnostics** | Monitoring and troubleshooting. | Open the saved progress page, files, or a diagnostic report. |
 | **Stop WINGS service** | A required service update or a deliberate shutdown. | Finish or stop jobs first. Closing a browser tab is not a service shutdown. |
 
-Saving, skipping or cancelling a settings action returns to the launcher menu. **Quit** closes the launcher; **Open WINGS** hands setup/service work to the independent background coordinator. The launcher icon can then disappear while the service continues running.
+Saving, skipping or cancelling a settings action returns to the launcher menu. **Quit** closes the launcher; **Open WINGS** hands setup/service work to the independent background coordinator. The launcher icon will disappear while the service continues running.
 
 Settings are workspace-specific. Refresh the WINGS browser page after changing access details or Ollama defaults. New launches/attempts read the applicable saved credentials; already-running processes retain their existing environment. Existing jobs retain their saved analysis configuration, including the Ollama model and endpoint.
 
