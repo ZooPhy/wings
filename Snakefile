@@ -3585,7 +3585,8 @@ rule genoflu:
     input:
         flag=f"{RESULTS}/{{sample}}/genoflu/h5.flag",
         fasta=f"{RESULTS}/{{sample}}/merged/consensus_all_segments.fasta",
-        summary=f"{RESULTS}/{{sample}}/summary/blast_top_hits.csv"
+        summary=f"{RESULTS}/{{sample}}/summary/blast_top_hits.csv",
+        runner="scripts/run_genoflu_safe.py"
     output:
         tsv=f"{RESULTS}/{{sample}}/genoflu/GenoFLU.tsv"
     log:
@@ -3600,12 +3601,8 @@ rule genoflu:
         h5_status="$(tr -d '\r\n' < {input.flag:q})"
 
         if [[ "$h5_status" == "DETECTED" ]]; then
-            fasta_dir="$(dirname {input.fasta:q})"
-            fasta_base="$(basename {input.fasta:q})"
-            (
-                cd "$fasta_dir"
-                genoflu.py -f "$fasta_base"
-            ) | tee {log:q} > {output.tsv:q}
+            python {input.runner:q} --fasta {input.fasta:q} \
+              --output {output.tsv:q} --log {log:q}
         elif [[ "$h5_status" == "NOT_DETECTED" ]]; then
             printf "sample\tstatus\n%s\tH5_NOT_DETECTED\n" {wildcards.sample:q} \
               | tee {log:q} > {output.tsv:q}
