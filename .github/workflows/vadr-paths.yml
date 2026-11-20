@@ -1,0 +1,24 @@
+name: VADR workspace paths
+on:
+  push:
+    branches: [main]
+    paths: ['Snakefile', 'tests/test_vadr_workspace_paths.py', '.github/workflows/vadr-paths.yml']
+  pull_request:
+    paths: ['Snakefile', 'tests/test_vadr_workspace_paths.py', '.github/workflows/vadr-paths.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paths:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -p 'test_vadr_workspace_paths.py' -v

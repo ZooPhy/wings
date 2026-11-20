@@ -1909,13 +1909,16 @@ rule vadr_annotate:
                 command = [
                     "docker", "run", "--rm",
                     "--platform", "linux/amd64",
-                    "-v", f"{mount_root}:{mount_root}",
+                    # VADR builds internal shell commands without quoting paths.
+                    # Keep host workspace names out of all container-side paths.
+                    "-v", f"{input_path}:/input.fa:ro",
+                    "-v", f"{outdir}:/work",
                     "-v", f"{model_dir}:/models:ro",
-                    "-w", str(outdir),
+                    "-w", "/work",
                     image,
                     *vadr_args,
                     "--mdir", "/models",
-                    str(input_path), prefix,
+                    "/input.fa", prefix,
                 ]
 
             else:
