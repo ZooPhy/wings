@@ -41,6 +41,7 @@ progress_tick() {
       /^Checking the analysis runtime/ {step(3,"runtimecheck")}
       /^Preparing the analysis runtime/ {step(3,"runtime")}
       /^Verifying workflow source/ {step(3,"verify")}
+      /^Checking Docker access from the analysis runtime/ {step(3,"runtimecheck")}
       /^Preparing BLAST references/ {step(4,"references")}
       /^Attempting to download fluA/ {step(4,"download")}
       /^Extracting influenza reference/ {step(4,"extract")}

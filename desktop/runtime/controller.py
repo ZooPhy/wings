@@ -36,7 +36,7 @@ def run(command, repo):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['verify', 'prepare', 'serve', 'smoke'])
+    parser.add_argument('action', choices=['verify', 'docker-check', 'prepare', 'serve', 'smoke'])
     parser.add_argument('--repo', type=Path, required=True)
     parser.add_argument('--workspace', type=Path, required=True)
     args = parser.parse_args()
@@ -52,6 +52,13 @@ def main():
         path.mkdir(parents=True, exist_ok=True)
     if args.action == 'verify':
         print('Source integrity verified')
+        return
+    if args.action == 'docker-check':
+        # Test subprocess execution from the same Python used by the runner.
+        # A CLI crash must stop setup before the browser offers Resume.
+        subprocess.run(['docker', 'version'], cwd=repo, check=True, timeout=30)
+        subprocess.run(['docker', 'info', '--format', '{{.OSType}}/{{.Architecture}}'],
+                       cwd=repo, check=True, timeout=30)
         return
     if args.action == 'smoke':
         run([sys.executable, 'scripts/build_explorer_assets.py', '--check'], repo)

@@ -38,6 +38,13 @@ jobs:
             wings-desktop-ci smoke --repo /tmp/wings-workspace/release --workspace /tmp/wings-workspace
       - name: Retain resolved dependency versions
         run: docker run --rm --entrypoint cat wings-desktop-ci /opt/conda-explicit.txt > /tmp/conda-explicit.txt
+      - name: Verify controller Docker client against the real CI daemon
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --env WINGS_DOCKER_CLI_ARCH=amd64 \
+            --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
+            --mount type=bind,source=/tmp/wings-workspace,target=/tmp/wings-workspace \
+            wings-desktop-ci docker-check --repo /tmp/wings-workspace/release --workspace /tmp/wings-workspace
       - name: Build and query a tiny real BLAST database in a path containing spaces
         run: |
           docker run --rm --platform linux/amd64 --entrypoint python \

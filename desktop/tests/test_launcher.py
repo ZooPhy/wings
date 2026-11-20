@@ -24,7 +24,9 @@ def out(value=''):save();print(value);sys.exit()
 def fail():save();sys.exit(1)
 if a[:2]==['--context','desktop-linux']:a=a[2:]
 if a[0]=='context':out('unix:///mock/docker.sock')
-if a[0]=='info':out('linux')
+if a[0]=='info':
+ if a[-1]=='{{.Architecture}}':out(os.environ.get('MOCK_ENGINE_ARCH','arm64'))
+ out('linux')
 if a[:2]==['image','inspect']:
  if not a[-1].startswith('wings-desktop-runtime:'):
   if a[2:4]!=['--platform','linux/amd64']:fail()
@@ -63,6 +65,7 @@ if a[0]=='inspect':
  if 'Running' in fmt:out('true' if s['container']['running'] else 'false')
  out('{}')
 if a[0]=='run':
+ if 'docker-check' in a and os.environ.get('MOCK_CONTROLLER_DOCKER_FAIL'):fail()
  if '-d' in a:
   labels=[a[i+1] for i,v in enumerate(a) if v=='--label']
   s['container']={'running':True}
