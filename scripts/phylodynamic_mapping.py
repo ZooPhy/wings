@@ -30,6 +30,14 @@ def calendar_date(value):
     return (start + (end-start)*(value-year)).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
 
 
+class ZeroDurationTraitConflict(ValueError):
+    """Observed locations disagree within a connected zero-duration subtree."""
+    def __init__(self, conflicts):
+        self.conflicts = conflicts
+        super().__init__('zero_duration_trait_conflict: conflicting tip locations '
+                         'connected by zero-duration branches in the saved dated tree')
+
+
 class TraitTree:
     def __init__(self, nodes, states):
         self.nodes = nodes
@@ -75,6 +83,25 @@ class TraitTree:
                 self.observed[i] = states.index(n['observed_state'])
             elif n.get('observed_state') is not None:
                 raise ValueError('Internal observations are not supported')
+        # P(0) is the identity: every node in a zero-time component must share
+        # one state. Detect contradictory tips before rate quadrature. Do not
+        # add time, relabel tips or treat this as a numerical convergence error.
+        component = {}
+        observations = {}
+        for i in self.order:
+            parent = nodes[i]['parent']
+            component[i] = (component[self.by_id[parent]]
+                            if parent is not None and self.lengths[i] == 0 else i)
+            if i in self.observed:
+                observations.setdefault(component[i], []).append(dict(
+                    id=nodes[i]['id'], label=nodes[i].get('label', nodes[i]['id']),
+                    date=nodes[i]['date'], observed_state=self.states[self.observed[i]]))
+        conflicts = [dict(component_root=nodes[root]['id'], date=nodes[root]['date'],
+                          observations=tips)
+                     for root, tips in observations.items()
+                     if len({tip['observed_state'] for tip in tips}) > 1]
+        if conflicts:
+            raise ZeroDurationTraitConflict(conflicts)
 
     def prune(self, rates, return_profiles=False):
         rates = np.atleast_1d(rates)
