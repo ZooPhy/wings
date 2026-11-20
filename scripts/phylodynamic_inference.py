@@ -4,12 +4,32 @@ import argparse
 import importlib.metadata
 import json
 import math
+import os
 from pathlib import Path
+import shutil
 import subprocess
 
 from phylodynamic_selection import read_tsv, write_json, digest
 from phylodynamic_mapping import numeric_date, calendar_date, sample_histories
 from phylodynamic_estimands import focal_branches, entry_count
+
+
+def mafft_runtime():
+    """Use binaries beside the selected launcher when installed by conda.
+
+    Conda's MAFFT launcher can retain an unquoted, pre-relocation prefix.
+    Override it only for this subprocess; other installation layouts retain
+    their normal MAFFT_BINARIES setting and MAFFT's own version validation.
+    """
+    executable = shutil.which('mafft')
+    if executable is None:
+        raise FileNotFoundError('MAFFT executable not found on PATH')
+    executable = str(Path(executable).absolute())
+    binaries = Path(executable).parent.parent / 'libexec' / 'mafft'
+    env = os.environ.copy()
+    if binaries.is_dir():
+        env['MAFFT_BINARIES'] = str(binaries)
+    return executable, env
 
 
 def infer(selection_dir, output, threads):
@@ -40,16 +60,17 @@ def infer(selection_dir, output, threads):
         raise ValueError('Duplicate tip IDs')
     if digest(selection_dir/'input.fasta') != selection['selected_sha256']:
         raise ValueError('Selected FASTA changed after selection')
+    mafft, mafft_env = mafft_runtime()
     commands = [
-        ['mafft','--auto','--thread',str(threads),str((selection_dir/'input.fasta').resolve())],
+        [mafft,'--auto','--thread',str(threads),str((selection_dir/'input.fasta').resolve())],
         ['iqtree2','-s',str((output/'alignment.fasta').resolve()),'-m','GTR+G',
          '-nt',str(threads),'-seed',str(selection['seed'] % 2147483647),
          '-pre',str((output/'ml').resolve()),'-redo']]
     with (output/'tools.log').open('w') as log:
-        for tool, args in [('mafft',['--version']),('iqtree2',['--version'])]:
-            subprocess.run([tool]+args,stdout=log,stderr=log,check=True)
+        subprocess.run([mafft,'--version'],stdout=log,stderr=log,check=True,env=mafft_env)
+        subprocess.run(['iqtree2','--version'],stdout=log,stderr=log,check=True)
         with (output/'alignment.fasta').open('w') as aln:
-            subprocess.run(commands[0],stdout=aln,stderr=log,check=True)
+            subprocess.run(commands[0],stdout=aln,stderr=log,check=True,env=mafft_env)
         subprocess.run(commands[1],stdout=log,stderr=log,check=True)
     tree = Phylo.read(output/'ml.treefile','newick')
     if {n.name for n in tree.get_terminals()} != set(metadata):
