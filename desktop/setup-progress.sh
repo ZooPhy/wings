@@ -2,9 +2,16 @@
 # Sourced by setup-session.sh; Bash 3.2 and built-in macOS utilities only.
 # The browser receives fixed status codes and numbers, never raw logs or keys.
 progress_init() {
+    local log_name
+    log_name="${log_path##*/}"
+    # Only coordinator-generated names enter HTML. The parent path can contain
+    # spaces, Unicode or URL-special characters; it is never interpolated.
+    [[ "$log_name" =~ ^setup-[A-Za-z0-9-]+\.log$ ]] || {
+        echo 'Unexpected setup log filename.' >&2; return 1;
+    }
     progress_dir="$log_path.status"
     mkdir -p "$progress_dir"
-    cp "$resources/setup-progress.html" "$progress_dir/index.html"
+    sed "s|@@WINGS_SETUP_LOG@@|../$log_name|g" "$resources/setup-progress.html" > "$progress_dir/index.html" || return 1
     cp "$resources/setup-progress.js" "$progress_dir/setup-progress.js"
     cp "$resources/wings_logo.jpg" "$progress_dir/wings_logo.jpg"
     progress_started="$(date +%s)"
@@ -44,6 +51,7 @@ progress_tick() {
       /^Downloading VADR influenza models/ {step(5,"modelsdownload")}
       /^VADR influenza models already installed/ {step(5,"modelscached")}
       /^VADR model installation complete/ {step(5,"modelsready")}
+      /^Preparing analysis tool images/ {step(5,"tools")}
       /: Pulling from (cdcgov\/irma|staphb\/vadr)/ {step(5,"tools")}
       /^Starting WINGS/ {step(6,"start")}
       /^WINGS is ready\.|^WINGS is already running\./ {step(6,"opening")}

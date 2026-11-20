@@ -106,12 +106,8 @@
         loaded = script;
     }
     $('refresh').addEventListener('click', () => { if (loaded) loaded.remove(); loading = false; refresh(); });
-    // Build this relative link from the coordinator-generated filename only.
-    // No log content or authenticated WINGS address is embedded in this page.
-    const folder = location.pathname.split('/').slice(-2, -1)[0] || '';
-    if (/^setup-[A-Za-z0-9-]+\.log\.status$/.test(folder)) {
-        $('log').href = '../' + folder.slice(0, -7);
-    } else $('log').hidden = true;
+    // The coordinator writes a real log href into the HTML. It also works
+    // without JavaScript and must not be replaced by a status-page fragment.
     render(); refresh();
     setInterval(refresh, 2000);
     setInterval(render, 1000);
