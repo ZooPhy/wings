@@ -66,11 +66,8 @@ def main():
         if not ((db / 'database_manifest.tsv').is_file() and list(db.glob('fluA_db*.nin'))):
             run(['bash', 'scripts/build_blast_db.sh'], repo)
         run(['bash', 'scripts/install_vadr_models.sh'], repo)
-        for image in ('ghcr.io/cdcgov/irma:v1.3.5', 'staphb/vadr:1.7'):
-            present = subprocess.run(['docker', 'image', 'inspect', image],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-            if not present:
-                run(['docker', 'pull', '--platform', 'linux/amd64', image], repo)
+        # desktop.sh prepares tool images with the native host Docker CLI.
+        # Do not invoke the emulated Docker CLI during resource preparation.
         return
     token = os.environ['WINGS_DESKTOP_TOKEN']
     child_env = os.environ.copy()

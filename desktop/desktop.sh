@@ -204,6 +204,11 @@ stage 'Verifying workflow source…'
 d run --rm "${common[@]}" "$image" verify --repo "$repo" --workspace "$workspace"
 stage 'Preparing BLAST references, VADR models, and assembly tools…'
 d run --rm "${common[@]}" "$image" prepare --repo "$repo" --workspace "$workspace"
+stage 'Preparing analysis tool images…'
+# Image inspection and downloads use the native Mac CLI. The controller's
+# emulated Linux Docker CLI is still used by analysis jobs, not by this setup.
+. "$RESOURCES/prepare-images.sh"
+wings_prepare_images
 stage 'Starting WINGS…'
 token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 printf '%s\n' "$token" > "$state/session"

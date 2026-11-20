@@ -26,8 +26,29 @@ if a[:2]==['--context','desktop-linux']:a=a[2:]
 if a[0]=='context':out('unix:///mock/docker.sock')
 if a[0]=='info':out('linux')
 if a[:2]==['image','inspect']:
+ if not a[-1].startswith('wings-desktop-runtime:'):
+  if a[2:4]!=['--platform','linux/amd64']:fail()
+  record=s.get('tools',{}).get(a[-1])
+  if not record:fail()
+  out(record)
  if 'image' not in s:fail()
  out(s['image'])
+if a[0]=='pull':
+ if a[1:3]!=['--platform','linux/amd64']:fail()
+ if os.environ.get('MOCK_PULL_FAIL'):
+  print('registry unavailable',file=sys.stderr);fail()
+ ref=a[-1]
+ if ref=='staphb/vadr:1.7':record='linux/amd64|sha256:fixture-vadr|staphb/vadr@sha256:fixture-vadr-manifest '
+ elif ref=='docker.io/cdcgov/irma@sha256:96357063a678fd5887598b093a53373ae286a2eb0155520feae8b72904bcdda8':
+  record='linux/amd64|sha256:fixture-irma|'+ref+' '
+ else:fail()
+ if os.environ.get('MOCK_PULL_ARM64'):record=record.replace('linux/amd64','linux/arm64')
+ s.setdefault('tools',{})[ref]=record;out()
+if a[0]=='tag':
+ if os.environ.get('MOCK_TAG_FAIL'):fail()
+ record=next((r for r in s.get('tools',{}).values() if r.split('|')[1]==a[1]),None)
+ if not record:fail()
+ s['tools'][a[2]]=record;out()
 if a[0]=='build':
  if os.environ.get('MOCK_REQUIRE_CREDENTIAL_HELPER'):
   subprocess.run(['docker-credential-desktop','get'],input=b'fixture-registry\n',check=True)
@@ -67,6 +88,7 @@ class LauncherTests(unittest.TestCase):
         curl = self.bin / 'curl'; curl.write_text('#!/bin/sh\nexit 0\n'); curl.chmod(0o755)
         self.resources = self.root / 'Application with spaces'; self.resources.mkdir()
         shutil.copy(ROOT / 'desktop.sh', self.resources / 'desktop.sh')
+        shutil.copy(ROOT / 'prepare-images.sh', self.resources / 'prepare-images.sh')
         (self.resources / 'runtime').mkdir()
         archive = self.resources / 'source.tar.gz'
         import io, tarfile

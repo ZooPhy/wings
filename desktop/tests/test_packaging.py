@@ -32,7 +32,7 @@ class PackageTests(unittest.TestCase):
             resources = app / 'Contents/Resources'
             self.assertEqual((resources / 'README.md').read_bytes(), readme)
             self.assertEqual((resources/'setup-session.sh').read_bytes(), (ROOT/'setup-session.sh').read_bytes())
-            for name in ['setup-progress.sh', 'setup-progress.js', 'setup-progress.html', 'ollama-settings.sh']:
+            for name in ['prepare-images.sh', 'setup-progress.sh', 'setup-progress.js', 'setup-progress.html', 'ollama-settings.sh']:
                 self.assertEqual((resources/name).read_bytes(), (ROOT/name).read_bytes())
             self.assertEqual((resources/'wings_ollama.py').read_bytes(), (source/'scripts/wings_ollama.py').read_bytes())
             self.assertEqual(plistlib.loads((app / 'Contents/Info.plist').read_bytes())['CFBundleExecutable'], 'WINGS')

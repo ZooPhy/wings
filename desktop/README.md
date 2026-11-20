@@ -293,6 +293,24 @@ First setup can take a substantial time. Later launches reuse the runtime and
 reference data. The first analysis can still download its module-specific Conda
 environments, inside Docker. This preview is not an offline installer.
 
+Startup image checks and downloads run through the native Mac Docker CLI, using
+the same local Docker context and credential helpers as the launcher. They use
+`docker image inspect --platform linux/amd64`, which requires Docker API 1.49 or
+newer (see [Docker image inspect](https://docs.docker.com/reference/cli/docker/image/inspect/)).
+An ARM64-only image does not satisfy the desktop runtime's AMD64 requirement.
+IRMA remains version 1.3.5: setup uses CDC's Docker Hub AMD64 manifest
+`sha256:96357063a678fd5887598b093a53373ae286a2eb0155520feae8b72904bcdda8`
+and retains the workflow's `ghcr.io/cdcgov/irma:v1.3.5` local alias. The matching
+v1.3.5 index is
+`sha256:cda47ea17971ee02195160fccbc76b4b97a8a0115c3f0c322b00d195b29e4785`.
+An existing AMD64 image with one of those official repository digests can be
+reused without a registry request. VADR remains `staphb/vadr:1.7`. Setup stops
+before starting the service if a required image cannot be prepared.
+
+This moves only startup image management to the host. Analysis jobs still use
+the controller's Linux Docker CLI, and the separate Jupyter kernel timeout is
+not resolved by this change. Validate both on a Mac before publishing a build.
+
 An unsigned app may be blocked by macOS. A normal public release needs Developer
 ID signing and Apple notarization. Do not disable Gatekeeper globally. This
 preview's code is supplied for inspection; on a development Mac, use Apple's
@@ -303,6 +321,9 @@ The included Mac build script compiles a native AppleScript applet and creates a
 DMG. Both versions open the same browser setup-progress page. Setup details
 remain available in the workspace's `logs/setup-*.log`. Reopening after completion
 opens WINGS.
+The coordinator writes the technical-log link directly into the status HTML so
+it works even when browser JavaScript does not initialize. It points to the
+actual log beside the status directory, not back to the progress page.
 
 ## Data and updates
 

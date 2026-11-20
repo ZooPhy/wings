@@ -1,7 +1,15 @@
 """Setup progress remains independent of the browser; no host runtime required."""
 from pathlib import Path
+from html.parser import HTMLParser
+from urllib.parse import urljoin
 import json, os, shlex, shutil, subprocess, sys, tempfile, time, unittest
 ROOT=Path(__file__).resolve().parents[1]
+
+class Links(HTMLParser):
+ def __init__(self):super().__init__();self.log=None
+ def handle_starttag(self,tag,attrs):
+  attrs=dict(attrs)
+  if tag=='a' and attrs.get('id')=='log':self.log=attrs.get('href')
 
 class SetupSessionTests(unittest.TestCase):
  def scenario(self,status=0,open_failure=False,reopen=False):
@@ -61,6 +69,12 @@ if os.environ.get('OPEN_FAILURE')=='1' and sys.argv[1].startswith('http:'):sys.e
    self.assertNotIn('test-token',log.read_text())
    self.assertFalse((workspace/'.desktop/setup-session.lock').exists())
    self.assertEqual((workspace/'.desktop/setup-page').read_text().strip(),str(log)+'.status/index.html')
+   page=Path(str(log)+'.status/index.html')
+   links=Links();links.feed(page.read_text())
+   # No JavaScript is needed to navigate to the actual log, including in a
+   # file:// page under a workspace whose URL contains encoded spaces.
+   self.assertEqual(urljoin(page.as_uri(),links.log),log.as_uri())
+   self.assertNotIn('@@WINGS_SETUP_LOG@@',page.read_text())
    if status==0:
     self.assertEqual(len(urls),1);self.assertEqual(data['status'],'ready')
     self.assertEqual(data['phase'],6);self.assertEqual(data['browserOpened'],not open_failure)
@@ -70,5 +84,13 @@ if os.environ.get('OPEN_FAILURE')=='1' and sys.argv[1].startswith('http:'):sys.e
  def test_reopen_attaches_to_existing_setup(self):self.scenario(reopen=True)
  def test_failure_stops_at_current_step_without_browser_launch(self):self.scenario(7)
  def test_browser_failure_does_not_undo_setup(self):self.scenario(open_failure=True)
+ def test_untrusted_log_name_cannot_enter_generated_html(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   log=Path(tmp)/'setup-<script>.log'
+   command='. "$1"; progress_init'
+   result=subprocess.run(['bash','-c',command,'bash',str(ROOT/'setup-progress.sh')],
+     env=dict(os.environ,resources=str(ROOT),log_path=str(log)),capture_output=True,text=True)
+   self.assertNotEqual(result.returncode,0)
+   self.assertFalse(Path(str(log)+'.status').exists())
 
 if __name__=='__main__':unittest.main()

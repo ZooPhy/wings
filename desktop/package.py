@@ -65,7 +65,7 @@ def bundle(source, destination):
     archive = buffer.getvalue()
     (resources / 'source.tar.gz').write_bytes(archive)
     (resources / 'source.sha256').write_text(hashlib.sha256(archive).hexdigest() + '\n')
-    for name in ('desktop.sh', 'WINGS.applescript', 'setup-session.sh', 'setup-progress.sh', 'setup-progress.html', 'setup-progress.js', 'ollama-settings.sh'):
+    for name in ('desktop.sh', 'prepare-images.sh', 'WINGS.applescript', 'setup-session.sh', 'setup-progress.sh', 'setup-progress.html', 'setup-progress.js', 'ollama-settings.sh'):
         shutil.copyfile(ROOT / name, resources / name)
     shutil.copyfile(source / 'scripts/wings_ollama.py', resources / 'wings_ollama.py')
     shutil.copyfile(ROOT / 'wings_logo.jpg', resources / 'wings_logo.jpg')
