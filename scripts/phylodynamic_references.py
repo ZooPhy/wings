@@ -10,10 +10,12 @@ import argparse
 import csv
 from datetime import date, datetime, timedelta, timezone
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
 import re
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -154,8 +156,16 @@ class NCBI:
                 if e.code not in (429,500,502,503,504):raise RuntimeError('NCBI HTTP '+str(e.code)+'; request details withheld to protect credentials') from None
                 delay=min(30,2**attempt)
                 if e.headers and str(e.headers.get('Retry-After','')).isdigit():delay=min(30,int(e.headers['Retry-After']))
-            except (urllib.error.URLError,TimeoutError):delay=min(30,2**attempt)
-            time.sleep(delay)
+            except (urllib.error.URLError, TimeoutError, ConnectionError,
+                    http.client.IncompleteRead, http.client.RemoteDisconnected):
+                # Discard any partial body and repeat the same read-only request.
+                # Only a complete response may reach parsing and snapshot caching.
+                delay=min(30,2**attempt)
+            if attempt < 4:
+                # Do not include exception text, request parameters or credentials.
+                print(f'NCBI request interrupted or temporarily unavailable; '
+                      f'retrying attempt {attempt+2}/5 in {delay}s', file=sys.stderr)
+                time.sleep(delay)
         raise RuntimeError('NCBI request failed after five attempts; cached completed batches remain reusable')
 
 
