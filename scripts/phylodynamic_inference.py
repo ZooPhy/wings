@@ -10,6 +10,7 @@ import shutil
 import subprocess
 
 from phylodynamic_selection import read_tsv, write_json, digest
+import phylodynamic_mapping as trait_mapping
 from phylodynamic_mapping import numeric_date, calendar_date, sample_histories
 from phylodynamic_estimands import focal_branches, entry_count
 
@@ -119,8 +120,17 @@ def infer(selection_dir, output, threads):
         return result
     write_json(output/'dated_nodes.json',nodes)
     states = sorted(selection['locations'])
-    histories, diagnostics = sample_histories(nodes,states,cfg['histories'],selection['seed'],
-                                              cfg['rate_prior_shape'],cfg['rate_prior_rate'])
+    try:
+        histories, diagnostics = sample_histories(nodes,states,cfg['histories'],selection['seed'],
+                                                  cfg['rate_prior_shape'],cfg['rate_prior_rate'])
+    except trait_mapping.ZeroDurationTraitConflict as error:
+        result['reasons'].append(str(error))
+        result['trait_diagnostics'] = dict(status='blocked',
+            reason='zero_duration_trait_conflict', conflicts=error.conflicts,
+            time_basis='Saved dated-node timestamps; exact zero after serialization. '
+                       'These diagnostics do not distinguish dating from timestamp rounding.')
+        write_json(output/'result.json', result)
+        return result
     result.update(status='complete', quadrature=diagnostics,
                   uncertainty='conditional-on-fixed-tree',
                   introduction_definition='All sampled jumps into a location from another observed location; includes reversals and re-entries.')

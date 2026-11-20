@@ -39,6 +39,10 @@ def summarize(selection_dir, inference_dir, output):
                 mean_range=[min(estimates),max(estimates)],
                 note='Range of replicate posterior means; not a credible interval. Missing locations are not zeros.'))
     result=dict(schema='wings.phylodynamic-sensitivity.v1',selection=selection,
+        replicate_counts=dict(total=len(records),
+            complete=sum(r['status']=='complete' for r in records),
+            blocked=sum(r['status']=='blocked' for r in records),
+            incomplete=sum(r['status'] not in ('complete','blocked') for r in records)),
         analyses=records,sensitivity=sensitivity,primary_analyses=primary_ids,phylogeography=primary,
         limitations=['Available reference pools may have unmeasured surveillance bias.',
             'Conditional ER trait inference: fixed dated ML tree, symmetric transitions, uniform root prior.',
@@ -67,7 +71,10 @@ def summarize(selection_dir, inference_dir, output):
     body='''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>WINGS sampling sensitivity</title>
 <style>body{font:16px system-ui;margin:2rem;color:#243840}h1{color:#8c1d40}table{border-collapse:collapse;width:100%}th{background:#8c1d40;color:white;text-align:left}th,td{padding:.7rem;border-bottom:1px solid #dce3e5}tr:nth-child(even){background:#f5f8f8}a{color:#8c1d40}.table{overflow:auto}</style>
 <h1>Reference sampling sensitivity</h1><p><a href="comparison.html">Compare replicate movies, trees and clock diagnostics →</a></p><p>Entries on study-sample ancestry: posterior mean (95% interval), conditional on each dated tree. The ancestry begins at the study-sample MRCA. Clock check reports raw-ML R² and tip/cluster permutation p-values.</p><ul>'''
-    body+=''.join('<li>'+html.escape(x)+'</li>' for x in result['limitations'])+'</ul><div class="table"><table><thead><tr>'
+    counts=result['replicate_counts']
+    body+=''.join('<li>'+html.escape(x)+'</li>' for x in result['limitations'])+'</ul>'
+    body+=f'<p>Replicates: {counts["complete"]} complete of {counts["total"]} requested; {counts["blocked"]} blocked; {counts["incomplete"]} incomplete. Ranges use completed replicates only; unavailable results are not zero estimates.</p>'
+    body+='<div class="table"><table><thead><tr>'
     body+=''.join('<th>'+x+'</th>' for x in ['HA clade','Clock check','Segment','Strategy','Replicate','Study','References','Location','Introductions','Status','Download'])
     body+='</tr></thead><tbody>'+''.join(rows)+'</tbody></table></div><p>Load a replicate’s movie data in Genomics → Phylogeography movie. The primary display uses the predeclared first balanced replicate.</p></html>'
     (output/'sensitivity.html').write_text(body)
