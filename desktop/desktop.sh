@@ -116,6 +116,13 @@ finish() {
 trap finish EXIT
 stage 'Checking Docker Desktop…'
 [[ "$(d info --format '{{.OSType}}')" == linux ]] || { echo 'Docker must run Linux containers.' >&2; exit 14; }
+# Ask the native host CLI about the actual Linux VM, not uname inside the
+# emulated scientific environment (which reports x86_64 on Apple Silicon).
+case "$(d info --format '{{.Architecture}}')" in
+    arm64|aarch64) docker_cli_arch=arm64;;
+    amd64|x86_64) docker_cli_arch=amd64;;
+    *) echo 'Unsupported Docker engine architecture for WINGS Desktop.' >&2; exit 14;;
+esac
 email="${3:-}"
 if [[ -n "$email" ]]; then
     [[ "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || { echo 'Enter a valid contact email address.' >&2; exit 15; }
@@ -199,14 +206,17 @@ fi
 common=(--platform linux/amd64 "${input_mounts[@]}" --env "WINGS_HOST_HOME=$host_home" --env "WINGS_BROWSE_ROOTS=$browse_roots" --mount "type=bind,source=$workspace,target=$workspace" \
     --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
     --env "WINGS_REFERENCE_ARCHIVE=$reference_archive" \
+    --env "WINGS_DOCKER_CLI_ARCH=$docker_cli_arch" \
     --workdir "$repo")
 stage 'Verifying workflow source…'
 d run --rm "${common[@]}" "$image" verify --repo "$repo" --workspace "$workspace"
+stage 'Checking Docker access from the analysis runtime…'
+d run --rm "${common[@]}" "$image" docker-check --repo "$repo" --workspace "$workspace"
 stage 'Preparing BLAST references, VADR models, and assembly tools…'
 d run --rm "${common[@]}" "$image" prepare --repo "$repo" --workspace "$workspace"
 stage 'Preparing analysis tool images…'
-# Image inspection and downloads use the native Mac CLI. The controller's
-# emulated Linux Docker CLI is still used by analysis jobs, not by this setup.
+# Image inspection and downloads use the native Mac CLI. Analysis jobs use
+# the controller's client selected for the daemon's Linux VM architecture.
 . "$RESOURCES/prepare-images.sh"
 wings_prepare_images
 stage 'Starting WINGS…'

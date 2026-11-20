@@ -307,9 +307,17 @@ An existing AMD64 image with one of those official repository digests can be
 reused without a registry request. VADR remains `staphb/vadr:1.7`. Setup stops
 before starting the service if a required image cannot be prepared.
 
-This moves only startup image management to the host. Analysis jobs still use
-the controller's Linux Docker CLI, and the separate Jupyter kernel timeout is
-not resolved by this change. Validate both on a Mac before publishing a build.
+The controller bundles Docker CLI 28.3.3 for both AMD64 and ARM64, pinned to the
+official image index
+`sha256:0135662b510037ea581d99c2e5929c5e01185139c0b86986a418bd4da0b98a44`.
+The native host CLI queries the Docker engine architecture; the launcher passes
+that selection into the controller for analysis jobs. The scientific runtime,
+Conda environments and default analysis image platform remain Linux AMD64.
+Setup tests the selected CLI through the controller's Python before serving the
+browser interface. A failing CLI therefore stops setup instead of surfacing as
+an unexplained Resume rejection. The separate Jupyter kernel timeout is not
+resolved by this change. Validate startup and report rendering on a Mac before
+publishing a build.
 
 An unsigned app may be blocked by macOS. A normal public release needs Developer
 ID signing and Apple notarization. Do not disable Gatekeeper globally. This
