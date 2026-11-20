@@ -100,7 +100,7 @@ class Element {
   assert.match(elements.contextStatus.textContent,/Check the runner log/);
   failRequest=true;await elements.contextPrepare.listeners.click();assert.doesNotMatch(elements.contextSetup.textContent,/SECRET|stack trace/);assert.equal(errors.length,1);failRequest=false;
   responseStatus='READY';await ui.prepareOnly();metadata='sample_id\nB\n';await assert.rejects(ui.readyForRun(),/prepare context/);
-  elements.metadataFile.listeners.change();assert.match(elements.contextStatus.textContent,/Selection changed/);
+  await elements.metadataFile.listeners.change();assert.match(elements.contextStatus.textContent,/Selection changed/);
   elements.metadataFile.files=[];await elements.contextPrepare.listeners.click();assert.equal(elements.contextStatus.textContent,'Select metadata.tsv first.');
   elements.metadataFile.files=[{text:async()=>metadata}];sandbox.storageRevision=undefined;await ui.prepareOnly();assert.equal(Object.hasOwn(JSON.parse(calls.filter(c=>c.url.endsWith('/api/runs')).at(-1).opts.body),'storage_revision'),false);
   const start=launcher.slice(launcher.indexOf('async function startRun()'),launcher.indexOf('\n  }',launcher.indexOf('async function startRun()')));

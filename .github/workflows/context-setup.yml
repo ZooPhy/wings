@@ -30,6 +30,7 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_genotype*.py' -v
       - run: python tests/check_context_path_aliases.py
       - run: node tests/test_context_setup_ui.cjs
+      - run: node tests/test_context_progress_recovery.cjs
       - run: node tests/test_context_picker_ui.cjs
       - run: python tests/integration_context_setup.py
       - run: python -m unittest discover -s tests -p test_phylodynamics_ci_dependencies.py -v

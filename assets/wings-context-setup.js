@@ -8,12 +8,36 @@
   let createSettings = () => ({});
   let prepared = null;
   let preparing = false;
+  let connectionMessage = '';
+  const recoveryKey = 'wings-context-preparation-v1';
+  // Save only the run reference and setup options, never metadata or credentials.
+  function remember(value) {
+    try {
+      if(value)localStorage.setItem(recoveryKey,JSON.stringify(value));
+      else localStorage.removeItem(recoveryKey);
+    } catch(_) { /* Polling still works when browser storage is unavailable. */ }
+  }
+  function recalled() {
+    try {
+      const value=JSON.parse(localStorage.getItem(recoveryKey));
+      if(value && typeof value.runId==='string' && /^[A-Za-z0-9_-]+$/.test(value.runId) &&
+         typeof value.signature==='string' && /^[a-f0-9]{64}$/.test(value.signature) &&
+         value.settings && Array.isArray(value.settings.selected_sources))return value;
+    } catch(_) {}
+    return null;
+  }
   let records = {};
   let folderCheckRequest=0;
   let recaching=false;
   let progressStarted=0,progressTimer=null,progressView=null,progressKey='',progressChanged=0;
   function elapsed(seconds){seconds=Math.max(0,Math.floor(seconds));return seconds>=60?`${Math.floor(seconds/60)}m ${seconds%60}s`:`${seconds}s`;}
   function renderProgress() {
+    if(connectionMessage){
+      $('contextStatus').textContent=connectionMessage;
+      const note=$('contextProgressNote');
+      if(note){note.hidden=false;note.textContent='Last confirmed counts are shown. WINGS is checking the same run; no new preparation has been started.';}
+      return;
+    }
     if(!progressView)return;
     const names={ecology:'weather and migration',phenology:'seasonal bird patterns',public_genotypes:'public genotypes',ebird:'eBird observations',outbreak:'APHIS detections'};
     const active=progressView.active_provider || sources.find(name=>records[name]?.status==='PREPARING');
@@ -94,11 +118,44 @@
     const signature = [...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('');
     return {file,metadata,settings,signature};
   }
-  async function request(path,body) {
-    const response = await fetch(origin+path,body === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Context request failed');
-    return data;
+  async function request(path,body,timeout=0) {
+    const controller=timeout && typeof AbortController==='function'?new AbortController():null;
+    const timer=controller?setTimeout(()=>controller.abort(),timeout):null;
+    try {
+      const response=await fetch(origin+path,{
+        ...(body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),
+        ...(controller?{signal:controller.signal}:{})
+      });
+      if(!response.ok){
+        // Authentication failures can be plain text. Preserve the HTTP status
+        // without trying to interpret a sign-in page as preparation JSON.
+        const error=new Error('Context request failed');error.status=response.status;throw error;
+      }
+      return await response.json();
+    } finally {if(timer!==null)clearTimeout(timer);}
+  }
+  async function followPreparation(runId,progress) {
+    let failures=0;
+    if(progress && !['PREPARING','READY','FAILED','BLOCKED','INTERRUPTED','NOT_PREPARED'].includes(progress.status))progress=null;
+    while(!progress || progress.status==='PREPARING') {
+      if(progress)showStatus(progress);
+      await new Promise(resolve=>setTimeout(resolve,failures?Math.min(15000,1000*2**Math.min(failures,4)):1000));
+      try {
+        const next=await request(`/api/runs/${encodeURIComponent(runId)}/context`,undefined,20000);
+        if(!next || !['PREPARING','READY','FAILED','BLOCKED','INTERRUPTED','NOT_PREPARED'].includes(next.status))
+          throw new Error('Invalid context status response');
+        progress=next;failures=0;connectionMessage='';
+      } catch(error) {
+        if(error.status===404){connectionMessage='';return {status:'NOT_FOUND',providers:{}};}
+        failures++;
+        connectionMessage=[401,403].includes(error.status)
+          ? 'Session access interrupted. Open WINGS from the desktop app to reconnect; preparation may still be running.'
+          : 'Connection interrupted; checking preparation status… Keep the runner running.';
+        renderProgress();
+      }
+    }
+    connectionMessage='';
+    return progress;
   }
   function openSettings(id,focusId) {
     $('contextAdvanced').open=true;
@@ -167,6 +224,8 @@
       status.textContent=chosen.length ? (count===chosen.length ? 'Context saved. Continue to Analysis.' : 'Context saved with available data. Continue to Analysis.') : 'No context sources selected. Continue to Analysis.';
     } else if(data.status==='REVIEW') status.textContent='Checking selected sources…';
     else if(data.status==='STALE') status.textContent='Selection changed. Prepare context again.';
+    else if(data.status==='NOT_FOUND') status.textContent='Saved preparation was not found on this runner. Check that WINGS is using the original workspace.';
+    else if(data.status==='NOT_PREPARED') status.textContent='Preparation was not started on the runner. Check your settings, then prepare again.';
     else if(['FAILED','BLOCKED','INTERRUPTED'].includes(data.status)) status.textContent='Preparation could not finish. Check the runner log, then try again.';
   }
   function showRequest(request) {
@@ -233,19 +292,53 @@
       const run=await request('/api/runs',{...createSettings(),name:'Context preparation',options:{context_setup:true}});
       const upload=await fetch(`${origin}/api/runs/${encodeURIComponent(run.run_id)}/files?kind=metadata&filename=metadata.tsv`,{method:'PUT',body:value.file});
       if(!upload.ok)throw new Error(await upload.text());
-      progress=await request(`/api/runs/${encodeURIComponent(run.run_id)}/context`,{options:value.settings});
-      while(progress.status==='PREPARING') {
-        showStatus(progress);
-        await new Promise(resolve=>setTimeout(resolve,1000));
-        progress=await request(`/api/runs/${encodeURIComponent(run.run_id)}/context`);
+      remember({runId:run.run_id,signature:value.signature,settings:value.settings});
+      try {
+        progress=await request(`/api/runs/${encodeURIComponent(run.run_id)}/context`,{options:value.settings},20000);
+      } catch(error) {
+        // The POST may have reached the worker even if its response was lost.
+        // Recover via GET; never repeat the start request automatically.
+        connectionMessage='Connection interrupted; checking preparation status… Keep the runner running.';
+        renderProgress();
       }
+      progress=await followPreparation(run.run_id,progress);
       if(progress.status!=='READY')throw new Error('Context preparation did not finish.');
       if((await input()).signature!==value.signature)throw new Error('Inputs changed during preparation.');
       prepared={runId:run.run_id,signature:value.signature};
       showStatus(progress);
     } catch(error) {
-      showStatus({...(progress || {}),status:'FAILED'});
+      remember(null);
+      showStatus({...(progress || {}),status:progress?.status || 'FAILED'});
       throw error;
+    } finally {
+      preparing=false;unlock();renderCards();
+      $('contextPrepare').textContent='Prepare context';
+      if($('contextPrepareHere'))$('contextPrepareHere').textContent='Prepare context';
+    }
+  }
+  async function recoverPreparation() {
+    const saved=recalled();
+    if(!saved || preparing)return;
+    preparing=true;prepared=null;
+    // Restore the options used by this job; the metadata file must be selected
+    // again before attaching results. Its signature is checked by readyForRun.
+    const settings=saved.settings;
+    for(const name of sources)$(controls[name]).checked=settings.selected_sources.includes(name);
+    for(const [id,key] of [['contextDays','days'],['contextYear','phenology_year'],['contextPackage','ebird_package'],['contextSource','ebird_source']])
+      if(settings[key]!==undefined)$(id).value=settings[key];
+    $('contextNetwork').checked=!!settings.network;
+    $('contextCoverage').checked=!!settings.all_species_confirmed;
+    const unlock=lockInputs();
+    $('contextPrepare').textContent='Reconnecting…';
+    if($('contextPrepareHere'))$('contextPrepareHere').textContent='Reconnecting…';
+    connectionMessage='Reconnecting to the saved context preparation…';renderProgress();
+    try {
+      const progress=await followPreparation(saved.runId,null);
+      showStatus(progress);
+      if(progress.status==='READY'){
+        prepared={runId:saved.runId,signature:saved.signature};
+        $('contextStatus').textContent='Prepared context recovered. Select the original metadata file to use it; matching settings and metadata are required.';
+      } else remember(null);
     } finally {
       preparing=false;unlock();renderCards();
       $('contextPrepare').textContent='Prepare context';
@@ -273,10 +366,16 @@
       if($('contextFolderCheck'))$('contextFolderCheck').textContent='Selection changed. Check the folder again to confirm its contents and metadata coverage.';
       if($('contextDownloadHelp'))$('contextDownloadHelp').hidden=false;
     }
-    prepared=null;records={};showStatus({status:'STALE'});
+    prepared=null;remember(null);records={};showStatus({status:'STALE'});
   }
   $('contextSetup').addEventListener('input',invalidate);
-  $('metadataFile').addEventListener('change',()=>{invalidate();$('contextRequest').textContent='Prepare context to determine the required regions and dates.';});
+  $('metadataFile').addEventListener('change',async()=>{
+    if(preparing)return;
+    if(prepared){
+      try {if((await input()).signature===prepared.signature){showStatus({status:'READY',providers:records});return;}}catch(_){}
+    }
+    invalidate();$('contextRequest').textContent='Prepare context to determine the required regions and dates.';
+  });
   $('contextAction-ebird').addEventListener('click',()=>openSettings('contextEbirdImport','contextSource'));
   $('contextCheckFolder')?.addEventListener('click',()=>checkEbirdFolder());
   $('contextRecache')?.addEventListener('click',()=>{
@@ -288,5 +387,6 @@
   $('contextPrepare').addEventListener('click',()=>prepareOnly().catch(report));
   $('contextPrepareHere')?.addEventListener('click',()=>prepareOnly().catch(report));
   renderCards();
-  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder,rebuildEbirdCache};
+  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder,rebuildEbirdCache,recoverPreparation};
+  recoverPreparation().catch(report);
 })();
