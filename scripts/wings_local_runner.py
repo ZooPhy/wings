@@ -404,6 +404,19 @@ def runtime_preflight() -> str:
         raise ValueError(f"Conda target platform must be {expected}; Conda reports {target or 'unknown'}. Check CONDA_SUBDIR and your Conda configuration.")
     return executable
 
+def conda_environment_prefix() -> Path:
+    """Keep desktop environments independent of release paths and host spaces."""
+    configured = os.environ.get('WINGS_DESKTOP_CONDA_PREFIX')
+    if configured:
+        base = Path(configured)
+        if not base.is_absolute() or any(c.isspace() for c in configured) or '..' in base.parts:
+            raise ValueError('WINGS_DESKTOP_CONDA_PREFIX must be an absolute path without whitespace or parent traversal')
+    else:
+        # Preserve the existing native/CLI runner layout.
+        base = REPO_ROOT / '.snakemake' / 'conda-platforms'
+    return base / (platform.system().lower() + '-' + platform.machine().lower())
+
+
 def workflow_command(executable: str, config_path: Path, state: dict) -> list[str]:
     cores, jobs = execution_limits(state)
     return [
@@ -411,8 +424,7 @@ def workflow_command(executable: str, config_path: Path, state: dict) -> list[st
         "--snakefile", str(REPO_ROOT / "Snakefile"),
         "--configfile", str(config_path),
         "--use-conda",
-        "--conda-prefix", str(REPO_ROOT / ".snakemake" / "conda-platforms" /
-                              (platform.system().lower() + "-" + platform.machine().lower())),
+        "--conda-prefix", str(conda_environment_prefix()),
         "--cores", str(cores),
         "--resources", f"wings_task_slots={jobs}",
         "--default-resources", "wings_task_slots=1",
