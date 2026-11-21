@@ -203,7 +203,12 @@ if ! d image inspect "$image" >/dev/null 2>&1; then
         -t "$image" "$RESOURCES/runtime"
 fi
 [[ "$(d image inspect --format '{{index .Config.Labels "org.wings.desktop.runtime"}}' "$image")" == "$runtime_hash" ]] || { echo 'Runtime image identity mismatch.' >&2; exit 18; }
+# Conda embeds its install prefix in scripts and binaries. Use a stable,
+# space-free container path across app releases; leave legacy caches intact.
+mkdir -p "$workspace/cache/conda-envs-v2"
 common=(--platform linux/amd64 "${input_mounts[@]}" --env "WINGS_HOST_HOME=$host_home" --env "WINGS_BROWSE_ROOTS=$browse_roots" --mount "type=bind,source=$workspace,target=$workspace" \
+    --mount "type=bind,source=$workspace/cache/conda-envs-v2,target=/opt/wings-conda-envs" \
+    --env WINGS_DESKTOP_CONDA_PREFIX=/opt/wings-conda-envs \
     --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
     --env "WINGS_REFERENCE_ARCHIVE=$reference_archive" \
     --env "WINGS_DOCKER_CLI_ARCH=$docker_cli_arch" \
