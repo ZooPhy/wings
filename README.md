@@ -26,7 +26,7 @@ WINGS was developed in support of the [Pandemic ESCAPE Center](http://www.escape
 
 | Route | Intended use | Requirements and status |
 | --- | --- | --- |
-| **[Desktop app — macOS only](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-20.2)** | Launch from an app, manage settings, and submit jobs in the browser. | Docker Desktop plus the WINGS app. Host Python, Conda and Snakemake are not required. |
+| **[Desktop app — macOS only](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-20.3)** | Launch from an app, manage settings, and submit jobs in the browser. | Docker Desktop plus the WINGS app. Host Python, Conda and Snakemake are not required. |
 | **Native local runner** | Run from a source checkout while using the same browser submission interface. | A compatible Python/Conda/Snakemake environment and the configured container runtime. |
 | **Command line / HPC** | Scripted analyses, custom configuration, or scheduled cluster work. | Snakemake, Conda/Mamba, and the appropriate Docker, Apptainer, Singularity or local IRMA installation. See the [command-line guide](docs/command-line-guide.md). |
 | **Report viewer / demo** | Explore completed results without installing the analysis pipeline. | Open the [WINGS portal](https://wings.scotchlab.org/) and load a `.wings` bundle or the demo. Bundle viewing is local to the browser. |
@@ -35,7 +35,7 @@ The project documents evaluated native Apple Silicon and Linux ARM64/SLURM confi
 
 ## Desktop setup
 
-Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-20.2)** pre-release. The app is distributed separately from a bare source checkout; a GitHub clone does not install the app.
+Obtain the **[WINGS Desktop Preview](https://github.com/ZooPhy/wings/releases/tag/desktop-preview-2026-11-20.3)** pre-release. The app is distributed separately from a bare source checkout; a GitHub clone does not install the app.
 
 1. Install and start [Docker Desktop](https://docs.docker.com/desktop/).
 2. Extract the preview archive and move **WINGS.app** to Applications.
