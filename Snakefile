@@ -3318,10 +3318,8 @@ rule historical_stability:
             if RUN_GENOFLU
             else []
         ),
-        variant_status=expand(
-            f"{RESULTS}/{{sample}}/medaka/{{segment}}/variants.status.tsv",
-            sample=SAMPLES,
-            segment=SEGMENT_SEQUENCE,
+        variant_status=lambda wildcards: run_medaka_status_inputs(
+            wildcards, "variants.status.tsv"
         ),
         explorer=(
             CONCORDANCE_REPORT_EXPLORER_JSON
