@@ -16,7 +16,7 @@ in the local configuration: Docker, Apptainer, Singularity, or a local installat
 | --- | --- |
 | Native Apple Silicon | Use ARM64 Conda/Python and a running Docker Desktop for the configured container jobs. This differs from the desktop app's Linux AMD64 controller. |
 | Linux ARM64 / SLURM | Use a compatible Conda environment, the site's IRMA runtime, writable project storage, and the supplied Linux ARM64 Quarto installer. A working native VADR installation can be used. |
-| Windows / WSL2 | Proposed route: Ubuntu under WSL2 with Linux Conda and Docker Desktop integration. End-to-end WINGS validation remains pending. |
+| Windows / WSL2 | Potententially Ubuntu under WSL2 with Linux Conda and Docker Desktop integration. End-to-end WINGS validation remains pending. |
 
 Check Docker connectivity with `docker info` on the machine running the analysis.
 The CLI alone does not start the daemon. Docker memory limits are separate from
