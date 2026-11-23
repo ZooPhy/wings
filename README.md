@@ -8,7 +8,7 @@ WINGS analyzes avian influenza A virus from Oxford Nanopore sequencing reads and
 
 WINGS was developed in support of the [Pandemic ESCAPE Center](http://www.escape-center.org/).
 
-**Start here:** [Choose how to run WINGS](#choose-how-to-run-wings) · [Desktop setup](#desktop-setup) · [Submit a job](#submit-a-job) · [Phylodynamics](#phylodynamics-in-the-surveillance-explorer) · [Q&A](docs/faq.md) · [Detailed guides](#documentation)
+**Start here:** [Choose how to run WINGS](#choose-how-to-run-wings) · [Desktop setup](#desktop-setup) · [Submit a job](#submit-a-job) · [Phylodynamics](#phylodynamics-in-the-surveillance-explorer) · [Q&A](faq.md) · [Detailed guides](#documentation)
 
 ## What WINGS provides
 
@@ -162,7 +162,7 @@ Counts cover the WINGS study ancestry from its common ancestor to the study tips
 
 The demo's Phylodynamics view is explicitly labeled a **simulated illustration**. It is not an inference from the demo sequencing samples.
 
-See the [Phylodynamics Q&A](docs/faq.md#phylodynamics), [dating methods](docs/bayesian-dating.md), [posterior mapping](docs/posterior-phylogeography.md) and [report/reference guide](docs/report-reference.md#phylodynamics-report-maintenance).
+See the [Phylodynamics Q&A](faq.md#phylodynamics), [dating methods](docs/bayesian-dating.md), [posterior mapping](docs/posterior-phylogeography.md) and [report/reference guide](docs/report-reference.md#phylodynamics-report-maintenance).
 
 ## Reports and Surveillance Explorer
 
@@ -201,7 +201,7 @@ WINGS maps the Mac address for access from Docker. A successful check means that
 
 The model receives structured result evidence and metadata, not raw reads, consensus sequences or tree files. Local inference requires a locally served model; selecting a cloud-backed model in a local Ollama service is a different data-handling choice. The generated narrative, evidence, prompts and diagnostics can be embedded in shared reports. Automated review does not replace scientific review.
 
-See the [briefing Q&A](docs/faq.md#ollama-and-briefings) and [native configuration and report regeneration](docs/report-reference.md#optional-local-public-health-briefing).
+See the [briefing Q&A](faq.md#ollama-and-briefings) and [native configuration and report regeneration](docs/report-reference.md#optional-local-public-health-briefing).
 
 ## Reproducibility and validation
 
@@ -213,7 +213,7 @@ Native workflow evaluation, numerical/model checks, browser tests and desktop in
 
 | Guide | Contents |
 | --- | --- |
-| [Q&A](docs/faq.md) | Setup, settings, folders, inference interpretation, missing data and common recovery questions. |
+| [Q&A](faq.md) | Setup, settings, folders, inference interpretation, missing data and common recovery questions. |
 | [Command-line guide](docs/command-line-guide.md) | Full native installation, VADR/BLAST setup, configuration examples, dry runs and Linux ARM64/SLURM execution. |
 | [Report/reference guide](docs/report-reference.md) | Detailed report controls, ecological sources, provenance, output paths and saved-report rebuilding. |
 | [Native runner](docs/native-runner.md) | Architecture checks and explicit run/cache locations. |
