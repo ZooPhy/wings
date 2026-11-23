@@ -38,15 +38,44 @@ For a new workflow environment:
 
 ```bash
 conda create -n snakemake_env --strict-channel-priority \
-  -c conda-forge -c bioconda 'snakemake>=9,<10'
+  -c conda-forge -c bioconda \
+  'snakemake>=9,<10' numpy scipy pyyaml
 conda activate snakemake_env
 snakemake --version
 python -c 'import platform, sys; print(sys.executable); print(platform.machine())'
+python -c 'import numpy, scipy, yaml; print("PASS: workflow imports available")'
 ```
 
 This is an environment-creation example, not an exact dependency lock. Record
 the resolved versions for your installation. Keep an already-working environment
 until a replacement has been tested.
+
+### Existing environments
+
+If you already have a WINGS environment, activate it and install the
+workflow-loading dependencies instead of creating another environment:
+
+```bash
+conda activate YOUR_WINGS_ENVIRONMENT
+conda install -c conda-forge numpy scipy pyyaml
+python -c 'import numpy, scipy, yaml; print("PASS: workflow imports available")'
+```
+
+Replace `YOUR_WINGS_ENVIRONMENT` with the environment used by your launcher or
+SLURM script, for example `wings_snakemake_new`. Update it when no jobs are using
+that environment. Both the environment's filesystem and the Conda package-cache
+filesystem need sufficient space; changing `CONDA_PKGS_DIRS` does not move an
+existing environment.
+
+WINGS imports NumPy, SciPy, and PyYAML while loading the workflow. These packages
+must be installed in the environment running Snakemake, even when using
+`--sdm conda`. Rule-specific environments cannot supply imports needed before
+the workflow has been loaded. A `ModuleNotFoundError` at this stage should be
+resolved in the launcher environment, not an unrelated `base` environment.
+Verify the imports above before submitting a batch job. This check verifies
+these imports only; it does not validate every workflow dependency or analysis.
+
+### Linux ARM64 reporting
 
 On Linux ARM64, install the repository's pinned Quarto distribution:
 
