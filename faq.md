@@ -1,6 +1,6 @@
 # WINGS questions and answers
 
-[Back to README](../README.md) · [Command-line guide](command-line-guide.md) · [Report/reference guide](report-reference.md)
+[Back to README](README.md) · [Command-line guide](docs/command-line-guide.md) · [Report/reference guide](docs/report-reference.md)
 
 This Q&A covers the current workflow and the supplied **WINGS Desktop developer preview 0.1.12**. Desktop, native-runner and cluster instructions are identified separately because their installation and storage mechanisms differ.
 
@@ -12,7 +12,7 @@ This Q&A covers the current workflow and the supplied **WINGS Desktop developer 
 
 Not for WINGS Desktop. Install Docker Desktop separately, then use WINGS.app. The app prepares the workflow runtime and its dependencies. First setup and the first use of some analysis modules require downloads.
 
-The native runner and command-line workflow still need a compatible environment. Follow the [command-line guide](command-line-guide.md) for those routes; do not run its installation commands inside the desktop app's managed release directory.
+The native runner and command-line workflow still need a compatible environment. Follow the [command-line guide](docs/command-line-guide.md) for those routes; do not run its installation commands inside the desktop app's managed release directory.
 
 ### Is WINGS a single executable or a single container?
 
@@ -126,7 +126,7 @@ Fast/BEAST buttons in a completed report only switch between results already pre
 
 The BEAST route propagates dating uncertainty. It is a modular analysis, not joint BEAST phylogeography, and neither current route samples topology uncertainty. Fast does not provide date uncertainty by drawing more geographic histories.
 
-See [Bayesian dating](bayesian-dating.md) and [posterior geography](posterior-phylogeography.md) for the model and diagnostic requirements.
+See [Bayesian dating](docs/bayesian-dating.md) and [posterior geography](docs/posterior-phylogeography.md) for the model and diagnostic requirements.
 
 ### Which result is shown by default?
 
@@ -218,7 +218,7 @@ No. Its Phylodynamics view is labeled a **simulated illustration** with syntheti
 
 Neither. EBD reporting frequency uses complete-checklist reporting with an explicit sampling-event denominator. Modeled Status & Trends abundance is a different product, and neither measures influenza infection prevalence.
 
-Use observations and sampling-event files from a matching release and geographic/date scope. Shared checklist context must not be added repeatedly across samples. Missing access or data is recorded as unavailable, not zero. See the [report/reference guide](report-reference.md#optional-ebird-reporting-context).
+Use observations and sampling-event files from a matching release and geographic/date scope. Shared checklist context must not be added repeatedly across samples. Missing access or data is recorded as unavailable, not zero. See the [report/reference guide](docs/report-reference.md#optional-ebird-reporting-context).
 
 ### Does a public genotype frequency describe population prevalence?
 
@@ -232,7 +232,7 @@ No. Space/time overlap supplies surveillance context. APHIS detections can lack 
 
 No. HTML reports and `.wings` bundles contain saved presentation and evidence. Updating the source/app changes subsequently generated reports; older files retain their embedded assets until refreshed or rebuilt.
 
-Preserve the original bundle and use the appropriate [report maintenance procedure](report-reference.md#phylodynamics-report-maintenance). Changing colors, layout or focus defaults should not rewrite scientific JSON or rerun inference. Changing biological inputs, references or model settings is a new analysis operation.
+Preserve the original bundle and use the appropriate [report maintenance procedure](docs/report-reference.md#phylodynamics-report-maintenance). Changing colors, layout or focus defaults should not rewrite scientific JSON or rerun inference. Changing biological inputs, references or model settings is a new analysis operation.
 
 ## Ollama and briefings
 
@@ -252,7 +252,7 @@ It does not download a model, generate a briefing, measure model quality, or pro
 
 The analysis runs in Docker. The desktop integration maps Mac loopback addresses to `host.docker.internal` and bypasses HTTP proxies for the local destinations. Check that Ollama is running, the configured port is correct, and Docker Desktop can reach the host service. WINGS does not modify Ollama's bind address or the Mac firewall.
 
-Desktop Settings accepts local HTTP endpoints, not an arbitrary remote service. Native advanced endpoint configuration is documented separately in [local model interpretation](local-llm-interpretation.md).
+Desktop Settings accepts local HTTP endpoints, not an arbitrary remote service. Native advanced endpoint configuration is documented separately in [local model interpretation](docs/local-llm-interpretation.md).
 
 ### What information does the model receive?
 
@@ -297,7 +297,7 @@ In desktop Settings, save the key, refresh the page and prepare context again if
 
 For the native runner, export `EBIRDST_ACCESS_KEY` in the environment that launches it and restart when no jobs are active. Setting it in another terminal does not update an existing native server.
 
-An unavailable phenology JSON can still be a completed workflow output. Ordinary resume need not rebuild it. With the run stopped, use its saved configuration to rerun `ebirdst_phenology` and dependent reports, preserving other outputs and the raster cache. See the [phenology recovery instructions](report-reference.md#ebird-status--trends-phenology-access-key-required-for-downloads).
+An unavailable phenology JSON can still be a completed workflow output. Ordinary resume need not rebuild it. With the run stopped, use its saved configuration to rerun `ebirdst_phenology` and dependent reports, preserving other outputs and the raster cache. See the [phenology recovery instructions](docs/report-reference.md#ebird-status--trends-phenology-access-key-required-for-downloads).
 
 ### What if Porechop reports “Counter build belongs to another conda environment”?
 
