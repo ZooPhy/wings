@@ -3417,8 +3417,7 @@ rule public_genotype_snapshot:
     shell:
         r"""
         python {input.script:q} --seed {input.seed:q} --output {output.json:q} \
-          --cache-dir {params.cache:q} --ref {params.ref:q} --max-age-days {params.age} \
-          {params.offline} {params.prepared}
+          --cache-dir {params.cache:q} --ref {params.ref:q} --max-age-days {params.age} {params.offline} {params.prepared}
         """
 
 
