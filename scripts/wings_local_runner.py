@@ -969,11 +969,7 @@ def launch_attempt(run_id: str, resume: bool = False) -> dict:
             attempt_dir, command, config_path, started, resume
         )
         environment = wings_ollama.runtime_environment(runtime_environment())
-        if "conda_pkgs_dirs" in state:
-            if state["conda_pkgs_dirs"]:
-                environment["CONDA_PKGS_DIRS"] = state["conda_pkgs_dirs"]
-            else:
-                environment.pop("CONDA_PKGS_DIRS", None)
+        apply_run_conda_cache(environment, state)
         environment["WINGS_ATTEMPT_PROVENANCE"] = str(attempt_provenance)
         log_handle = log_path.open("x", encoding="utf-8")
         try:
@@ -1387,6 +1383,44 @@ def create_storage_folder(payload: dict) -> dict:
     return {"path": str(destination), "status": "CREATED"}
 
 
+
+def apply_run_conda_cache(environment, state):
+    if managed_conda_cache():
+        # A resumed run may retain a legacy Mac cache path in state.json.
+        environment["CONDA_PKGS_DIRS"] = managed_conda_cache()
+    elif "conda_pkgs_dirs" in state:
+        if state["conda_pkgs_dirs"]:
+            environment["CONDA_PKGS_DIRS"] = state["conda_pkgs_dirs"]
+        else:
+            environment.pop("CONDA_PKGS_DIRS", None)
+
+
+def managed_conda_cache() -> str:
+    """Desktop dependency cache is app-managed, never a user-selected Mac folder."""
+    if not os.environ.get('WINGS_DESKTOP_WORKSPACE'):
+        return ''
+    configured = os.environ.get('WINGS_DESKTOP_CONDA_PKGS_DIR', '')
+    if configured and configured != '/opt/wings-conda-pkgs':
+        raise ValueError('Unexpected managed desktop Conda cache path')
+    return configured
+
+
+def prepare_conda_cache(value: str | None) -> str | None:
+    managed = managed_conda_cache()
+    if managed:
+        if value and value != managed:
+            raise ValueError('WINGS Desktop manages its Linux dependency cache automatically. '
+                             'Keep the current cache setting; choose a workspace folder only for results.')
+        directory = Path(managed)
+        if directory.resolve() != directory or not directory.is_dir():
+            raise ValueError('Desktop dependency storage is unavailable. Reopen WINGS to run setup.')
+        with tempfile.TemporaryFile(dir=directory) as probe:
+            probe.write(b'WINGS cache check')
+            probe.flush()
+        return managed
+    return str(prepare_storage_directory(value)) if value else None
+
+
 def prepare_storage_directory(value: str) -> Path:
     """Resolve, create and check a writable directory without moving existing data."""
     directory = desktop_storage_path(Path(value).expanduser())
@@ -1464,7 +1498,7 @@ def update_storage(payload: dict) -> dict:
         if payload.get("storage_revision") != STORAGE_REVISION:
             raise ValueError("Storage settings changed. Reload the page and review the current paths.")
         root = prepare_storage_directory(paths[0])
-        cache = str(prepare_storage_directory(paths[1])) if paths[1] else None
+        cache = prepare_conda_cache(paths[1])
         # Keep uploads, monitoring and completion callbacks bound to their original paths.
         register_runs(RUNS_ROOT)
         register_runs(root)
@@ -1490,8 +1524,8 @@ def main() -> int:
 
     try:
         RUNS_ROOT = prepare_storage_directory(args.runs_dir)
-        if args.conda_pkgs_dir:
-            cache_directory = prepare_storage_directory(args.conda_pkgs_dir)
+        if args.conda_pkgs_dir or managed_conda_cache():
+            cache_directory = prepare_conda_cache(args.conda_pkgs_dir)
             os.environ["CONDA_PKGS_DIRS"] = str(cache_directory)
             CURRENT_CACHE_DIR = str(cache_directory)
     except OSError as error:

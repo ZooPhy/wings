@@ -61,7 +61,10 @@ def handle_get(handler,api):
 def provider_executor(run_state,api,environment=None):
     """Use this run's saved package cache without mutating process-wide settings."""
     environment=runtime_environment() if environment is None else dict(environment)
-    if 'conda_pkgs_dirs' in run_state:
+    managed = api.get('managed_conda_cache', lambda: '')()
+    if managed:
+        environment['CONDA_PKGS_DIRS'] = managed
+    elif 'conda_pkgs_dirs' in run_state:
         if run_state['conda_pkgs_dirs']:
             environment['CONDA_PKGS_DIRS']=run_state['conda_pkgs_dirs']
         else:
@@ -72,6 +75,12 @@ def provider_executor(run_state,api,environment=None):
             # Phenology creates a Conda environment, so use the launcher's actual
             # native-platform and executable checks before invoking Snakemake.
             command[0]=api['runtime_preflight']()
+            if managed:
+                prefix = str(api['conda_environment_prefix']())
+                if '--conda-prefix' in command:
+                    command[command.index('--conda-prefix') + 1] = prefix
+                else:
+                    command.extend(['--conda-prefix', prefix])
         context_setup.command(command,log,timeout=timeout,env=environment)
     return execute
 

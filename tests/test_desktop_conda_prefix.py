@@ -47,13 +47,13 @@ class PrefixTests(unittest.TestCase):
 
     def test_bash_constructs_mount_as_single_argument_with_spaces(self):
         text=(ROOT/'desktop/desktop.sh').read_text()
-        block=text[text.index('# Conda embeds'):text.index("stage 'Verifying workflow source")]
+        block=text[text.index('common=(--platform'):text.index("stage 'Verifying workflow source")]
         with tempfile.TemporaryDirectory(prefix='WINGS space ') as tmp:
-            preamble='workspace=$1\ninput_mounts=()\nhost_home=/Users/test\nbrowse_roots=/Users\nreference_archive=/tmp/ref\ndocker_cli_arch=arm64\nrepo=/tmp/repo\n'
+            preamble='conda_env_volume=wings-conda-envs-v3-fixture\nconda_pkg_volume=wings-conda-pkgs-v3-fixture\nworkspace=$1\ninput_mounts=()\nhost_home=/Users/test\nbrowse_roots=/Users\nreference_archive=/tmp/ref\ndocker_cli_arch=arm64\nrepo=/tmp/repo\n'
             result=subprocess.run(['bash','-c',preamble+block+'\nprintf "%s\\0" "${common[@]}"','_',tmp],capture_output=True,check=True)
             args=result.stdout.decode().split('\0')
-            self.assertIn('type=bind,source='+tmp+'/cache/conda-envs-v2,target=/opt/wings-conda-envs',args)
+            self.assertTrue(any(arg.startswith('type=volume,source=wings-conda-envs-v3-') and arg.endswith('target=/opt/wings-conda-envs,volume-nocopy') for arg in args))
             self.assertIn('WINGS_DESKTOP_CONDA_PREFIX=/opt/wings-conda-envs',args)
-            self.assertTrue((Path(tmp)/'cache/conda-envs-v2').is_dir())
+            self.assertFalse((Path(tmp)/'cache/conda-envs-v2').exists())
 
 if __name__=='__main__':unittest.main()

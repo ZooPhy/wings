@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import threading
+import tempfile
 
 from proxy import make_server
 
@@ -34,6 +35,39 @@ def run(command, repo):
     subprocess.run(command, cwd=repo, check=True)
 
 
+
+def check_case_sensitive_directory(path):
+    """Probe the mounted filesystem itself; a space-free prefix is insufficient."""
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix='.wings-case-check-', dir=path) as temp:
+            lower, upper = Path(temp) / 'probea', Path(temp) / 'probeA'
+            lower.write_bytes(b'lower')
+            try:
+                with upper.open('xb') as handle:
+                    handle.write(b'upper')
+            except FileExistsError:
+                raise RuntimeError(f'Conda storage is case-insensitive: {path}. '
+                                   'Reopen the updated WINGS app using its managed Docker volumes.') from None
+            if lower.read_bytes() != b'lower' or upper.read_bytes() != b'upper':
+                raise RuntimeError(f'Conda storage does not preserve filename case: {path}')
+    except OSError as exc:
+        raise RuntimeError(f'Cannot write to Conda storage {path}: {exc}') from exc
+
+
+def prepare_conda_storage():
+    prefix = os.environ.get('WINGS_DESKTOP_CONDA_PREFIX', '/opt/wings-conda-envs')
+    cache = os.environ.get('WINGS_DESKTOP_CONDA_PKGS_DIR', '/opt/wings-conda-pkgs')
+    for path in (prefix, cache):
+        check_case_sensitive_directory(path)
+    os.environ['WINGS_DESKTOP_CONDA_PREFIX'] = prefix
+    os.environ['WINGS_DESKTOP_CONDA_PKGS_DIR'] = cache
+    os.environ['CONDA_PKGS_DIRS'] = cache
+    print('Conda storage verified: case-sensitive package cache and environments', flush=True)
+    return cache
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['verify', 'docker-check', 'prepare', 'serve', 'smoke'])
@@ -47,9 +81,8 @@ def main():
     os.chdir(repo)
     os.environ['HOME'] = str(workspace / 'runtime-home')
     Path(os.environ['HOME']).mkdir(exist_ok=True)
-    os.environ['CONDA_PKGS_DIRS'] = str(workspace / 'cache' / 'conda-pkgs')
-    for path in [workspace / 'runs', workspace / 'cache' / 'conda-pkgs']:
-        path.mkdir(parents=True, exist_ok=True)
+    cache = prepare_conda_storage()
+    (workspace / 'runs').mkdir(parents=True, exist_ok=True)
     if args.action == 'verify':
         print('Source integrity verified')
         return
@@ -83,7 +116,7 @@ def main():
     command = [sys.executable, 'scripts/wings_local_runner.py', '--no-browser',
                '--host', '127.0.0.1', '--port', '8765',
                '--runs-dir', str(workspace / 'runs'),
-               '--conda-pkgs-dir', str(workspace / 'cache' / 'conda-pkgs')]
+               '--conda-pkgs-dir', cache]
     child = subprocess.Popen(command, env=child_env)
     server = make_server(token)
 

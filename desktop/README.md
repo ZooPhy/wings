@@ -1,5 +1,45 @@
 # WINGS Desktop — developer preview 0.1.14
 
+
+## Unreleased: case-sensitive Linux dependency storage
+
+The launcher now uses two persistent Docker-managed volumes per workspace for
+Linux Conda environments and extracted package caches. A Mac bind mount can
+collapse names such as `2621A` and `2621a` from `ncurses`. Both destinations are
+checked for writability and distinct upper/lowercase filenames before setup
+continues. Environment prefixes remain stable at `/opt/wings-conda-envs`; package
+extraction uses `/opt/wings-conda-pkgs`. Resumed runs and seasonal bird-data
+preparation use these same destinations instead of saved Mac cache paths.
+
+This change requires a **rebuilt desktop app and runtime**. Finish or stop active
+jobs, use **Settings → Stop WINGS service**, quit the launcher, replace WINGS.app,
+and reopen the same workspace. Previously installed Mac-hosted Conda environments
+are left intact and are not copied into the Linux volumes. Dependencies will be
+created again; allow time and Docker disk space for downloads and extraction.
+Reads, results, reference data, run history, and credentials remain in the workspace.
+Review the resumed job plan because environment/source changes can rerun jobs.
+
+Volumes are named `wings-conda-envs-v3-<workspace-id>` and
+`wings-conda-pkgs-v3-<workspace-id>`. They survive app updates and service/container
+replacement. Resetting Docker Desktop or deleting these volumes removes the
+rebuildable dependencies, so workspace backups alone do not contain them. There
+is no automatic cache deletion, volume pruning, or movement of existing data.
+The app validates volume labels and rejects unexpected drivers/options.
+
+The automated launcher tests simulate Docker. Before publishing a preview,
+verify on a default case-insensitive Mac filesystem that real package extraction,
+analysis, service restart, and resume all succeed. Test both a new workspace and
+one containing a failed legacy environment. Keep end-to-end validation pending
+until those checks pass.
+
+For credentials already skipped during setup, the existing native menu is
+**Settings → NCBI & eBird access → Add or update NCBI email / eBird access key**.
+Refresh the browser after saving. The eBird Status and Trends access key is distinct
+from the general eBird API key. Improving browser discoverability and preventing
+progression past invalid metadata remain separate UI work.
+
+## Previous preview changes
+
 Version 0.1.14 adds the WINGS logo to the installation/setup progress page.
 The supplied logo is bundled locally and copied alongside each new progress
 page, so displaying it needs no internet connection. It retains its proportions
