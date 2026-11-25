@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -81,6 +82,9 @@ class BrowserBriefingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
             (root / 'config').mkdir()
+            (root / 'scripts').mkdir()
+            shutil.copy2(Path(runner.__file__).with_name('validate_metadata.py'),
+                         root / 'scripts/validate_metadata.py')
             (root / 'config/config.example.yaml').write_text(yaml.safe_dump({
                 'coverage_min_depth': 50, 'public_health_interpretation': {'enabled': True, 'extra': 'keep'}}))
             directory = root / 'runs' / 'example'

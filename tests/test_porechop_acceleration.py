@@ -299,6 +299,7 @@ class AccelerationTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('fixture_wings_runner', SCRIPTS/'wings_local_runner.py')
         runner = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(runner)
+        shutil.copy2(SCRIPTS/'validate_metadata.py', self.repo/'scripts/validate_metadata.py')
         (self.repo/'config').mkdir()
         (self.repo/'config/config.example.yaml').write_text('other_setting: example\n')
         self.config.write_text('porechop_threads: 4\nporechop_adapter_search_threads: 1\nporechop_counter_build: /cache/build.json\nother_setting: local\n')
