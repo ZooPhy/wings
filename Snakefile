@@ -1303,6 +1303,10 @@ rule irma:
                 executable,
                 "run",
                 "--rm",
+                # Keep bind-mounted outputs owned by the process running Snakemake.
+                "--user", f"{os.getuid()}:{os.getgid()}",
+                "--env", "HOME=/tmp",
+                "--env", "TMPDIR=/tmp",
                 "-v",
                 f"{mount_root}:{mount_root}",
                 "-w",
@@ -1908,6 +1912,10 @@ rule vadr_annotate:
 
                 command = [
                     "docker", "run", "--rm",
+                    # Keep bind-mounted outputs owned by the process running Snakemake.
+                    "--user", f"{os.getuid()}:{os.getgid()}",
+                    "--env", "HOME=/tmp",
+                    "--env", "TMPDIR=/tmp",
                     "--platform", "linux/amd64",
                     # VADR builds internal shell commands without quoting paths.
                     # Keep host workspace names out of all container-side paths.
