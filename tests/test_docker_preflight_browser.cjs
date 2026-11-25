@@ -11,6 +11,7 @@ const server=http.createServer((req,res)=>{
   // Older health responses omit the capability flag; the endpoint must still be tried.
   if(route==='/api/health')return json({snakemake_available:true,snakemake:'fixture',config_yaml_present:true,runs_root:'/fixture',storage_revision:'test',conda_pkgs_default:'default',free_bytes:100});
   if(route==='/api/runs')return json([]);
+  if(route==='/api/metadata/validate')return json({ok:true,errors:[],warnings:[]});
   if(route==='/api/docker/check'){
     let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{
       const vadr=JSON.parse(body).vadr;probes++;
@@ -44,6 +45,13 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator('#checkDocker').isEnabled(),true);
     endpointAvailable=true;await page.locator('#checkDocker').click();
     await page.waitForFunction(()=>document.getElementById('dockerStatus').textContent.includes('responding'));
+    // Satisfy metadata requirements and isolate these Docker checks from provider preparation.
+    await page.locator('.step-button[data-step="1"]').click();
+    await page.locator('#readsFiles').setInputFiles({name:'A.fastq.gz',mimeType:'application/gzip',buffer:Buffer.from('fixture')});
+    await page.locator('.step-button[data-step="2"]').click();
+    await page.locator('#metadataFile').setInputFiles({name:'metadata.tsv',mimeType:'text/tab-separated-values',buffer:Buffer.from('sample_id\nA\n')});
+    await page.waitForFunction(()=>document.getElementById('metadataSummary').textContent.includes('Workflow metadata validation passed'));
+    await page.evaluate(()=>{window.WINGS_CONTEXT_SETUP.readyForRun=async()=>({runId:'fixture'});window.WINGS_CONTEXT_SETUP.isReady=()=>true;});
     await page.locator('.step-button[data-step="4"]').click();
     await page.waitForFunction(()=>document.getElementById('preflightList').textContent.includes('Docker engine is responding'));
     daemonReady=false;await page.locator('#checkDockerPreflight').click();

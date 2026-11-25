@@ -33,7 +33,7 @@
 <main class="portal-main">
   <h1 class="portal-title">Run WINGS Pipeline</h1>
   <div class="local-note">
-    Files stay local; context uses external services.
+    Files stay local; optional surveillance data may use external services.
   </div>
 
   <section id="savedRuns" class="panel" aria-labelledby="savedRunsTitle" hidden>
@@ -110,6 +110,14 @@
           </div>
         </section>
 
+        <details id="credentialHelp" class="summary-box" style="white-space:normal">
+          <summary>NCBI email and eBird access — add or update after setup</summary>
+          <p id="credentialStatus" role="status" aria-live="polite">Connect to WINGS to check saved credential status.</p>
+          <p id="credentialInstructions">In the Mac app, bring WINGS to the foreground and choose <strong>Settings → NCBI &amp; eBird access</strong>, then <strong>Add or update NCBI email</strong> or <strong>Add or update eBird access key</strong>. After saving, click Recheck saved access below.</p>
+          <p class="help">NCBI email is used for reference retrieval. The eBird Status and Trends access key is used for new seasonal-abundance downloads; it differs from the general eBird API key. Observation-file import does not use this key. You can leave these unconfigured when you do not use the features that need them.</p>
+          <button id="recheckCredentials" class="btn btn-secondary" type="button">Recheck saved access</button>
+        </details>
+
         <section class="wizard-step" data-step-panel="1" hidden>
           <div class="file-box">
             <div class="field">
@@ -129,14 +137,16 @@
               <div class="help">The file must include a <code>sample_id</code> column matching the selected FASTQ sample names.</div>
             </div>
           </div>
-          <div id="metadataSummary" class="summary-box">No metadata file selected.</div>
+          <div id="metadataSummary" class="summary-box" role="status" aria-live="polite">No metadata file selected.</div>
           <div class="actions">
             <button id="openMetadataWizard" class="btn btn-primary" type="button" aria-haspopup="dialog">Create or fix metadata</button>
           </div>
           <p id="metadataWizardStatus" class="help" role="status" aria-live="polite"></p>
+          <button id="recheckMetadata" class="btn btn-secondary" type="button">Check metadata again</button>
+          <p class="help">Dates and coordinates are checked using the workflow validator. Correct blocking errors before continuing. Unknown optional values can remain blank; do not invent dates.</p>
           <div id="contextSetup" class="context-panel">
-            <h3>Surveillance context</h3>
-            <p class="context-intro">Choose the sources to include in your report.</p>
+            <h3>Additional surveillance data (optional)</h3>
+            <p class="context-intro">Add weather, bird activity, public genotypes, or reported detections to help interpret your sequences. These sources supplement genomic results. Prepare the selected sources, or explicitly continue without additional data.</p>
             <div class="context-card-grid">
               <article class="context-card" data-provider="ecology">
                 <label class="context-choice" for="contextEcology"><input id="contextEcology" type="checkbox" data-context-source="ecology" checked><span><strong>Weather and migration</strong><span class="context-description">Weather and BirdCast activity matched to collection dates and locations.</span></span></label>
@@ -160,11 +170,13 @@
               </article>
             </div>
             <div class="context-consent">
-              <label class="context-check"><input id="contextNetwork" type="checkbox" checked><span><strong>Allow context downloads</strong><span class="context-description">Coordinates, dates, regions and species may be sent to providers.</span></span></label>
+              <label class="context-check"><input id="contextNetwork" type="checkbox" checked><span><strong>Allow surveillance-data downloads</strong><span class="context-description">Coordinates, dates, regions and species may be sent to providers.</span></span></label>
             </div>
-            <div class="context-action-row"><button id="contextPrepare" type="button" class="btn context-primary">Prepare context</button><p id="contextStatus" role="status" aria-live="polite">Selected sources will be checked during preparation.</p></div>
+            <div class="context-action-row"><button id="contextPrepare" type="button" class="btn context-primary">Prepare selected data</button><p id="contextStatus" role="status" aria-live="polite">Selected sources will be checked during preparation.</p></div>
+            <button id="contextSkip" type="button" class="btn btn-secondary">Skip additional data</button>
+            <label id="contextUnavailableReview" class="context-check" hidden><input id="contextAcceptUnavailable" type="checkbox"><span id="contextUnavailableMessage">I reviewed unavailable sources and want to continue with the available data.</span></label>
             <p id="contextProgressNote" class="context-note" hidden></p>
-            <p class="context-note">Missing context will not prevent genomic analysis. Sequencing starts later.</p>
+            <p class="context-note">If a selected source is unavailable, review the reason and acknowledge proceeding with available data. Sequencing starts later.</p>
             <details id="contextAdvanced" class="context-advanced"><summary>Advanced settings</summary>
               <div class="context-settings-grid">
                 <div class="field"><label for="contextDays">Days before and after collection</label><input id="contextDays" type="number" min="1" max="365" value="30"></div>
@@ -191,11 +203,11 @@
                   <label id="contextCoverageRow" class="context-check" hidden><input id="contextCoverage" type="checkbox"><span>I requested all species, all listed regions, and the required dates. File presence alone does not confirm this coverage.</span></label>
                   <details class="context-nested"><summary>Need to request an observations download?</summary>
                     <p><a href="https://ebird.org/data/download" target="_blank" rel="noopener">Request eBird observations</a>: choose all species, include sampling-event data, and keep the terms and citation files. Extract the download before selecting its folder.</p>
-                    <div id="contextRequest">Select metadata, then check the folder or prepare context to see the required regions and dates.</div>
+                    <div id="contextRequest">Select metadata, then check the folder or prepare selected data to see the required regions and dates.</div>
                   </details>
                 </div>
-                <p class="context-note"><strong>Next:</strong> check the folder and confirm download coverage, then click <strong>Prepare context</strong>. This builds a cache from an original download or reuses a compatible prepared dataset.</p>
-                <div class="context-action-row context-prepare-followup"><button id="contextPrepareHere" type="button" class="btn context-primary">Prepare context</button><p id="contextNextAction" class="context-note" role="status">After preparation finishes, use Continue to Analysis. Continue only changes the setup step; it does not prepare or rebuild data.</p></div>
+                <p class="context-note"><strong>Next:</strong> check the folder and confirm download coverage, then click <strong>Prepare selected data</strong>. This builds a cache from an original download or reuses a compatible prepared dataset.</p>
+                <div class="context-action-row context-prepare-followup"><button id="contextPrepareHere" type="button" class="btn context-primary">Prepare selected data</button><p id="contextNextAction" class="context-note" role="status">After preparation finishes, use Continue to Analysis. Continue only changes the setup step; it does not prepare or rebuild data.</p></div>
               </details>
             </details>
             <p id="contextPickerNotice" class="context-note" role="status" aria-live="polite" hidden></p>
@@ -262,6 +274,7 @@
           </div>
         </section>
 
+        <p id="setupGateMessage" class="summary-box" role="status" aria-live="polite" tabindex="-1" hidden></p>
         <div id="wizardActions" class="actions">
           <button id="backButton" class="btn btn-secondary" type="button" disabled>Previous</button>
           <div class="action-group">
@@ -324,8 +337,8 @@
 <script src="assets/wings-metadata-core.js?v=2"></script>
 <script src="assets/wings-metadata-wizard.js?v=6"></script>
 <script src="assets/wings-context-picker.js?ebird_folder=1&v=1"></script>
-<script src="assets/wings-context-setup.js?ebird_folder=2&v=12"></script>
-<script src="assets/wings-run.js?v=20261116-beast-submission&wings_context=3"></script>
+<script src="assets/wings-context-setup.js?ebird_folder=2&v=13"></script>
+<script src="assets/wings-run.js?v=20261125-setup-validation&wings_context=4"></script>
 <script src="assets/wings-folder-picker.js?v=3"></script>
 </body>
 </html>

@@ -6,6 +6,21 @@
   const sources = ['ecology','phenology','public_genotypes','ebird','outbreak'];
   const controls = {ecology:'contextEcology',phenology:'contextPhenology',public_genotypes:'contextGenotypes',ebird:'contextEbird',outbreak:'contextAphis'};
   let createSettings = () => ({});
+  let validateMetadata = async () => {};
+  function setMetadataValidation(check) { validateMetadata = check; }
+  function unavailableSources() { return sources.filter(name => $(controls[name]).checked && records[name]?.status !== 'READY'); }
+  function isReady() { return Boolean(prepared && !preparing && (!unavailableSources().length || $('contextAcceptUnavailable')?.checked)); }
+  function notifyReadiness() {
+    const row = $('contextUnavailableReview'), message = $('contextUnavailableMessage');
+    const missing = unavailableSources();
+    if (row) row.hidden = !prepared || preparing || !missing.length;
+    if (message && missing.length) {
+      const names={ecology:'weather and migration',phenology:'seasonal bird patterns',public_genotypes:'public genotypes',ebird:'eBird observations',outbreak:'APHIS detections'};
+      message.textContent = 'Unavailable or incomplete: ' + missing.map(name=>names[name]).join(', ') + '. I reviewed the source messages and want to continue with available data.';
+    }
+    if (typeof document.dispatchEvent === 'function') document.dispatchEvent(new Event('wings-context-change'));
+  }
+  function clearAcknowledgment() { if ($('contextAcceptUnavailable')) $('contextAcceptUnavailable').checked = false; }
   let prepared = null;
   let preparing = false;
   let connectionMessage = '';
@@ -46,7 +61,7 @@
     const note=$('contextProgressNote');if(note){
       note.hidden=false;
       const gap=detail?Math.floor((Date.now()-progressChanged)/1000):0;
-      note.textContent=active==='ebird'?'Large downloads are scanned in full. Keep the runner running. '+(gap>=20?`Last processing update ${elapsed(gap)} ago; waiting for the next count.`:'Record counts update as files are processed.'): 'Context preparation is running separately from sequencing.';
+      note.textContent=active==='ebird'?'Large downloads are scanned in full. Keep the runner running. '+(gap>=20?`Last processing update ${elapsed(gap)} ago; waiting for the next count.`:'Record counts update as files are processed.'): 'Surveillance-data preparation is running separately from sequencing.';
     }
   }
   function stopProgress(){if(progressTimer!==null && typeof clearInterval==='function')clearInterval(progressTimer);progressTimer=null;progressView=null;progressStarted=0;progressKey='';if($('contextProgressNote'))$('contextProgressNote').hidden=true;}
@@ -91,7 +106,7 @@
       status.textContent='Building a new observations cache for the current metadata…';
       await prepareOnly();
       if(records.ebird?.status!=='READY')throw new Error(records.ebird?.reason || 'eBird cache could not be rebuilt. Check the download coverage and try again.');
-      status.textContent='New eBird cache prepared for this metadata. Your previous dataset is unchanged. Context is ready for the selected available sources.';
+      status.textContent='New eBird cache prepared for this metadata. Your previous dataset is unchanged. Additional data are ready for the selected available sources.';
     }catch(error){status.textContent=error.message;}
     finally{recaching=false;$('contextRecacheRun').disabled=false;}
   }
@@ -109,6 +124,7 @@
     global_genotypes:true,required:[]
   });
   async function input() {
+    await validateMetadata();
     const file = $('metadataFile').files[0];
     if (!file) throw new Error('Select metadata.tsv first.');
     const metadata = await file.text();
@@ -206,8 +222,8 @@
     renderCards();
     const next=$('contextNextAction');if(next){
       next.textContent=data.status==='PREPARING'?'Preparing context. Wait for preparation to finish, then continue to Analysis.':
-        data.status==='READY'?($('contextEbird').checked && records.ebird?.status!=='READY'?'eBird observations are unavailable. Review the folder details or continue to Analysis with the other available sources.':'Context preparation finished. Continue to Analysis to choose analysis options.'):
-        'Click Prepare context to build or reuse data. Continue to Analysis only changes the setup step.';
+        data.status==='READY'?($('contextEbird').checked && records.ebird?.status!=='READY'?'eBird observations are unavailable. Review the folder details or continue to Analysis with the other available sources.':'Surveillance-data preparation finished. Continue to Analysis to choose analysis options.'):
+        'Click Prepare selected data to build or reuse data. Continue to Analysis only changes the setup step.';
     }
     const status=$('contextStatus');
     if(data.status==='PREPARING'){
@@ -221,9 +237,9 @@
     if(data.status==='READY') {
       const chosen=sources.filter(name=>$(controls[name]).checked);
       const count=chosen.filter(name=>records[name]?.status==='READY').length;
-      status.textContent=chosen.length ? (count===chosen.length ? 'Context saved. Continue to Analysis.' : 'Context saved with available data. Continue to Analysis.') : 'No context sources selected. Continue to Analysis.';
+      status.textContent=chosen.length ? (count===chosen.length ? 'Additional surveillance data saved. Continue to Analysis.' : 'Context saved with available data. Continue to Analysis.') : 'No additional surveillance sources selected. Continue to Analysis.';
     } else if(data.status==='REVIEW') status.textContent='Checking selected sources…';
-    else if(data.status==='STALE') status.textContent='Selection changed. Prepare context again.';
+    else if(data.status==='STALE') status.textContent='Selection changed. Prepare selected data again.';
     else if(data.status==='NOT_FOUND') status.textContent='Saved preparation was not found on this runner. Check that WINGS is using the original workspace.';
     else if(data.status==='NOT_PREPARED') status.textContent='Preparation was not started on the runner. Check your settings, then prepare again.';
     else if(['FAILED','BLOCKED','INTERRUPTED'].includes(data.status)) status.textContent='Preparation could not finish. Check the runner log, then try again.';
@@ -239,7 +255,7 @@
     const validDate=value=>typeof value==='string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
       Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value;
     if(windows.some(w=>!w || !validDate(w.date_from) || !validDate(w.date_to) || w.date_from>w.date_to)) {
-      text.textContent='Update collection dates and prepare context again to plan an eBird download.';
+      text.textContent='Update collection dates and prepare selected data again to plan an eBird download.';
       return;
     }
     // eBird accepts one inclusive month/year range. Keep exact matching windows unchanged.
@@ -278,9 +294,9 @@
     return ()=>{for(const [el,disabled] of previous)el.disabled=disabled;};
   }
   async function prepareOnly() {
-    if(preparing)throw new Error('Context preparation is already running.');
+    if(preparing)throw new Error('Surveillance-data preparation is already running.');
     if(window.WINGS_CONTEXT_PICKER?.isBusy())throw new Error('Finish choosing a folder first.');
-    preparing=true;prepared=null;
+    preparing=true;prepared=null;clearAcknowledgment();notifyReadiness();
     const unlock=lockInputs();
     $('contextPrepare').textContent='Preparing…';
     if($('contextPrepareHere'))$('contextPrepareHere').textContent='Preparing…';
@@ -289,7 +305,7 @@
       if($('contextEbird').checked && ($('contextSource').value.trim() || $('contextPackage').value.trim()))await checkEbirdFolder();
       const value=await review();
       showStatus({status:'PREPARING'});
-      const run=await request('/api/runs',{...createSettings(),name:'Context preparation',options:{context_setup:true}});
+      const run=await request('/api/runs',{...createSettings(),name:'Surveillance-data preparation',options:{context_setup:true}});
       const upload=await fetch(`${origin}/api/runs/${encodeURIComponent(run.run_id)}/files?kind=metadata&filename=metadata.tsv`,{method:'PUT',body:value.file});
       if(!upload.ok)throw new Error(await upload.text());
       remember({runId:run.run_id,signature:value.signature,settings:value.settings});
@@ -302,7 +318,7 @@
         renderProgress();
       }
       progress=await followPreparation(run.run_id,progress);
-      if(progress.status!=='READY')throw new Error('Context preparation did not finish.');
+      if(progress.status!=='READY')throw new Error('Surveillance-data preparation did not finish.');
       if((await input()).signature!==value.signature)throw new Error('Inputs changed during preparation.');
       prepared={runId:run.run_id,signature:value.signature};
       showStatus(progress);
@@ -311,15 +327,15 @@
       showStatus({...(progress || {}),status:progress?.status || 'FAILED'});
       throw error;
     } finally {
-      preparing=false;unlock();renderCards();
-      $('contextPrepare').textContent='Prepare context';
-      if($('contextPrepareHere'))$('contextPrepareHere').textContent='Prepare context';
+      preparing=false;unlock();renderCards();notifyReadiness();
+      $('contextPrepare').textContent='Prepare selected data';
+      if($('contextPrepareHere'))$('contextPrepareHere').textContent='Prepare selected data';
     }
   }
   async function recoverPreparation() {
     const saved=recalled();
     if(!saved || preparing)return;
-    preparing=true;prepared=null;
+    preparing=true;prepared=null;clearAcknowledgment();notifyReadiness();
     // Restore the options used by this job; the metadata file must be selected
     // again before attaching results. Its signature is checked by readyForRun.
     const settings=saved.settings;
@@ -340,14 +356,15 @@
         $('contextStatus').textContent='Prepared context recovered. Select the original metadata file to use it; matching settings and metadata are required.';
       } else remember(null);
     } finally {
-      preparing=false;unlock();renderCards();
-      $('contextPrepare').textContent='Prepare context';
-      if($('contextPrepareHere'))$('contextPrepareHere').textContent='Prepare context';
+      preparing=false;unlock();renderCards();notifyReadiness();
+      $('contextPrepare').textContent='Prepare selected data';
+      if($('contextPrepareHere'))$('contextPrepareHere').textContent='Prepare selected data';
     }
   }
   async function readyForRun() {
     const value=await input();
-    if(!prepared || prepared.signature!==value.signature)throw new Error('In Metadata, prepare context for the current selection before launching.');
+    if(preparing || !prepared || prepared.signature!==value.signature)throw new Error('In Metadata, click Prepare selected data or Skip additional data before continuing.');
+    if(!isReady())throw new Error('Review the unavailable sources in Metadata, then acknowledge continuing with available data or change the selection and prepare again.');
     return prepared;
   }
   async function attach(runId) {
@@ -357,24 +374,37 @@
   }
   function report(error) {
     console.error('WINGS context:',error);
-    $('contextStatus').textContent=['Select metadata.tsv first.','Finish choosing a folder first.'].includes(error.message) ? error.message : 'Preparation could not finish. Check the runner log, then try again.';
+    $('contextStatus').textContent=error.setupValidation ? error.message : ['Select metadata.tsv first.','Finish choosing a folder first.'].includes(error.message) ? error.message : 'Preparation could not finish. Check the runner log, then try again.';
   }
   function invalidate(event) {
     if(preparing)return;
+    if(event?.target?.id==='contextAcceptUnavailable'){notifyReadiness();return;}
     if(event?.target?.id!=='contextCoverage'){
       folderCheckRequest++;
       if($('contextFolderCheck'))$('contextFolderCheck').textContent='Selection changed. Check the folder again to confirm its contents and metadata coverage.';
       if($('contextDownloadHelp'))$('contextDownloadHelp').hidden=false;
     }
-    prepared=null;remember(null);records={};showStatus({status:'STALE'});
+    prepared=null;clearAcknowledgment();remember(null);records={};showStatus({status:'STALE'});notifyReadiness();
   }
+  $('contextSkip')?.addEventListener('click', async () => {
+    if (preparing) return;
+    try {
+      await validateMetadata();
+      for (const name of sources) $(controls[name]).checked = false;
+      invalidate();
+      await prepareOnly();
+    } catch(error) { report(error); }
+  });
+  $('contextAcceptUnavailable')?.addEventListener('change', notifyReadiness);
   $('contextSetup').addEventListener('input',invalidate);
   $('metadataFile').addEventListener('change',async()=>{
     if(preparing)return;
-    if(prepared){
-      try {if((await input()).signature===prepared.signature){showStatus({status:'READY',providers:records});return;}}catch(_){}
+    const previous = prepared; prepared = null; clearAcknowledgment(); notifyReadiness();
+    await Promise.resolve(); // Let the launcher register validation for the newly selected file.
+    if(previous){
+      try {if((await input()).signature===previous.signature){prepared=previous;showStatus({status:'READY',providers:records});notifyReadiness();return;}}catch(_){}
     }
-    invalidate();$('contextRequest').textContent='Prepare context to determine the required regions and dates.';
+    invalidate();$('contextRequest').textContent='Prepare selected data to determine the required regions and dates.';
   });
   $('contextAction-ebird').addEventListener('click',()=>openSettings('contextEbirdImport','contextSource'));
   $('contextCheckFolder')?.addEventListener('click',()=>checkEbirdFolder());
@@ -387,6 +417,6 @@
   $('contextPrepare').addEventListener('click',()=>prepareOnly().catch(report));
   $('contextPrepareHere')?.addEventListener('click',()=>prepareOnly().catch(report));
   renderCards();
-  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder,rebuildEbirdCache,recoverPreparation};
+  window.WINGS_CONTEXT_SETUP={readyForRun,attach,review,prepareOnly,showStatus,setCreateSettings,checkEbirdFolder,rebuildEbirdCache,recoverPreparation,isReady,setMetadataValidation};
   recoverPreparation().catch(report);
 })();

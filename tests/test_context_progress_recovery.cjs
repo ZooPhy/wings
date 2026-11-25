@@ -113,7 +113,7 @@ for(const status of ['FAILED','BLOCKED','INTERRUPTED','NOT_PREPARED'])test('conf
   await assert.rejects(h.ui.prepareOnly(),/did not finish/);
   assert.equal(h.storage.size,0);assert.equal(h.heartbeats.size,0);
   assert.equal(h.el('contextPrepare').disabled,false);
-  await assert.rejects(h.ui.readyForRun(),/prepare context/);
+  await assert.rejects(h.ui.readyForRun(),/Prepare selected data/);
 });
 
 test('reload reconnects to the same run; original metadata restores readiness; changed metadata cannot attach',async()=>{
@@ -136,7 +136,7 @@ test('reload reconnects to the same run; original metadata restores readiness; c
   assert.equal((await restored.ui.readyForRun()).runId,'fixture-run');
   restored.el('metadataFile').files=[{text:async()=>'different metadata'}];
   await restored.el('metadataFile').listeners.change();
-  await assert.rejects(restored.ui.readyForRun(),/prepare context/);
+  await assert.rejects(restored.ui.readyForRun(),/Prepare selected data/);
   assert.equal(storage.size,0);
   finish(ready);await original;
 });
@@ -166,7 +166,7 @@ test('unavailable local storage does not prevent preparation',async()=>{
 test('changed source selection cannot attach a completed context',async()=>{
   const h=harness();await h.ui.prepareOnly();
   h.el('contextDays').value='60';
-  await assert.rejects(h.ui.readyForRun(),/prepare context/);
+  await assert.rejects(h.ui.readyForRun(),/Prepare selected data/);
   h.el('contextSetup').listeners.input();
   assert.equal(h.storage.size,0);
 });

@@ -21,7 +21,7 @@ class Element {
 (async()=>{
   const sources=['ecology','phenology','public_genotypes','ebird','outbreak'];
   const controls={ecology:'contextEcology',phenology:'contextPhenology',public_genotypes:'contextGenotypes',ebird:'contextEbird',outbreak:'contextAphis'};
-  const ids=['contextPrepareHere','contextNextAction','contextProgressNote','contextRecache','contextRecachePanel','contextRecacheRun','contextRecacheStatus','contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
+  const ids=['contextAcceptUnavailable','contextUnavailableReview','contextUnavailableMessage','contextPrepareHere','contextNextAction','contextProgressNote','contextRecache','contextRecachePanel','contextRecacheRun','contextRecacheStatus','contextCheckFolder','contextFolderCheck','contextDownloadHelp','contextCoverageRow','contextSetup','contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage','contextStatus','contextRequest','contextPrepare','contextAdvanced','contextEbirdImport','metadataFile',...Object.values(controls),...sources.flatMap(s=>['contextState-'+s,'contextCount-'+s,'contextAction-'+s])];
   const elements=Object.fromEntries(ids.map(id=>[id,new Element(id==='contextPrepare'||id==='contextPrepareHere'||id.startsWith('contextAction-')?'button':'div')]));
   for(const id of ['contextDays','contextNetwork','contextYear','contextPackage','contextSource','contextCoverage',...Object.values(controls)])elements[id].tagName='input';
   for(const [id,el] of Object.entries(elements))if(id!=='contextSetup'&&id!=='metadataFile')elements.contextSetup.append(el);
@@ -57,11 +57,13 @@ class Element {
   const launcher=fs.readFileSync(path.join(__dirname,'../assets/wings-run.js'),'utf8');
   vm.runInNewContext(launcher.slice(launcher.indexOf('  // WINGS_CONTEXT_STORAGE_V2:'),launcher.indexOf('  async function startRun()')),sandbox);
   sandbox.storageRevision='revision-one';
-  await assert.rejects(ui.readyForRun(),/prepare context/);
+  await assert.rejects(ui.readyForRun(),/Prepare selected data/);
   sandbox.window.WINGS_CONTEXT_PICKER={isBusy:()=>true};
   await assert.rejects(ui.prepareOnly(),/Finish choosing a folder/);assert.equal(calls.length,0);
   delete sandbox.window.WINGS_CONTEXT_PICKER;
   const preparing=ui.prepareOnly();assert.equal(elements.contextYear.disabled,true);await assert.rejects(ui.prepareOnly(),/already running/);await preparing;
+  await assert.rejects(ui.readyForRun(),/Review the unavailable sources/);
+  elements.contextAcceptUnavailable.checked=true;
   assert.equal((await ui.readyForRun()).runId,'draft1');
   assert.equal(calls.filter(c=>c.url.endsWith('/api/context/plan')).length,1,'One click includes review');
   assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,1);
@@ -86,20 +88,20 @@ class Element {
   await ui.attach('analysis');assert.equal(JSON.parse(calls.at(-1).opts.body).reuse_run_id,'draft1');
   elements.contextEcology.checked=false;elements.contextSetup.listeners.input();
   assert.equal(elements['contextState-ecology'].textContent,'Not selected');assert.equal(elements['contextCount-ecology'].hidden,true);
-  await assert.rejects(ui.readyForRun(),/prepare context/);await ui.prepareOnly();assert.equal(settings.selected_sources.includes('ecology'),false);
+  await assert.rejects(ui.readyForRun(),/Prepare selected data/);await ui.prepareOnly();assert.equal(settings.selected_sources.includes('ecology'),false);
   for(const id of Object.values(controls))elements[id].checked=false;
   elements.contextSetup.listeners.input();await ui.prepareOnly();assert.deepEqual(settings.selected_sources,[]);assert.equal(settings.phenology,false);
-  assert.match(elements.contextStatus.textContent,/No context sources selected/);await ui.readyForRun();
+  assert.match(elements.contextStatus.textContent,/No additional surveillance sources selected/);await ui.readyForRun();
   for(const name of sources)assert.equal(elements['contextState-'+name].textContent,'Not selected');
-  sandbox.storageRevision='revision-two';await assert.rejects(ui.readyForRun(),/prepare context/);
+  sandbox.storageRevision='revision-two';await assert.rejects(ui.readyForRun(),/Prepare selected data/);
   elements.contextEcology.checked=true;poll=true;await ui.prepareOnly();poll=false;
   assert.equal(elements.contextPrepare.disabled,false);assert.equal(elements.contextEcology.disabled,false);
   assert.equal(calls.some(c=>c.url.endsWith('/context')&&!c.opts.body),true,'Preparation progress polled');
-  responseStatus='FAILED';await assert.rejects(ui.prepareOnly(),/did not finish/);await assert.rejects(ui.readyForRun(),/prepare context/);
+  responseStatus='FAILED';await assert.rejects(ui.prepareOnly(),/did not finish/);await assert.rejects(ui.readyForRun(),/Prepare selected data/);
   assert.equal(elements.contextPrepare.disabled,false);assert.equal(elements.metadataFile.disabled,false);
   assert.match(elements.contextStatus.textContent,/Check the runner log/);
   failRequest=true;await elements.contextPrepare.listeners.click();assert.doesNotMatch(elements.contextSetup.textContent,/SECRET|stack trace/);assert.equal(errors.length,1);failRequest=false;
-  responseStatus='READY';await ui.prepareOnly();metadata='sample_id\nB\n';await assert.rejects(ui.readyForRun(),/prepare context/);
+  responseStatus='READY';await ui.prepareOnly();metadata='sample_id\nB\n';await assert.rejects(ui.readyForRun(),/Prepare selected data/);
   await elements.metadataFile.listeners.change();assert.match(elements.contextStatus.textContent,/Selection changed/);
   elements.metadataFile.files=[];await elements.contextPrepare.listeners.click();assert.equal(elements.contextStatus.textContent,'Select metadata.tsv first.');
   elements.metadataFile.files=[{text:async()=>metadata}];sandbox.storageRevision=undefined;await ui.prepareOnly();assert.equal(Object.hasOwn(JSON.parse(calls.filter(c=>c.url.endsWith('/api/runs')).at(-1).opts.body),'storage_revision'),false);
@@ -184,7 +186,7 @@ class Element {
   const beforeInline=calls.filter(c=>c.url.endsWith('/api/runs')).length;
   await elements.contextPrepareHere.listeners.click();
   assert.equal(calls.filter(c=>c.url.endsWith('/api/runs')).length,beforeInline+1);
-  assert.equal(elements.contextPrepareHere.textContent,'Prepare context');
+  assert.equal(elements.contextPrepareHere.textContent,'Prepare selected data');
   assert.match(elements.contextNextAction.textContent,/Continue to Analysis/);
   ui.showStatus({status:'STALE'});assert.match(elements.contextNextAction.textContent,/only changes the setup step/);
   assert.equal(calls.filter(c=>c.url.endsWith('/start')).length,0);

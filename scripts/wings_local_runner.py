@@ -10,6 +10,8 @@ import os
 import platform
 import sys
 import re
+import importlib.util
+from types import SimpleNamespace
 import shutil
 import subprocess
 import tempfile
@@ -211,6 +213,56 @@ def metadata_ids(path: Path) -> list[str]:
     return values
 
 
+
+def validate_setup_metadata(payload: dict) -> dict:
+    """Run the production validator in temporary files; never create a run."""
+    if not isinstance(payload, dict) or not isinstance(payload.get('metadata'), str):
+        raise ValueError('Provide metadata TSV text.')
+    text = payload['metadata']
+    if len(text.encode('utf-8')) > 10 * 1024 * 1024:
+        raise ValueError('Metadata exceeds the 10 MB setup validation limit.')
+    samples = payload.get('sample_ids', [])
+    if not isinstance(samples, list) or len(samples) > 10000 or any(
+        not isinstance(v, str) or not v or ',' in v or '\n' in v or '\r' in v for v in samples
+    ):
+        raise ValueError('Provide valid FASTQ sample IDs.')
+    if len(set(samples)) != len(samples):
+        return {'ok': False, 'errors': ['FASTQ filenames produce duplicate sample IDs.'], 'warnings': []}
+    with tempfile.TemporaryDirectory(prefix='wings-metadata-check-') as temporary:
+        root = Path(temporary)
+        source, validated, report = root/'metadata.tsv', root/'validated.tsv', root/'validation.tsv'
+        source.write_text(text, encoding='utf-8')
+        if not samples:
+            try:
+                with source.open(encoding='utf-8-sig', newline='') as handle:
+                    samples = sorted(set((row.get('sample_id') or '').strip() for row in csv.DictReader(handle, delimiter='\t')) - {''})
+            except csv.Error as exc:
+                raise ValueError('Cannot parse metadata TSV: ' + str(exc)) from None
+        if any(',' in sample for sample in samples):
+            return {'ok': False, 'errors': ['Sample IDs cannot contain commas.'], 'warnings': []}
+        runtime = SimpleNamespace(input=SimpleNamespace(metadata=str(source)),
+            output=SimpleNamespace(validated=str(validated), report=str(report)),
+            params=SimpleNamespace(samples=','.join(samples), require_all_samples='true'))
+        errors, warnings = [], []
+        try:
+            spec = importlib.util.spec_from_file_location('wings_setup_validation', REPO_ROOT/'scripts/validate_metadata.py')
+            validator = importlib.util.module_from_spec(spec)
+            validator.snakemake = runtime
+            spec.loader.exec_module(validator)
+            validator.main()
+        except (ValueError, csv.Error) as exc:
+            if not report.exists():
+                errors.append(str(exc).replace(str(source), 'metadata.tsv'))
+        if report.exists():
+            for line in report.read_text().splitlines():
+                kind, _, message = line.partition('\t')
+                if kind == 'ERROR': errors.append(message)
+                elif kind == 'WARNING': warnings.append(message)
+        if not samples and not errors:
+            errors.append('Metadata contains no sample_id values.')
+        return {'ok': not errors, 'errors': errors, 'warnings': warnings, 'sample_count': len(samples)}
+
+
 BRIEFING_URL = "http://127.0.0.1:11434/api/chat"
 
 
@@ -274,6 +326,10 @@ def build_config(run_id: str) -> tuple[Path, int]:
         if missing_reads:
             details.append(f"missing reads: {', '.join(missing_reads[:8])}")
         raise ValueError("Sample mismatch (" + "; ".join(details) + ")")
+
+    validation = validate_setup_metadata({'metadata': metadata.read_text(encoding='utf-8-sig'), 'sample_ids': sample_ids})
+    if not validation['ok']:
+        raise ValueError('Metadata validation failed:\n' + '\n'.join(validation['errors']))
 
     example = REPO_ROOT / "config" / "config.example.yaml"
     config = yaml.safe_load(example.read_text(encoding="utf-8")) or {}
@@ -967,9 +1023,9 @@ class Handler(SimpleHTTPRequestHandler):
     def error_response(self, message: str, status: int = 400) -> None:
         self.json_response({"error": message}, status)
 
-    def read_json(self) -> dict:
+    def read_json(self, limit=1024 * 1024) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
-        if length > 1024 * 1024:
+        if length < 0 or length > limit:
             raise ValueError("JSON request too large")
         raw = self.rfile.read(length)
         return json.loads(raw.decode("utf-8")) if raw else {}
@@ -983,6 +1039,7 @@ class Handler(SimpleHTTPRequestHandler):
             if context_runner.handle_get(self, globals()):
                 return
             if parsed.path == "/api/health":
+                credentials = runtime_environment()
                 snakemake = shutil.which("snakemake")
                 storage = storage_settings()
                 self.json_response({
@@ -994,7 +1051,9 @@ class Handler(SimpleHTTPRequestHandler):
                     "config_yaml_present": (REPO_ROOT / "config.yaml").is_file(),
                     "config_yaml_path": str(REPO_ROOT / "config.yaml"),
                     "docker_check_available": True,
-                    "phylodynamics_ready": bool(runtime_environment().get("NCBI_EMAIL", "").strip()),
+                    "phylodynamics_ready": bool(credentials.get("NCBI_EMAIL", "").strip()),
+                    "ebirdst_key_configured": bool(credentials.get("EBIRDST_ACCESS_KEY", "").strip()),
+                    "metadata_validation_available": True,
                     "desktop_mode": bool(os.environ.get("WINGS_DESKTOP_WORKSPACE")),
                     "ollama": wings_ollama.public_settings(),
                     "phylodynamics_available": True,
@@ -1141,6 +1200,13 @@ class Handler(SimpleHTTPRequestHandler):
         parsed = self.parsed()
         try:
             if context_runner.handle_post(self, globals()):
+                return
+            if parsed.path == '/api/metadata/validate':
+                origin = self.headers.get('Origin')
+                if self.headers.get_content_type() != 'application/json' or (origin and origin != f"http://{self.headers.get('Host', '')}"):
+                    self.error_response('Use the local WINGS portal to validate metadata.', 403)
+                    return
+                self.json_response(validate_setup_metadata(self.read_json(limit=25 * 1024 * 1024)))
                 return
             if parsed.path == '/api/docker/check':
                 origin = self.headers.get('Origin')
