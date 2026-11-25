@@ -6,17 +6,26 @@ Use this guide for a source checkout on a Mac or Linux computer, or inside an
 HPC allocation. WINGS Desktop manages a separate runtime and installed source
 snapshot; do not run these installation commands inside its release directory.
 
+**Windows users: start with the [Windows/WSL2 setup guide](windows-wsl2.md)**.
+Install Ubuntu on WSL2 before following the Linux commands, and use a Linux
+Conda installation inside Ubuntu rather than a Windows Conda prompt.
+
 ## Requirements and execution routes
 
 You need Git, Bash, Conda or Mamba, and Snakemake. Most analysis tools use
 rule-specific Conda environments. IRMA additionally requires the runtime selected
 in the local configuration: Docker, Apptainer, Singularity, or a local installation.
 
+Linux reference setup also needs `curl`, `unzip`, `tar`, `gzip`, and a SHA-256
+checksum utility. Minimal Ubuntu/WSL installations may lack `unzip`; check these
+prerequisites before downloading resources. The [WSL2 guide](windows-wsl2.md#2-install-linux-system-prerequisites--ubuntu)
+provides the explicit Ubuntu package-install command.
+
 | Route | Runtime considerations |
 | --- | --- |
 | Native Apple Silicon | Use ARM64 Conda/Python and a running Docker Desktop for the configured container jobs. This differs from the desktop app's Linux AMD64 controller. |
 | Linux ARM64 / SLURM | Use a compatible Conda environment, the site's IRMA runtime, writable project storage, and the supplied Linux ARM64 Quarto installer. A working native VADR installation can be used. |
-| Windows / WSL2 | Potententially Ubuntu under WSL2 with Linux Conda and Docker Desktop integration. End-to-end WINGS validation remains pending. |
+| [Windows / WSL2](windows-wsl2.md) | Ubuntu under WSL2 with Linux Conda and Docker Desktop integration. Setup, dry run, and analysis launch have been reported; completed-analysis validation remains pending. |
 
 Check Docker connectivity with `docker info` on the machine running the analysis.
 The CLI alone does not start the daemon. Docker memory limits are separate from
@@ -283,12 +292,17 @@ environment that starts the native service.
 
 ## Windows / WSL2 status
 
-Windows/WSL2 remains an unevaluated execution route for the complete workflow.
-Follow [Microsoft's WSL installation instructions](https://learn.microsoft.com/en-us/windows/wsl/install)
-and [Docker's WSL integration instructions](https://docs.docker.com/desktop/features/wsl/).
-Use Linux tools and paths inside Ubuntu, with a Linux Conda installation.
-Keep the checkout in the Linux filesystem and verify `docker info` from Ubuntu.
-Do not apply Linux ARM64 configuration to an x86-64 WSL installation.
+Follow the dedicated [Windows/WSL2 setup guide](windows-wsl2.md). It separates
+Windows PowerShell setup from Ubuntu commands and covers Linux prerequisites,
+Miniforge, Docker integration and conditional socket-permission troubleshooting,
+file paths, real metadata, resource verification, and sample-discovery checks.
+
+As of 2026-11-24, a tester reported successful setup, a dry run, Conda-environment
+creation, and full-analysis launch. Analysis completion and report review remain
+pending. This is evidence of setup progress, not full end-to-end validation.
+Record the exact WINGS revision, operating-system and tool versions, inputs,
+configuration, final logs, and report checks before making a stronger claim.
+Windows on ARM compatibility is not established by the available feedback.
 
 ## Results and updates
 
