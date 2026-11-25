@@ -51,6 +51,15 @@ if a[0]=='tag':
  record=next((r for r in s.get('tools',{}).values() if r.split('|')[1]==a[1]),None)
  if not record:fail()
  s['tools'][a[2]]=record;out()
+if a[:2]==['volume','inspect']:
+ record=s.get('volumes',{}).get(a[-1])
+ if not record:fail()
+ out(record)
+if a[:2]==['volume','create']:
+ if os.environ.get('MOCK_VOLUME_CREATE_FAIL'):fail()
+ labels=dict(a[i+1].split('=',1) for i,v in enumerate(a) if v=='--label')
+ s.setdefault('volumes',{})[a[-1]]='local|null|'+labels['org.wings.desktop.workspace']+'|'+labels['org.wings.desktop.conda']
+ out(a[-1])
 if a[0]=='build':
  if os.environ.get('MOCK_REQUIRE_CREDENTIAL_HELPER'):
   subprocess.run(['docker-credential-desktop','get'],input=b'fixture-registry\n',check=True)
@@ -65,6 +74,7 @@ if a[0]=='inspect':
  if 'Running' in fmt:out('true' if s['container']['running'] else 'false')
  out('{}')
 if a[0]=='run':
+ if 'verify' in a and os.environ.get('MOCK_CONDA_CHECK_FAIL'):fail()
  if 'docker-check' in a and os.environ.get('MOCK_CONTROLLER_DOCKER_FAIL'):fail()
  if '-d' in a:
   labels=[a[i+1] for i,v in enumerate(a) if v=='--label']
@@ -84,7 +94,7 @@ fail()
 class LauncherTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.home = self.root / 'home'; self.home.mkdir()
         self.bin = self.home / '.docker/bin'; self.bin.mkdir(parents=True)
         fake = self.bin / 'docker'; fake.write_text(FAKE.replace('#!/usr/bin/env python3', '#!' + sys.executable, 1)); fake.chmod(0o755)

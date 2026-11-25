@@ -205,9 +205,30 @@ fi
 [[ "$(d image inspect --format '{{index .Config.Labels "org.wings.desktop.runtime"}}' "$image")" == "$runtime_hash" ]] || { echo 'Runtime image identity mismatch.' >&2; exit 18; }
 # Conda embeds its install prefix in scripts and binaries. Use a stable,
 # space-free container path across app releases; leave legacy caches intact.
-mkdir -p "$workspace/cache/conda-envs-v2"
+# Both extracted packages and installed Linux environments must live on the
+# Docker VM filesystem. Mac bind mounts can collapse case-distinct filenames.
+conda_env_volume="wings-conda-envs-v3-$workspace_id"
+conda_pkg_volume="wings-conda-pkgs-v3-$workspace_id"
+ensure_conda_volume() {
+    local name="$1" role="$2" record
+    if ! d volume inspect "$name" >/dev/null 2>&1; then
+        d volume create --driver local \
+            --label "org.wings.desktop.workspace=$workspace_id" \
+            --label "org.wings.desktop.conda=$role-v3" "$name" >/dev/null
+    fi
+    record="$(d volume inspect --format '{{.Driver}}|{{json .Options}}|{{index .Labels "org.wings.desktop.workspace"}}|{{index .Labels "org.wings.desktop.conda"}}' "$name")"
+    case "$record" in
+        "local|null|$workspace_id|$role-v3"|"local|{}|$workspace_id|$role-v3") ;;
+        *) echo "Conda volume identity or driver mismatch: $name. No volume was removed." >&2; exit 22;;
+    esac
+}
+stage 'Checking persistent Linux dependency storage…'
+ensure_conda_volume "$conda_env_volume" envs
+ensure_conda_volume "$conda_pkg_volume" pkgs
 common=(--platform linux/amd64 "${input_mounts[@]}" --env "WINGS_HOST_HOME=$host_home" --env "WINGS_BROWSE_ROOTS=$browse_roots" --mount "type=bind,source=$workspace,target=$workspace" \
-    --mount "type=bind,source=$workspace/cache/conda-envs-v2,target=/opt/wings-conda-envs" \
+    --mount "type=volume,source=$conda_env_volume,target=/opt/wings-conda-envs,volume-nocopy" \
+    --mount "type=volume,source=$conda_pkg_volume,target=/opt/wings-conda-pkgs,volume-nocopy" \
+    --env WINGS_DESKTOP_CONDA_PKGS_DIR=/opt/wings-conda-pkgs \
     --env WINGS_DESKTOP_CONDA_PREFIX=/opt/wings-conda-envs \
     --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
     --env "WINGS_REFERENCE_ARCHIVE=$reference_archive" \

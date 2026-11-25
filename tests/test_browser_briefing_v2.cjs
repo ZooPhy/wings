@@ -28,8 +28,8 @@ let created = null;
 let storageRequest = null;
 let storageOk = true;
 const context = vm.createContext({
-  window: {WINGS_CONTEXT_SETUP:{setCreateSettings(){},async readyForRun(){},async attach(){}}},
-  document: {getElementById: id => nodes.get(id) || null, querySelectorAll: () => [], createElement: element},
+  window: {WINGS_CONTEXT_SETUP:{setCreateSettings(){},isReady(){return true;},async readyForRun(){},async attach(){}}},
+  document: {addEventListener(){}, getElementById: id => nodes.get(id) || null, querySelectorAll: () => [], createElement: element},
   location: {hostname: '', search: '', origin: 'null'},
   URLSearchParams, URL, AbortController, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
   alert() {}, console,
@@ -111,6 +111,10 @@ const $ = id => nodes.get(id);
   t.renderPreflight();
   assert.match($('preflightList').innerHTML, /&lt;runs&gt;/);
   assert.equal($('preflightList').innerHTML.includes('<runs>'), false);
+  await t.startRun();
+  assert.equal(created, null, 'Missing metadata validation must still prevent run creation');
+  // This fixture isolates briefing/storage behavior after setup validation.
+  t.state.metadataValidation = {ok:true,errors:[],warnings:[]};
   await t.startRun();
   assert.equal(created.storage_revision, 'applied');
   assert.deepEqual(created.options, {context_setup:true, genoflu: true, vadr: true, phylogeny: false, phylodynamics:false, phylodynamics_method:'fast',

@@ -26,6 +26,8 @@
     metadata: null,
     metadataIds: [],
     metadataError: "",
+    metadataPending: false,
+    metadataValidation: null,
     runId: null,
     poller: null,
     resumePending: false,
@@ -186,8 +188,28 @@
     return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
   }
 
-  function setStep(next) {
-    state.step = Math.max(0, Math.min(4, next));
+  let navigationRequest = 0;
+  function gateMessage(message) {
+    const node = $('setupGateMessage');
+    if (!node) return;
+    node.textContent = message || ''; node.hidden = !message;
+    if (message) node.focus();
+  }
+  async function setStep(next) {
+    const request = ++navigationRequest;
+    let target = Math.max(0, Math.min(4, next));
+    let message = '';
+    if (target > state.step && target > 2) {
+      try {
+        await requireValidMetadata();
+        if (typeof window.WINGS_CONTEXT_SETUP?.readyForRun !== 'function') throw new Error('Reload WINGS: additional-data setup did not load.');
+        await window.WINGS_CONTEXT_SETUP.readyForRun();
+        if (!metadataReady()) throw new Error('Metadata changed. Check it again before continuing.');
+      } catch (error) { target = 2; message = error.message; }
+    }
+    if (request !== navigationRequest) return;
+    state.step = target;
+    gateMessage(message);
     document.querySelectorAll("[data-step-panel]").forEach((panel) => {
       panel.hidden = Number(panel.dataset.stepPanel) !== state.step;
     });
@@ -223,6 +245,7 @@
       $("runnerText").textContent = localMode ? "Local runner unavailable" : "Open local runner to execute";
       $("openLocalRunner").hidden = localMode;
     }
+    renderCredentialHelp();
     syncStorage();
     if(!state.runId)checkDocker(false);
     if (state.step === 4) renderPreflight();
@@ -288,6 +311,63 @@
     pollStatus();
   }
 
+
+  function renderCredentialHelp() {
+    const status = $('credentialStatus');
+    if (!status) return;
+    if (!state.runner) { status.textContent = 'Connect to the local WINGS runner to check saved access.'; return; }
+    const ncbi = state.runner.phylodynamics_ready ? 'Configured' : 'Not configured';
+    const ebird = state.runner.ebirdst_key_configured === undefined ? 'Status unavailable — update the runner' : state.runner.ebirdst_key_configured ? 'Configured' : 'Not configured';
+    status.textContent = `NCBI email: ${ncbi}. eBird Status and Trends key: ${ebird}. Saved status does not verify provider access; cached abundance data may still be usable without a key.`;
+    if (!state.runner.desktop_mode) $('credentialInstructions').textContent = 'For a native/cluster runner, set NCBI_EMAIL and EBIRDST_ACCESS_KEY in the environment that starts WINGS, then restart the runner. For the Mac desktop app, use Settings → NCBI & eBird access and recheck after saving.';
+  }
+
+  let metadataRequest = 0, metadataTask = Promise.resolve();
+  function metadataReady() {
+    return Boolean(state.metadata && !state.metadataPending && !state.metadataError && state.metadataValidation?.ok && validateMetadataMatch().ok);
+  }
+  async function checkSetupMetadata() {
+    const token = ++metadataRequest, file = state.metadata;
+    state.metadataValidation = null; state.metadataError = ''; state.metadataIds = [];
+    state.metadataPending = Boolean(file);
+    renderMetadata();
+    if (!file) { if (state.step === 4) renderPreflight(); return; }
+    let timer;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error('Metadata exceeds the 10 MB setup validation limit.');
+      const text = await file.text();
+      if (token !== metadataRequest) return;
+      state.metadataIds = parseMetadata(text);
+      if (!localMode) throw new Error('Open the local WINGS runner to validate metadata before continuing.');
+      const controller = new AbortController();
+      timer = setTimeout(() => controller.abort(), 20000);
+      const response = await fetch(`${localOrigin}/api/metadata/validate`, {
+        signal:controller.signal, method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({metadata:text, sample_ids:state.reads.map(file=>stripFastq(file.name))})
+      });
+      if (token !== metadataRequest) return;
+      if (!response.ok) throw new Error(response.status === 404 ? 'Update and reopen WINGS: this runner does not support setup metadata validation.' : 'Metadata could not be checked. Check the local runner and try again.');
+      const result = await response.json();
+      if (token !== metadataRequest) return;
+      if (typeof result.ok !== 'boolean' || !Array.isArray(result.errors) || !Array.isArray(result.warnings)) throw new Error('Invalid metadata validation response. Reopen WINGS and check again.');
+      state.metadataValidation = result;
+      if (!result.ok) state.metadataError = result.errors.join('\n') || 'Metadata validation failed.';
+    } catch(error) {
+      if (token === metadataRequest) state.metadataError = error.name === 'AbortError' ? 'Metadata check timed out. Check the local runner and click Check metadata again.' : error.message;
+    } finally {
+      clearTimeout(timer);
+      if (token === metadataRequest) { state.metadataPending = false; renderMetadata(); if (state.step === 4) renderPreflight(); }
+    }
+  }
+  function refreshMetadataValidation() { metadataTask = checkSetupMetadata(); return metadataTask; }
+  async function requireValidMetadata() {
+    await metadataTask;
+    if (!metadataReady()) {
+      const message = state.metadataPending ? 'Metadata validation is still running.' : state.metadataError || validateMetadataMatch().detail || 'Check metadata before continuing.';
+      const error = new Error(message); error.setupValidation = true; throw error;
+    }
+  }
+
   function parseMetadata(text) {
     if (globalThis.WINGS_METADATA) return globalThis.WINGS_METADATA.inspectIds(text);
     const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -341,12 +421,13 @@
       $("metadataSummary").textContent = "No metadata file selected.";
       return;
     }
+    if (state.metadataPending) { $("metadataSummary").textContent = "Checking metadata dates, coordinates and sample IDs…"; return; }
     if (state.metadataError) {
       $("metadataSummary").textContent = `⚠ ${state.metadataError}`;
       return;
     }
     const match = validateMetadataMatch();
-    $("metadataSummary").textContent = `${state.metadata.name} · ${state.metadataIds.length} metadata sample(s)\n${match.ok ? "✓" : "⚠"} ${match.detail}`;
+    $("metadataSummary").textContent = `${state.metadata.name} · ${state.metadataIds.length} metadata sample(s)\n${match.ok ? "✓" : "⚠"} ${match.detail}\n${state.metadataValidation?.ok ? "Workflow metadata validation passed." : "Metadata has not been validated."}${state.metadataValidation?.warnings?.length ? "\nWarnings (do not block progression):\n" + state.metadataValidation.warnings.join("\n") : ""}`;
   }
 
   let briefingRequest = 0;
@@ -435,7 +516,7 @@
     const method = $("phylodynamicsMethod").value;
     const supported = state.runner?.phylodynamics_methods || [];
     if (!supported.includes(method)) return [false, "Phylodynamics", "Restart the updated local runner to use the selected method."];
-    if (!state.runner?.phylodynamics_ready) return [false, "Phylodynamics", state.runner?.desktop_mode ? "Add an NCBI contact email in WINGS Settings → Add or update NCBI email, then refresh this page." : "Start the local runner with NCBI_EMAIL set."];
+    if (!state.runner?.phylodynamics_ready) return [false, "Phylodynamics", state.runner?.desktop_mode ? "Add an NCBI contact email in WINGS Settings → NCBI & eBird access → Add or update NCBI email, then refresh this page." : "Start the local runner with NCBI_EMAIL set."];
     return [true, "Phylodynamics", `${phylodynamicsLabel()} selected; Explorer included${method === "beast" ? "; diagnostic checks required" : ""}`];
   }
   $("optPhylodynamics").addEventListener("change", updatePhylodynamics);
@@ -445,7 +526,7 @@
     const match = validateMetadataMatch();
     const extensions = new Set(state.reads.map((f) => fastqExtension(f.name)));
     const readsOk = state.reads.length > 0 && !extensions.has("") && extensions.size === 1;
-    const metadataOk = Boolean(state.metadata && !state.metadataError);
+    const metadataOk = metadataReady();
     const runnerOk = Boolean(state.runner && state.runner.snakemake_available && state.runner.config_yaml_present);
     let runnerDetail = "Start the local runner with: python scripts/wings_local_runner.py";
     if (state.runner && !state.runner.snakemake_available) runnerDetail = "Snakemake is not available in the runner environment.";
@@ -463,7 +544,8 @@
           : "Connect to an updated local runner to verify storage."],
       phylodynamicsPreflight(),
       [readsOk, "Sequence inputs", readsOk ? `${state.reads.length} FASTQ file(s) selected` : "Select FASTQ files with one consistent extension"],
-      [metadataOk, "Metadata structure", metadataOk ? `${state.metadataIds.length} sample rows detected` : (state.metadataError || "Select metadata.tsv")],
+      [Boolean(window.WINGS_CONTEXT_SETUP?.isReady?.()), "Additional surveillance data", "Prepare the selection or choose Skip additional data in Metadata; review unavailable sources."],
+      [metadataOk, "Metadata validation", metadataOk ? `${state.metadataIds.length} sample rows detected` : (state.metadataError || "Select metadata.tsv")],
       [match.ok, "Sample matching", match.detail],
       [Boolean($("runName").value.trim()), "Run name", $("runName").value.trim() || "Enter a run name"]
     ];
@@ -520,8 +602,9 @@
       if (!["setCreateSettings", "readyForRun", "attach"].every(
         name => typeof window.WINGS_CONTEXT_SETUP?.[name] === "function"
       )) {
-        throw new Error("Context setup did not load. Reload this page before starting a new run. Saved runs remain available.");
+        throw new Error("Additional-data setup did not load. Reload this page before starting a new run. Saved runs remain available.");
       }
+      await requireValidMetadata();
       await window.WINGS_CONTEXT_SETUP.readyForRun();
       if(!await checkDocker(true))throw new Error(state.docker?.message || 'Docker is not ready.');
       const create = await fetch(`${localOrigin}/api/runs`, {
@@ -548,7 +631,7 @@
       const created = await create.json();
       state.runId = created.run_id;
 
-      $("startRun").textContent = "Verifying prepared context…";
+      $("startRun").textContent = "Verifying prepared surveillance data…";
       await uploadFile(state.runId, "metadata", state.metadata);
       await window.WINGS_CONTEXT_SETUP.attach(state.runId);
       for (let i = 0; i < state.reads.length; i += 1) {
@@ -910,17 +993,15 @@
   document.querySelectorAll(".step-button").forEach((button) => button.addEventListener("click", () => setStep(Number(button.dataset.step))));
   $("backButton").addEventListener("click", () => setStep(state.step - 1));
   $("nextButton").addEventListener("click", () => setStep(state.step + 1));
-  $("readsFiles").addEventListener("change", (event) => { state.reads = [...event.target.files]; renderReads(); renderMetadata(); });
-  $("metadataFile").addEventListener("change", async (event) => {
+  $("readsFiles").addEventListener("change", (event) => { state.reads = [...event.target.files]; renderReads(); refreshMetadataValidation(); });
+  $("metadataFile").addEventListener("change", (event) => {
     state.metadata = event.target.files[0] || null;
-    state.metadataIds = [];
-    state.metadataError = "";
-    if (state.metadata) {
-      try { state.metadataIds = parseMetadata(await state.metadata.text()); }
-      catch (error) { state.metadataError = error.message; }
-    }
-    renderMetadata();
+    refreshMetadataValidation();
   });
+  $('recheckMetadata')?.addEventListener('click', refreshMetadataValidation);
+  $('recheckCredentials')?.addEventListener('click', checkRunner);
+  window.WINGS_CONTEXT_SETUP?.setMetadataValidation?.(requireValidMetadata);
+  document.addEventListener('wings-context-change', () => { if (state.step === 4) renderPreflight(); });
   ["runName", "cores", "maxParallelJobs", "optGenoflu", "optVadr", "optPhylogeny", "optPhylodynamics", "phylodynamicsMethod", "optExplorer"].forEach((id) => $(id).addEventListener("change", () => { if (state.step === 4) renderPreflight(); }));
   $("optBriefing")?.addEventListener("change", syncBriefing);
   $("checkBriefingModel")?.addEventListener("click", checkBriefingModel);

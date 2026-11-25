@@ -26,7 +26,7 @@ const launch = source.slice(start, end);
     await sandbox.startRun();
     assert.equal(writes, 0);
     assert.equal(button.disabled, false);
-    assert.match(messages[0], /Context setup did not load/);
+    assert.match(messages[0], /Additional-data setup did not load/);
   }
   let settings;
   const api = {setCreateSettings(fn) {settings = fn;}};
@@ -43,7 +43,7 @@ const launch = source.slice(start, end);
   const messages = [], button = {};
   api.readyForRun = async () => {checked++; throw new Error('Prepare context first');};
   api.attach = async () => {throw new Error('Unexpected attachment');};
-  Object.assign(sandbox, {$: () => button, alert: msg => messages.push(msg),
+  Object.assign(sandbox, {requireValidMetadata: async () => {}, $: () => button, alert: msg => messages.push(msg),
     preflightRows: () => [[true]],
     renderPreflight: () => {throw new Error('Valid preflight should not block');},
     fetch: () => {writes++; throw new Error('Unexpected request');}});

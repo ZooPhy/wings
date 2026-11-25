@@ -113,8 +113,11 @@ class StartupImagesTests(unittest.TestCase):
             repo = workspace / 'release'; repo.mkdir()
             with patch.object(sys, 'argv', ['controller', 'prepare', '--repo', str(repo), '--workspace', str(workspace)]), \
                  patch.object(module, 'verify'), patch.object(module.os, 'chdir'), \
-                 patch.dict(module.os.environ), patch.object(module.subprocess, 'run') as run:
+                 patch.object(module, 'check_case_sensitive_directory') as storage_check, \
+                 patch.dict(module.os.environ, {'WINGS_DESKTOP_CONDA_PREFIX': str(workspace / 'envs'), 'WINGS_DESKTOP_CONDA_PKGS_DIR': str(workspace / 'pkgs')}), patch.object(module.subprocess, 'run') as run:
                 module.main()
+            self.assertEqual([c.args[0] for c in storage_check.call_args_list],
+                             [str(workspace / 'envs'), str(workspace / 'pkgs')])
             self.assertEqual([c.args[0] for c in run.call_args_list], [
                 ['bash', 'scripts/build_blast_db.sh'], ['bash', 'scripts/install_vadr_models.sh']])
 
